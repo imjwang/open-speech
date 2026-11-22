@@ -1,0 +1,59 @@
+# electron-builder: the macOS arm64 build (10 § M5, NFR-6). `pnpm dist:mac` runs `pnpm build` (out/) and
+# `pnpm engine:bundle` (engine-runtime/, see scripts/bundle-engine.sh) first.
+#
+# Signing: ad-hoc ("-"); no Developer ID, no notarization yet (10 § R17). A copy downloaded from the internet
+# is blocked by Gatekeeper until the user allows it (right-click → Open, or System Settings → Privacy &
+# Security → Open Anyway). Locally built copies are not quarantined and open normally.
+appId: org.openspeech.app # CFBundleIdentifier: macOS keys the microphone permission (TCC) on it
+productName: Open Speech
+
+directories:
+  output: release
+  buildResources: build
+
+# The shell is small: the bundled pages and main/preload scripts. Everything else comes from extraResources.
+files:
+  - out/**/*
+  - package.json
+  - "!out/**/*.map"
+asar: true
+npmRebuild: false
+electronLanguages: [en]
+
+extraResources:
+  # Menu-bar template images (src/main/index.ts reads <resources>/tray when packaged).
+  - from: resources/tray
+    to: tray
+  # Relocatable Python + engine + Kokoro weights. Layout must match src/main/engine/spawn-spec.ts:
+  # <resources>/engine/python/bin/python3, cwd <resources>/engine.
+  - from: engine-runtime
+    to: engine
+
+mac:
+  target:
+    - target: dmg
+      arch: arm64
+  category: public.app-category.productivity
+  icon: build/icon.icns
+  minimumSystemVersion: "14.0"
+  identity: "-"
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  notarize: false
+  # build/entitlements.mac.plist and build/entitlements.mac.inherit.plist are picked up automatically.
+  extendInfo:
+    LSUIElement: true # menu-bar app: no Dock icon, no app menu
+    NSMicrophoneUsageDescription: Open Speech listens when you open the command bar so you can tell it what to read.
+  # "Open With → Open Speech" in Finder (routed to the engine by the app's open-file handler). Alternate rank:
+  # never claims to be the default app for these types.
+  fileAssociations:
+    - { ext: pdf, name: PDF Document, role: Viewer, rank: Alternate }
+    - { ext: docx, name: Word Document, role: Viewer, rank: Alternate }
+    - { ext: txt, name: Plain Text, role: Viewer, rank: Alternate }
+    - { ext: md, name: Markdown Document, role: Viewer, rank: Alternate }
+
+dmg:
+  artifactName: OpenSpeech-${version}-${arch}.${ext}
+  title: ${productName} ${version}
+
+publish: null
