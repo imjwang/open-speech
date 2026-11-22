@@ -13,6 +13,8 @@ export interface VadOptions {
   marginDb?: number
   /** Absolute floor for the speech threshold (dBFS). */
   minThresholdDb?: number
+  /** How long to listen to the room before declaring speech (ms). */
+  calibrateMs?: number
 }
 
 export function toDb(level: number): number {
@@ -25,6 +27,10 @@ export class EnergyVad {
   private readonly marginDb: number
   private readonly minThresholdDb: number
   private floorDb = -60
+  /** The first moments of a session measure the room; no speech is declared until then. */
+  private calibrationMs = 0
+  private calibration: number[] = []
+  private readonly calibrateMs: number
   private speechMs = 0
   private silenceMs = 0
   private speaking = false
@@ -36,6 +42,7 @@ export class EnergyVad {
     this.minSpeechMs = options.minSpeechMs ?? 150
     this.marginDb = options.marginDb ?? 12
     this.minThresholdDb = options.minThresholdDb ?? -50
+    this.calibrateMs = options.calibrateMs ?? 250
   }
 
   get isSpeaking(): boolean {
@@ -55,6 +62,18 @@ export class EnergyVad {
   push(level: number, durationMs: number): VadEvent | null {
     if (this.ended) return null
     const db = toDb(level)
+    if (this.calibrationMs < this.calibrateMs) {
+      // A quiet room isn't -60 dBFS: with gain control a normal room sits near -30. Take the floor from
+      // the quieter part of the opening moments (the 30th percentile, so a word said right away doesn't
+      // become "silence").
+      this.calibrationMs += durationMs
+      this.calibration.push(db)
+      if (this.calibrationMs >= this.calibrateMs) {
+        const sorted = [...this.calibration].sort((a, b) => a - b)
+        this.floorDb = sorted[Math.floor(sorted.length * 0.3)] ?? this.floorDb
+      }
+      return null
+    }
     const loud = db > this.threshold
     if (!this.speaking) {
       // Noise floor: follow drops quickly, rises slowly (never learns speech as noise).
@@ -86,6 +105,9 @@ export class EnergyVad {
   }
 
   reset(): void {
+    this.calibrationMs = 0
+    this.calibration = []
+    this.floorDb = -60
     this.speechMs = 0
     this.silenceMs = 0
     this.speaking = false

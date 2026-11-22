@@ -37,6 +37,20 @@ engine.socket.onStatus((status) => {
   if (status === 'open') controller.connected()
 })
 const actions = new BarActions(engine, controller, bridge)
+// Read-only state handle and a content-free event log for UI automation and debugging.
+const debugLog: string[] = []
+for (const type of ['stt.partial', 'stt.final', 'assistant.turn', 'assistant.done', 'error'] as const)
+  // Event types and sizes only: transcripts and replies never go into the debug log.
+  engine.socket.on(type, (m) => {
+    const text = (m as { text?: unknown }).text
+    debugLog.push(`${Math.round(performance.now())} ${type}${typeof text === 'string' ? ` chars=${text.length}` : ''}`)
+  })
+store.subscribe((s, prev) => {
+  if (s.mode !== prev.mode || s.prompting !== prev.prompting)
+    debugLog.push(`${Math.round(performance.now())} state mode=${s.mode} prompting=${s.prompting} chars=${s.text.length}`)
+  if (debugLog.length > 200) debugLog.splice(0, debugLog.length - 200)
+})
+;(window as unknown as { __openSpeechBar?: unknown }).__openSpeechBar = { getState: () => store.getState(), log: debugLog }
 
 bridge.onBarOpened((event) => controller.open(event))
 bridge.onBarClosed(() => controller.close())

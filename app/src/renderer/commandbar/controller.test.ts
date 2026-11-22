@@ -86,6 +86,7 @@ function harness(initial: Partial<BarState> = {}) {
     },
     /** Speech long enough for the energy VAD to fire speech-start (but not speech-end). */
     speak() {
+      mic.feed(QUIET, 300) // the VAD first measures the room (calibration)
       mic.feed(LOUD, 320)
     },
     /** End-of-speech silence (800 ms). */

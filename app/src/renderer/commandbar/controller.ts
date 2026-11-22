@@ -149,9 +149,10 @@ export class BarController {
   /** Speak something without hearing ourselves: the mic is off while `speak` runs, then listening resumes. */
   async withMicPaused(speak: () => Promise<unknown>, opts: { listenAfter?: boolean } = {}): Promise<void> {
     const wasListening = this.s.mode === 'listening' || opts.listenAfter === true
-    if (wasListening) {
+    if (this.s.mode === 'listening') {
+      // Whatever was half-heard before the prompt is noise, not an answer: drop it.
       this.stopMic(false)
-      this.set({ mode: 'typing', level: 0, speaking: false })
+      this.set({ mode: 'typing', text: '', level: 0, speaking: false })
     }
     this.set({ prompting: true })
     try {
@@ -193,6 +194,11 @@ export class BarController {
   // ---------------------------------------------------------------- listening
 
   startListening(): void {
+    if (this.s.prompting) {
+      // Never listen over our own spoken prompt: listen once it has finished (withMicPaused).
+      this.listenWhenConnected = true
+      return
+    }
     const sessionId = this.deps.newSessionId()
     this.vad.reset()
     this.vad.endOfSpeechMs = this.deps.endOfSpeechMs()

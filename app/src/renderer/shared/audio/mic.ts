@@ -34,7 +34,9 @@ export class BrowserMic implements MicSource {
     const generation = ++this.generation
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+        // No automatic gain control: on macOS it changes the system-wide input volume (it moved a test Mac
+        // from 50 to 92) and raises room noise. The VAD calibrates to the room instead.
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false, channelCount: 1 },
         video: false,
       })
       if (generation !== this.generation) {

@@ -63,16 +63,20 @@ def _anthropic(catalog: ModelCatalog, key: str, settings: Callable[[], UserSetti
     return AnthropicLlm(catalog, key, model=model, annotate_effort=effort)
 
 
+INTERIM_PARTIALS_S = 0.7
+
+
 def _openai_stt(catalog: ModelCatalog, key: str) -> SttProvider:
     from open_speech.providers.openai_stt import OpenAIStt
 
-    return OpenAIStt(catalog, key)
+    # Interim partials every ~0.7 s so the transcript appears as the user speaks (FR-BAR-2).
+    return OpenAIStt(catalog, key, partial_interval_s=INTERIM_PARTIALS_S)
 
 
 def _gemini_stt(catalog: ModelCatalog, key: str) -> SttProvider:
     from open_speech.providers.gemini_stt import GeminiStt
 
-    return GeminiStt(catalog, key)
+    return GeminiStt(catalog, key, partial_interval_s=INTERIM_PARTIALS_S)
 
 
 def _compat(catalog: ModelCatalog) -> TtsProvider:
