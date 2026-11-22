@@ -5226,6 +5226,11 @@
             ],
             "title": "Stt Provider",
             "default": "auto"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "auto"
           }
         },
         "type": "object",
