@@ -53,11 +53,10 @@ class VoiceService:
         res = await self.e.synth.synth(
             PREVIEW_TEXT.format(name=voice.name.split(" (")[0]), voice_id, style=style, op="preview"
         )
-        cached = res.notice is None and voice_id == res.voice_id
         rec_id = self.e.recordings.register(res.audio.path, kind="preview", duration_s=res.audio.duration_s, copy=False)
         if play:
             await self.e.transport.play_clip(res.audio, duck=True)
-        return s.PreviewResponse(recording_id=rec_id, cached=cached)
+        return s.PreviewResponse(recording_id=rec_id, cached=res.cache_hit, usd_estimate=str(res.usd))
 
 
 class UsageService:
