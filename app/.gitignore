@@ -1,4 +1,7 @@
 # App-local build artefacts (the repo root ignores node_modules/, out/, release/, dist/, build/)
 /engine-runtime/
+/engine-runtime-cache/
 /test-results/
 /e2e/.artifacts/
+# electron-builder resources (icons, entitlements) are source, unlike the root's generic build/ rule
+!/build/

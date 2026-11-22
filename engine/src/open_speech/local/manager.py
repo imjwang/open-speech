@@ -7,6 +7,8 @@
   Files without a pin are accepted trust-on-first-use: the computed hash is recorded in `manifest.json`
   and the model's status says "unpinned".
 - Remove deletes the model directory. Qwen3-TTS (P2) is listed as unsupported/later.
+- Packaged builds ship Kokoro read-only inside the app (`local/bundled.py`, FR-SETUP-3). It counts as installed
+  when app data has no complete copy, and is never written to or removed.
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from open_speech.api.ws_schema import ErrorMsg, JobProgress
 from open_speech.config import Paths
 from open_speech.errors import EngineError, NotFound
 from open_speech.ids import new_id
+from open_speech.local.bundled import bundled_models_dir
 from open_speech.local.catalog import ModelCatalog, TtsModel, WeightFile
 from open_speech.service.events import EventBus
 
@@ -122,9 +125,11 @@ class LocalModelManager:
         hf_base: str = "https://huggingface.co",
         on_change: Callable[[str], None] | None = None,
         chunk_size: int = 1 << 16,
+        bundled_models: Path | None = None,
     ) -> None:
         self.paths = paths
         self.catalog = catalog
+        self._bundled = bundled_models if bundled_models is not None else bundled_models_dir()
         self.events = events
         self._hw = hardware
         self._client_factory = client_factory or (
@@ -151,7 +156,23 @@ class LocalModelManager:
         return e
 
     def model_dir(self, entry: TtsModel) -> Path:
+        """Where installs go (app data). See `installed_dir` for where weights are read from."""
         return self.paths.models / entry.provider / entry.model
+
+    def _complete(self, entry: TtsModel, d: Path) -> bool:
+        return entry.weights is not None and all((d / f.path).exists() for f in entry.weights.all_files())
+
+    def bundled_dir(self, entry: TtsModel) -> Path | None:
+        """The read-only copy shipped with the app, when it has every weight file."""
+        if self._bundled is None:
+            return None
+        d = self._bundled / entry.provider / entry.model
+        return d if self._complete(entry, d) else None
+
+    def installed_dir(self, entry: TtsModel) -> Path | None:
+        """The complete copy in app data, else the bundled one, else None."""
+        d = self.model_dir(entry)
+        return d if self._complete(entry, d) else self.bundled_dir(entry)
 
     def _files(self, entry: TtsModel) -> list[WeightFile]:
         w = entry.weights
@@ -163,7 +184,7 @@ class LocalModelManager:
         return files
 
     def manifest(self, entry: TtsModel) -> dict[str, Any] | None:
-        p = self.model_dir(entry) / "manifest.json"
+        p = (self.installed_dir(entry) or self.model_dir(entry)) / "manifest.json"
         if not p.exists():
             return None
         try:
@@ -173,11 +194,7 @@ class LocalModelManager:
             return None
 
     def installed(self, model_id: str) -> bool:
-        entry = self.entry(model_id)
-        if entry.weights is None:
-            return False
-        d = self.model_dir(entry)
-        return all((d / f.path).exists() for f in entry.weights.all_files())
+        return self.installed_dir(self.entry(model_id)) is not None
 
     def list(self) -> list[LocalModel]:
         out: list[LocalModel] = []
@@ -188,6 +205,8 @@ class LocalModelManager:
             job = self._by_model.get(entry.model)
             if job is not None and job.state == "running":
                 status = f"Downloading, {job.pct:.0f}%"
+            elif installed and self.installed_dir(entry) != self.model_dir(entry):
+                status = "Included with the app"
             elif installed:
                 man = self.manifest(entry) or {}
                 status = "Installed" + ("" if man.get("pinned", False) else " (sha256 not pinned)")
@@ -240,11 +259,13 @@ class LocalModelManager:
 
     async def ensure_installed(self, model_id: str) -> Path:
         entry = self.entry(model_id)
-        if self.installed(entry.model):
-            return self.model_dir(entry)
+        d = self.installed_dir(entry)
+        if d is not None:
+            return d
         return await self.install(entry.model)
 
     def remove(self, model_id: str) -> bool:
+        """Delete the app-data copy. A bundled copy stays (it is part of the app) and keeps the model installed."""
         entry = self.entry(model_id)
         d = self.model_dir(entry)
         if not d.exists():

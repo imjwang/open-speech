@@ -6,7 +6,8 @@
   phoneme tokens' durations, so word timings are exact (FR-READ-6), not estimated.
 - G2P: `providers/g2p.LexiconPhonemizer` (misaki dictionaries + rules, no espeak). Injectable.
 - Weights live in `paths.models/kokoro/<model>/` and are installed by `local/manager.py` (sha256-verified,
-  resumable, with job progress). Without them the voices are listed with `available=False` and a reason.
+  resumable, with job progress). Packaged builds also ship a read-only copy (`local/bundled.py`), used when
+  app data has no complete copy. Without either the voices are listed with `available=False` and a reason.
 - The ONNX session loads lazily on first use and unloads after 10 idle minutes (NFR-9).
 """
 
@@ -25,6 +26,7 @@ import numpy as np
 
 from open_speech.config import Paths
 from open_speech.errors import EngineError
+from open_speech.local.bundled import bundled_models_dir
 from open_speech.local.catalog import ModelCatalog, TtsModel
 from open_speech.playback.timing import estimate_word_timings
 from open_speech.providers.base import AudioChunk, TtsLimits, TtsRequest, Units, Voice, WordTiming
@@ -65,9 +67,11 @@ class KokoroTts:
         phonemizer: Phonemizer | None = None,
         session_factory: SessionFactory | None = None,
         idle_unload_s: float = 600.0,
+        bundled_models: Path | None = None,
     ) -> None:
         self._models: dict[str, TtsModel] = {m.model: m for m in catalog.tts_models(self.id)}
         self._paths = paths
+        self._bundled = bundled_models if bundled_models is not None else bundled_models_dir()
         self._phonemizer = phonemizer
         self._session_factory = session_factory
         self._idle_unload_s = idle_unload_s
@@ -81,29 +85,41 @@ class KokoroTts:
     # ------------------------------------------------------------------ installation state
 
     def model_dir(self, model: str) -> Path:
-        return self._paths.models / self.id / model
+        """The app-data copy when it is complete, else the read-only bundled copy when that one is."""
+        user = self._paths.models / self.id / model
+        if self._bundled is None or model not in self._models or self._complete(user, model):
+            return user
+        bundled = self._bundled / self.id / model
+        return bundled if self._complete(bundled, model) else user
 
     def runtime_available(self) -> bool:
         return self._session_factory is not None or importlib.util.find_spec("onnxruntime") is not None
 
-    def _weights(self, model: str) -> tuple[Path, Path | None, str | None]:
-        m = self._models[model]
-        w = m.weights
-        d = self.model_dir(model)
+    def _layout(self, model: str) -> tuple[str, str | None, str]:
+        """(model file, tokenizer file, voice file pattern), relative to the model directory."""
+        w = self._models[model].weights
         if w is None:
-            return d / "model.onnx", d / "tokenizer.json", "voices/{voice}.bin"
-        return d / w.model_file, (d / w.tokenizer_file) if w.tokenizer_file else None, w.voice_file
+            return "model.onnx", "tokenizer.json", "voices/{voice}.bin"
+        return w.model_file, w.tokenizer_file, w.voice_file or "voices/{voice}.bin"
+
+    def _complete(self, d: Path, model: str) -> bool:
+        mfile, tok, _ = self._layout(model)
+        return (d / mfile).exists() and (tok is None or (d / tok).exists())
+
+    def _weights(self, model: str) -> tuple[Path, Path | None, str]:
+        mfile, tok, pattern = self._layout(model)
+        d = self.model_dir(model)
+        return d / mfile, (d / tok) if tok else None, pattern
 
     def voice_path(self, model: str, voice: str) -> Path:
-        _, _, pattern = self._weights(model)
-        return self.model_dir(model) / (pattern or "voices/{voice}.bin").format(voice=voice)
+        _, _, pattern = self._layout(model)
+        return self.model_dir(model) / pattern.format(voice=voice)
 
     def installed(self, model: str | None = None) -> bool:
         model = model or self.default_model()
         if model not in self._models:
             return False
-        mpath, tok, _ = self._weights(model)
-        return mpath.exists() and (tok is None or tok.exists())
+        return self._complete(self.model_dir(model), model)
 
     def default_model(self) -> str:
         return next(iter(self._models), "kokoro-82m-v1.0")

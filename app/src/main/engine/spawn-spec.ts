@@ -36,6 +36,9 @@ export function resolveSpawnSpec(ctx: SpawnContext): SpawnSpec {
   // Never inherit Electron's own Node/Electron switches into the Python process.
   delete env.ELECTRON_RUN_AS_NODE
   delete env.NODE_OPTIONS
+  // onnxruntime (local Kokoro) otherwise keeps a device ID and an event store under ~/Library/Application
+  // Support/Microsoft and uploads usage telemetry to Microsoft. The engine is local-first: off unless overridden.
+  env.ORT_DISABLE_TELEMETRY ??= '1'
   if (ctx.extraOrigins?.length) {
     const existing = (env.OPEN_SPEECH_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
     env.OPEN_SPEECH_ALLOWED_ORIGINS = Array.from(new Set([...existing, ...ctx.extraOrigins])).join(',')
@@ -53,8 +56,19 @@ export function resolveSpawnSpec(ctx: SpawnContext): SpawnSpec {
     env.PYTHONNOUSERSITE = '1'
     env.PYTHONDONTWRITEBYTECODE = '1'
     env.OPEN_SPEECH_BUNDLED_RUNTIME = runtime
-    // The console script's shebang is not relocatable; call the Typer app through the interpreter.
-    const bootstrap = 'import sys; sys.argv[0] = "open-speech"; from open_speech.cli.main import app; app()'
+    // The console script's shebang is not relocatable; call the Typer app through the interpreter. The watch
+    // thread stops the engine when the app dies without stopping it (force quit, crash), instead of leaving it
+    // running under launchd: SIGTERM for a clean shutdown, then a hard exit if that hangs.
+    const bootstrap = [
+      'import os, signal, sys, threading, time',
+      'def _watch_parent(parent=os.getppid()):',
+      '    while os.getppid() == parent: time.sleep(1)',
+      '    os.kill(os.getpid(), signal.SIGTERM); time.sleep(5); os._exit(1)',
+      'threading.Thread(target=_watch_parent, name="parent-watch", daemon=True).start()',
+      'sys.argv[0] = "open-speech"',
+      'from open_speech.cli.main import app',
+      'app()',
+    ].join('\n')
     return { command: python, args: ['-c', bootstrap, ...SERVE_ARGS], cwd: runtime, env }
   }
 
