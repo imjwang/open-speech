@@ -144,6 +144,9 @@ class VoiceInput(BaseModel):
     end_of_speech_ms: int = Field(800, ge=200, le=5000)
     recording_retention_days: int = Field(30, ge=0, le=3650)  # 0 = never keep
     stt_provider: Literal["auto", "openai", "gemini", "local"] = "auto"
+    # Spoken language hint for speech-to-text ("auto" = the Mac's first preferred language). Without a
+    # hint, noise is often transcribed as words in some other language.
+    language: str = "auto"
 
 
 class CacheSettings(BaseModel):

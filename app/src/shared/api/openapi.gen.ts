@@ -1961,6 +1961,11 @@ export interface components {
              * @enum {string}
              */
             stt_provider: "auto" | "openai" | "gemini" | "local";
+            /**
+             * Language
+             * @default auto
+             */
+            language: string;
         };
         /** VoiceList */
         VoiceList: {

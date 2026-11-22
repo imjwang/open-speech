@@ -9,7 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import logging
+import os
+import re
+import subprocess
+import sys
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -98,7 +103,8 @@ class VoiceInputService:
 
     async def _run_stt(self, sess: MicSession, stt: object) -> None:
         try:
-            async for ev in stt.stream(self._pcm_iter(sess)):  # type: ignore[attr-defined]
+            lang = stt_language(self.e.settings.get().voice_input.language)
+            async for ev in stt.stream(self._pcm_iter(sess), lang=lang):  # type: ignore[attr-defined]
                 if ev.kind == "partial":
                     sess.partial = ev.text
                     self.e.events.publish(SttPartial(session_id=sess.id, text=ev.text))
@@ -124,6 +130,10 @@ class VoiceInputService:
         if not submit:
             return
         text = (sess.final if sess.final is not None else sess.partial).strip()
+        if is_noise_transcript(text, lang=stt_language(self.e.settings.get().voice_input.language)):
+            # Speech-to-text turns coughs, hums and room noise into "um", "음" or "Thank you." Treat it as
+            # nothing heard instead of sending it to the assistant (and paying for a turn).
+            text = ""
         duration = len(sess.pcm) / 2 / SAMPLE_RATE
         rec_id = self._save_recording(sess, duration)
         if duration > 0:
@@ -154,3 +164,49 @@ class VoiceInputService:
         except Exception as e:  # noqa: BLE001
             log.warning("could not store recording: %s", e)
             return None
+
+
+@functools.cache
+def _system_language() -> str | None:
+    """ISO 639-1 code of the Mac's first preferred language ("en" from "en-US"), or the POSIX locale."""
+    if sys.platform == "darwin":
+        try:
+            out = subprocess.run(
+                ["defaults", "read", "-g", "AppleLanguages"], capture_output=True, text=True, timeout=2
+            ).stdout
+            m = re.search(r'"?([a-z]{2,3})(?:[-_][A-Za-z]+)*"?', out.replace("(", " "))
+            if m:
+                return m.group(1)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    loc = os.environ.get("LC_ALL") or os.environ.get("LANG") or ""
+    m = re.match(r"([a-z]{2,3})[_.-]", loc)
+    return m.group(1) if m else None
+
+
+def stt_language(setting: str) -> str | None:
+    """The language hint to send with speech input: an explicit setting wins, "auto" uses the system's."""
+    s = (setting or "auto").strip().lower()
+    if s and s != "auto":
+        return s.split("-")[0].split("_")[0]
+    return _system_language()
+
+
+_FILLERS = {
+    "um", "umm", "uh", "uhh", "hmm", "hm", "mm", "mmm", "ah", "er", "erm", "oh", "huh", "you",
+    "thank you", "thanks", "thanks for watching", "thank you for watching", "bye", "okay bye",
+    "음", "어", "응", "아", "えー", "あの", "嗯", "啊",
+}
+
+
+_LATIN_SCRIPT = {"en", "fr", "es", "de", "it", "pt", "nl", "sv", "no", "nb", "da", "fi", "pl", "cs", "ro", "hu", "tr",
+                 "id", "ms", "vi", "ca", "hr", "sk", "sl", "et", "lv", "lt"}
+
+
+def is_noise_transcript(text: str, *, lang: str | None = None) -> bool:
+    """True for transcripts that are only filler, punctuation or a classic noise hallucination, or that are in a
+    different script than the user's language (speech-to-text turns hums and tones into "むかし" or "음")."""
+    t = re.sub(r"[\s\.,!?…'\"“”‘’()\-–—]+", " ", text.lower()).strip()
+    if not t or t in _FILLERS or not re.search(r"\w", t):
+        return True
+    return lang in _LATIN_SCRIPT and not re.search(r"[a-z]", t)
