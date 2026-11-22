@@ -98,7 +98,7 @@ export class BarController {
     this.openedAt = this.deps.now()
     if (this.s.open) {
       this.set({ context })
-      if (event.listen && this.s.mode === 'typing' && !this.s.text && this.s.canListen) this.startListening()
+      if (event.listen && this.s.mode === 'typing' && !this.s.text && this.s.canListen === true) this.startListening()
       return
     }
     this.set({
@@ -114,8 +114,12 @@ export class BarController {
       pendingText: null,
     })
     this.deps.send({ type: 'bar.state', open: true })
-    if (event.listen && this.s.canListen) this.startListening()
-    else this.set({ mode: 'typing' })
+    if (event.listen && this.s.canListen === true) this.startListening()
+    else {
+      // Capability not known yet: listen as soon as it is (if speech input turns out to be available).
+      if (event.listen && this.s.canListen === null) this.listenWhenConnected = true
+      this.set({ mode: 'typing' })
+    }
     this.armIdle()
   }
 
@@ -158,17 +162,23 @@ export class BarController {
       this.set({ prompting: false })
     }
     const s = this.s
-    if ((wasListening || this.listenWhenConnected) && s.open && s.mode === 'typing' && !s.text && s.canListen) {
+    if ((wasListening || this.listenWhenConnected) && s.open && s.mode === 'typing' && !s.text && s.canListen === true) {
       this.listenWhenConnected = false
       this.set({ hint: null })
       this.startListening()
     }
   }
 
+  /** The engine told us whether speech input is set up (keys checked, or a key was just saved). */
+  setCanListen(canListen: boolean): void {
+    this.set({ canListen })
+    this.connected()
+  }
+
   /** The engine socket (re)connected. */
   connected(): void {
     const s = this.s
-    if (!this.listenWhenConnected || s.prompting) return // withMicPaused picks it up after the prompt
+    if (!this.listenWhenConnected || s.prompting || s.canListen === null) return // picked up later
     this.listenWhenConnected = false
     if (s.open && s.mode === 'typing' && !s.text && s.canListen) {
       this.set({ hint: null })
@@ -350,7 +360,7 @@ export class BarController {
       this.deps.setListening(false)
       this.set({ mode: 'typing', text: '', level: 0, speaking: false })
       const next = this.interceptor(msg.text)
-      if (next === 'listen-again' && this.s.open && this.s.canListen) this.startListening()
+      if (next === 'listen-again' && this.s.open && this.s.canListen === true) this.startListening()
       return
     }
     if (s.mode === 'listening') {

@@ -307,7 +307,7 @@ export class BarActions {
       result = await unwrap(this.client().PUT('/api/v1/keys/{provider}', { params: { path: { provider: 'auto' } }, body: { key } }))
     })
     const r = result as KeyTestResult | null
-    if (r?.ok && (r.provider === 'openai' || r.provider === 'gemini')) this.controller.store.setState({ canListen: true })
+    if (r?.ok && (r.provider === 'openai' || r.provider === 'gemini')) this.controller.setCanListen(true)
     if (r) this.controller.notice(r.ok ? 'info' : 'error', r.ok ? `Saved your ${r.provider} key. ${r.detail}`.trim() : r.detail)
     return r
   }

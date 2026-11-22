@@ -92,8 +92,9 @@ export interface BarState {
   keyEntry: boolean
   selected: string
   settings: UserSettings | null
-  /** False when no speech-to-text provider is set up (no OpenAI/Gemini key): the bar opens typing. */
-  canListen: boolean
+  /** Whether speech-to-text is set up (an OpenAI/Gemini key). Null until the engine has said: the bar
+   *  never opens the microphone (and so never triggers the OS permission prompt) before it knows. */
+  canListen: boolean | null
   /** A spoken prompt is playing (the mic is paused meanwhile). */
   prompting: boolean
   busy: string | null
@@ -122,7 +123,7 @@ export const initialBarState: BarState = {
   keyEntry: false,
   selected: '',
   settings: null,
-  canListen: true,
+  canListen: null,
   prompting: false,
   busy: null,
   announcement: null,

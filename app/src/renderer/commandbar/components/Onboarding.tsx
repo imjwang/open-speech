@@ -106,7 +106,7 @@ export function Onboarding({
   const [voices, setVoices] = useState<Voice[]>([])
   const [chosenVoice, setChosenVoice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const canListen = useStore(controller.store, (s) => s.canListen)
+  const canListen = useStore(controller.store, (s) => s.canListen === true)
 
   useEffect(() => {
     const client = engine.client

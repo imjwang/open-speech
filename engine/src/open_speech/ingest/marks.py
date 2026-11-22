@@ -25,6 +25,13 @@ _NUM_CITE = re.compile(
 _ALPHA_CITE = re.compile(
     r"\[\s*[A-Z][A-Za-z+]{0,5}\d{2}(?:\d{2})?[a-z]?(?:\s*[,;]\s*[A-Z][A-Za-z+]{0,5}\d{2}(?:\d{2})?[a-z]?)*\s*\]"
 )
+# Wikipedia-style editorial tags read as noise: "[citation needed]", "[clarification needed]", "[who?]".
+_EDITORIAL_CITE = re.compile(
+    r"\[\s*(?:(?:citation|clarification|verification|page|year|date|source)\s+needed|"
+    r"who\??|when\??|which\??|by whom\??|according to whom\??|dubious|disputed|"
+    r"failed verification|better source needed|not in citation given|original research\??)\s*\]",
+    re.IGNORECASE,
+)
 _CITE_GAP = re.compile(r"^\s*(?:[,;–—-]\s*)?$")
 
 _NAME = r"(?:(?:van|von|der|den|de|del|da|di|le|la|du|dos|al|el|bin|ibn|ter|ten)\s+)*[A-Z][\w'’\-]*[a-z][\w'’\-]*"
@@ -107,7 +114,7 @@ def _merge_adjacent(text: str, spans: list[tuple[int, int]]) -> list[tuple[int, 
 
 
 def find_citations(text: str) -> list[tuple[int, int]]:
-    brackets = [(m.start(), m.end()) for rx in (_NUM_CITE, _ALPHA_CITE) for m in rx.finditer(text)]
+    brackets = [(m.start(), m.end()) for rx in (_NUM_CITE, _ALPHA_CITE, _EDITORIAL_CITE) for m in rx.finditer(text)]
     spans = _merge_adjacent(text, brackets)
     for s, e in _balanced(text, "(", ")"):
         inner = text[s + 1 : e - 1]

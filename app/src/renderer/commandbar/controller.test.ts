@@ -28,7 +28,8 @@ const LOUD = 0.2 // ≈ -14 dBFS
 const QUIET = 0.0001 // -80 dBFS
 
 function harness(initial: Partial<BarState> = {}) {
-  const store = createBarStore(initial)
+  // Most tests run with speech input known to be set up; capability-unknown is tested explicitly.
+  const store = createBarStore({ canListen: true, ...initial })
   const mic = new FakeMic()
   const sent: ClientMessage[] = []
   const audio: Int16Array[] = []
@@ -120,6 +121,24 @@ afterEach(() => {
 })
 
 describe('BarController.open / close', () => {
+  it('never opens the mic before it knows speech input is set up, then listens once it is', () => {
+    const h = harness({ canListen: null })
+    h.controller.open({ listen: true, viaHotkey: true })
+    expect(h.store.getState().mode).toBe('typing')
+    expect(h.sent.some((m) => m.type === 'mic.start')).toBe(false)
+    h.controller.setCanListen(true)
+    expect(h.store.getState().mode).toBe('listening')
+    expect(h.sent.some((m) => m.type === 'mic.start')).toBe(true)
+  })
+
+  it('stays typing when the engine says speech input is not set up', () => {
+    const h = harness({ canListen: null })
+    h.controller.open({ listen: true, viaHotkey: true })
+    h.controller.setCanListen(false)
+    expect(h.store.getState().mode).toBe('typing')
+    expect(h.sent.some((m) => m.type === 'mic.start')).toBe(false)
+  })
+
   it('opens listening: bar.state open, then mic.start with the document context', () => {
     const h = harness()
     h.open(true, false, 'doc-1')

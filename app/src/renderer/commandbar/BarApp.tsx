@@ -69,6 +69,24 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
   // ---------------------------------------------------------------- data: settings, recents, search
 
   useEffect(() => {
+    // Whether talking works is known before the first open, so the bar never asks for the microphone
+    // (OS prompt) on a Mac that has no speech-to-text key.
+    if (!endpoint) return
+    const client = engine.client
+    if (!client) return
+    let cancelled = false
+    void Promise.all([unwrap(client.GET('/api/v1/keys')), unwrap(client.GET('/api/v1/health'))]).then(
+      ([keys, health]) =>
+        !cancelled &&
+        controller.setCanListen(keys.openai === 'configured' || keys.gemini === 'configured' || health.fixture_providers === true),
+      () => undefined,
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [endpoint, engine, controller, state.open])
+
+  useEffect(() => {
     if (!state.open || !endpoint) return
     const client = engine.client
     if (!client) return
@@ -79,14 +97,6 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
     )
     void unwrap(client.GET('/api/v1/documents', { params: { query: { limit: 10 } } })).then(
       (list) => !cancelled && setRecents(list.items),
-      () => undefined,
-    )
-    void Promise.all([unwrap(client.GET('/api/v1/keys')), unwrap(client.GET('/api/v1/health'))]).then(
-      ([keys, health]) => {
-        if (cancelled) return
-        const canListen = keys.openai === 'configured' || keys.gemini === 'configured' || health.fixture_providers === true
-        store.setState({ canListen })
-      },
       () => undefined,
     )
     return () => {
@@ -281,7 +291,7 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
         : state.mode === 'waiting'
           ? 'Working…'
           : state.hint ??
-            (state.canListen ? 'Type a command, or press Tab to talk' : 'Type what to read, or a command')
+            (state.canListen !== false ? 'Type a command, or press Tab to talk' : 'Type what to read, or a command')
 
   const announcement = state.announcement?.text ?? ''
   const shortcutLabel = displayShortcut(state.settings?.shortcuts?.open_bar, mac)
@@ -378,7 +388,7 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
             ) : (
               <>
                 <span><Kbd>↵</Kbd> run</span>
-                {state.canListen ? (
+                {state.canListen !== false ? (
                   <span><Kbd>tab</Kbd> talk</span>
                 ) : (
                   <button
