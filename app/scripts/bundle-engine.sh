@@ -143,7 +143,7 @@ find "$PY" -name __pycache__ -type d -prune -exec rm -rf {} +
 
 # --------------------------------------------------------------------------- checks
 step "Checks: imports, sys.path, linkage, licenses"
-env -i HOME="$HOME" PATH=/usr/bin:/bin PYTHONNOUSERSITE=1 "$PY/bin/python3" - "$PY" <<'PYCODE'
+env -i HOME="$HOME" PATH=/usr/bin:/bin PYTHONNOUSERSITE=1 ORT_DISABLE_TELEMETRY=1 "$PY/bin/python3" - "$PY" <<'PYCODE'
 import os, sys
 root = os.path.realpath(sys.argv[1])
 import open_speech, open_speech.cli.main, open_speech.api.app  # noqa: E401,F401
