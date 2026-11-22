@@ -32,7 +32,7 @@ class Engine:
         from open_speech.cache.extract import ExtractCache
         from open_speech.cache.plans import PlanCache
         from open_speech.local.catalog import ModelCatalog
-        from open_speech.local.manager import ModelManager
+        from open_speech.local.manager import LocalModelManager
         from open_speech.plan.planner import Planner
         from open_speech.playback.synth import Synthesizer
         from open_speech.playback.transport import Transport
@@ -70,7 +70,9 @@ class Engine:
         self.synth = Synthesizer(
             self.registry, self.audio_cache, self.ledger, self.budget, self.settings.get, self.events
         )
-        self.model_manager = ModelManager(self.paths, self.catalog, self.events)
+        self.model_manager = LocalModelManager(
+            self.paths, self.catalog, self.events, on_change=lambda _model: self.registry.refresh()
+        )
         if output is None:
             output = self._default_output()
         self.transport = Transport(
@@ -109,6 +111,8 @@ class Engine:
     def _default_output(self) -> Any:
         from open_speech.playback.output import NullOutput
 
+        if self.env.open_speech_audio_output == "null":
+            return NullOutput()
         try:
             from open_speech.playback.output import SoundDeviceOutput
 
@@ -195,6 +199,9 @@ class Engine:
             local=provider == "fixture",
         )
         self.budget.after_record()
+
+    def has_agent(self) -> bool:
+        return self._agent_runner_factory is not None or bool(self.keystore.get("anthropic"))
 
     def agent_runner(self) -> Any | None:
         if self._agent_runner_factory is not None:

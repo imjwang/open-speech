@@ -72,6 +72,14 @@ def _money_words(d: Decimal) -> str:
     return f"{cents} cent{'s' if cents != 1 else ''}"
 
 
+from open_speech.rules.presets import preset_out  # noqa: E402
+from open_speech.service.rules import _noun as rules_noun  # noqa: E402
+
+
+class _ToAgent(Exception):  # noqa: N818 — control flow, not an error
+    """Raised by a fast-path handler that matched but can't resolve the request without the LLM."""
+
+
 class AssistantService:
     def __init__(self, engine: Engine) -> None:
         self.e = engine
@@ -110,9 +118,13 @@ class AssistantService:
         try:
             pending = self.latest_pending()
             intent = parse(req.text, has_pending_action=pending is not None)
+            reply = None
             if intent is not None:
-                reply = await self._fast(intent, turn_id, req, pending)
-            else:
+                try:
+                    reply = await self._fast(intent, turn_id, req, pending)
+                except _ToAgent:
+                    reply = None  # the grammar matched but couldn't resolve it locally; Claude can
+            if reply is None:
                 handled = "agent"
                 reply = await self._agent(turn_id, session_id, req)
         except EngineError as e:
@@ -231,7 +243,12 @@ class AssistantService:
                 )
                 return Reply(f"I'll say {term} as {spoken}. Save it?", card=None) if aid else Reply()
             case "preset":
-                prop = await self.e.rules.propose_preset(str(p["preset"]), bool(p["enabled"]), turn_id=turn_id)
+                name, enabled = str(p["preset"]), bool(p["enabled"])
+                current = self.e.rules.find_preset(name)
+                if current is not None and current.enabled == enabled:  # nothing to confirm
+                    noun = rules_noun(preset_out(current).name)
+                    return Reply(f"I already skip {noun}." if enabled else f"I already read {noun}.")
+                prop = await self.e.rules.propose_preset(name, enabled, turn_id=turn_id)
                 return Reply(prop.summary)
             case "propose_rule":
                 prop = await self.e.rules.propose(
@@ -298,6 +315,8 @@ class AssistantService:
             case "set_voice_by_name":
                 voice = self.e.voices.find_by_name(str(p["name"]))
                 if voice is None:
+                    if self.e.has_agent():  # "use a calmer voice" is a description, not a name
+                        raise _ToAgent
                     return Reply(f"I couldn't find a voice called {p['name']}. Say “show voices” to hear the options.")
                 scope = str(p.get("scope", "document"))
                 if scope == "document":

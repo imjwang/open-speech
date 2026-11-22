@@ -38,17 +38,9 @@ class RuleService:
         return s.RuleList(items=[r.to_out() for r in rules], conflicts=self.e.rule_store.conflicts(rules))
 
     def presets(self) -> s.PresetsState:
-        out: list[s.PresetOut] = []
-        for r in self.e.rule_store.presets():
-            out.append(
-                s.PresetOut(
-                    id=r.id,
-                    name=r.name,
-                    enabled=r.enabled,
-                    classic=_describe_compiled(r),
-                    ai_enhanced_adds=_ai_adds(r),
-                )
-            )
+        from open_speech.rules.presets import preset_out
+
+        out = [preset_out(r) for r in self.e.rule_store.presets()]
         overrides = [s.ModeOverride(scope=sc, mode=m) for sc, m in self.e.rule_store.mode_overrides()]  # type: ignore[arg-type]
         return s.PresetsState(mode=self.e.settings.get().defaults.mode, overrides=overrides, presets=out)
 
@@ -211,11 +203,20 @@ class RuleService:
 
     # ------------------------------------------------------------------ preset proposals (fast path)
 
+    def find_preset(self, name_or_id: str) -> Rule | None:
+        from open_speech.rules.presets import preset_spec
+
+        spec = preset_spec(name_or_id)
+        key = spec.name if spec else name_or_id
+        return next((r for r in self.e.rule_store.presets() if key in (r.name, r.id)), None)
+
     async def propose_preset(self, preset_name: str, enabled: bool, *, turn_id: str | None = None) -> s.RuleProposal:
-        rs = self.e.rule_store
-        target = next((r for r in rs.presets() if r.name.lower() == preset_name.lower()), None)
+        from open_speech.rules.presets import preset_out
+
+        target = self.find_preset(preset_name)
         if target is None:
             raise NotFound(f"a preset called {preset_name}")
+        title = preset_out(target).name
         doc = self._doc(None)
         proposed = target.model_copy(update={"enabled": enabled})
         if enabled:
@@ -223,12 +224,12 @@ class RuleService:
                 proposed, doc, turn_id=turn_id, kind="set_preset", extra={"preset": target.name, "enabled": True}
             )
             if not prop.diff.summary:
-                prop.summary = f"That skips {target.name.lower()} everywhere. Save it?"
+                prop.summary = f"That skips {_noun(title)} everywhere. Save it?"
         else:
             action_id = self.e.assistant.create_action(
                 kind="set_preset",
-                summary=f"Read {target.name.lower()} again",
-                spoken=f"I'll read {target.name.lower()} again. OK?",
+                summary=f"Read {_noun(title)} again",
+                spoken=f"I'll read {_noun(title)} again. OK?",
                 payload={"preset": target.name, "enabled": False},
                 preview=None,
                 turn_id=turn_id,
@@ -237,7 +238,7 @@ class RuleService:
                 proposal_id=action_id,
                 rule=proposed.to_out(),
                 diff=s.SpeechDiff(),
-                summary=f"I'll read {target.name.lower()} again. OK?",
+                summary=f"I'll read {_noun(title)} again. OK?",
             )
         return prop
 
@@ -260,27 +261,6 @@ def _scope_summary(rule: Rule) -> str:
     return f"{what.rstrip('.')}, {where}. Save it?"
 
 
-def _describe_compiled(rule: Rule) -> str:
-    c = rule.compiled
-    if c is None:
-        return rule.description
-    parts: list[str] = []
-    if c.drop_blocks:
-        parts.append("drop " + ", ".join(str(b.value if hasattr(b, "value") else b) for b in c.drop_blocks))
-    if c.drop_marks:
-        parts.append("drop " + ", ".join(str(m.value if hasattr(m, "value") else m) for m in c.drop_marks))
-    return "; ".join(parts) or rule.description
-
-
-def _ai_adds(rule: Rule) -> str:
-    return {
-        "Headers": "Catches running heads the heuristic missed",
-        "Page numbers": "Inline “Page 4 of 18” fragments",
-        "Footnotes": "Endnote markers in odd formats",
-        "Citations": "Author-year forms, keeping names that are subjects",
-        "URLs": "Reads a short domain when the link text is the URL",
-        "Parentheses": "Keeps parentheses that carry meaning",
-        "Tables": "Optional one-sentence table summary",
-        "Formulas": "Optional “explain in words”",
-        "Code": "Optional one-line summary of each code block",
-    }.get(rule.name, "—")
+def _noun(title: str) -> str:
+    """How a preset is said mid-sentence: \"page numbers\", but \"URLs\"."""
+    return title if any(c.isupper() for c in title[1:]) else title.lower()

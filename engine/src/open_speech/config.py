@@ -14,12 +14,12 @@ import tomllib
 from decimal import Decimal
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import tomli_w
 from platformdirs import user_data_dir
 from pydantic import BaseModel, Field, SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_VOICE = "kokoro:kokoro-82m-v1.0:af_heart"
@@ -44,9 +44,11 @@ class EngineEnv(BaseSettings):
     # Deterministic, offline providers (fixture TTS/STT/LLM) for tests and the e2e suite. Never on in
     # packaged builds. They appear as provider "fixture" so they can't be mistaken for real voices.
     open_speech_fixture_providers: bool = False
+    # "null" plays nothing but keeps real-time playback clocks (tests, UI automation, headless CI).
+    open_speech_audio_output: Literal["auto", "null"] = "auto"
     # Extra browser origins allowed to call the engine (dev/test only, e.g. the Vite dev server used
     # by the UI test suite). The shell's own origin is always allowed.
-    open_speech_allowed_origins: list[str] = Field(default_factory=list)
+    open_speech_allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     @field_validator("anthropic_api_key", "openai_api_key", "gemini_api_key", mode="before")
     @classmethod

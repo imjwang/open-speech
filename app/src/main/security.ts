@@ -45,6 +45,7 @@ function originOf(url: string): string | null {
 
 async function ensureMacMicrophoneAccess(): Promise<boolean> {
   if (process.platform !== 'darwin') return true
+  if (process.env.OPEN_SPEECH_FAKE_MIC === '1') return true // UI automation: Chromium's fake capture device
   const status = systemPreferences.getMediaAccessStatus('microphone')
   if (status === 'granted') return true
   if (status === 'denied' || status === 'restricted') return false

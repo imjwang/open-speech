@@ -159,11 +159,11 @@ class ModelService:
         return s.LocalModelList(items=self.e.model_manager.list())
 
     async def install(self, model_id: str) -> s.JobAccepted:
-        job_id = await self.e.model_manager.install(model_id)
+        job_id = self.e.model_manager.start_install(model_id)
         return s.JobAccepted(job_id=job_id)
 
     async def remove(self, model_id: str) -> None:
-        await self.e.model_manager.remove(model_id)
+        self.e.model_manager.remove(model_id)
         self.e.registry.refresh()
 
 

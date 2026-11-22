@@ -53,6 +53,12 @@ function notify(title: string, body: string): void {
 
 registerAppSchemePrivileges()
 
+if (process.env.OPEN_SPEECH_FAKE_MIC === '1') {
+  // UI automation only: a synthetic capture device, so no OS microphone prompt and no real audio.
+  app.commandLine.appendSwitch('use-fake-device-for-media-stream')
+  app.commandLine.appendSwitch('use-fake-ui-for-media-stream')
+}
+
 const pendingOpenFiles: string[] = []
 app.on('open-file', (event, filePath) => {
   // Finder "Open with" / dock drops: route the file to the engine (03 § Main-process duties).

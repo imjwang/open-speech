@@ -179,6 +179,8 @@ def test_stop_reading_footnotes_on_this_site(api: tuple[Any, TestClient], home: 
     engine, client = api
     with ws_connect(client) as ws:
         reader = WsReader(ws)
+        # Footnotes are skipped everywhere by default; this user reads them, except on arxiv.org.
+        client.put("/api/v1/rules/presets", json={"presets": {"Footnotes": False}}).raise_for_status()
         res = client.post("/api/v1/documents", json={"kind": "html_blocks", "html_blocks": ARXIV_BLOCKS, "play": True})
         doc_id = res.json()["document"]["id"]
         assert res.json()["document"]["site"] == "arxiv.org"
@@ -216,8 +218,11 @@ def test_preset_toggle_and_lexicon(api: tuple[Any, TestClient]) -> None:
     engine, client = api
     with ws_connect(client) as ws:
         reader = WsReader(ws)
+        r = turn(client, reader, "skip citations")  # on by default: no card, just an answer
+        assert not r["actions"] and "already" in r["done"]["text"]
+        client.put("/api/v1/rules/presets", json={"presets": {"Citations": False}}).raise_for_status()
         doc_id = _create_text(client, play=True)["document"]["id"]
-        assert "[12]" in _script_text(client, doc_id) or "12" in _script_text(client, doc_id)
+        assert "[12]" in _script_text(client, doc_id)
         r = turn(client, reader, "skip citations")
         assert r["actions"] and r["actions"][0]["kind"] == "set_preset"
         turn(client, reader, "yes")

@@ -2,3 +2,5 @@
 # flags: scanned_pages:1
 
 --- removed (0)
+--- warnings
+Page 1 has no text layer (scanned), so it can't be read without AI extraction.
