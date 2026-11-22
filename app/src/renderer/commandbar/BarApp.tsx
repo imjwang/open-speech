@@ -344,6 +344,9 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
           shouldFilter={false}
           loop
           vimBindings={false}
+          // Selection follows the keyboard and the conversation, not wherever the pointer happens to rest
+          // when new rows appear (Enter must act on what the user chose). Clicking still runs a row.
+          disablePointerSelection
           value={selected}
           onValueChange={(value) => store.setState({ selected: value })}
           onKeyDown={onRootKeyDown}

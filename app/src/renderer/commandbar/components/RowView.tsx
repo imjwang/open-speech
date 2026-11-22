@@ -71,7 +71,7 @@ function Item({ row, handlers, className, children }: { row: Row; handlers: RowH
       value={row.value}
       onSelect={() => handlers.onSelect(row)}
       disabled={row.kind === 'pending'}
-      className={cn('group/item', className)}
+      className={cn('group/item hover:bg-muted/50', className)}
       data-row-kind={row.kind}
     >
       {children}
