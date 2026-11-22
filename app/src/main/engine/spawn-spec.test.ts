@@ -14,6 +14,9 @@ describe('resolveSpawnSpec', () => {
     expect(spec.args.slice(-5)).toEqual(['serve', '--port', '0', '--handshake', 'stdout'])
     expect(spec.cwd).toBe(runtime)
     expect(spec.env).toMatchObject({ PYTHONNOUSERSITE: '1', OPEN_SPEECH_BUNDLED_RUNTIME: runtime })
+    expect(spec.args[0]).toBe('-c')
+    expect(spec.args[1]).toContain('from open_speech.cli.main import app')
+    expect(spec.args[1]).toContain('os.getppid()') // exits when the app dies (no orphaned engine)
   })
 
   it('turns onnxruntime telemetry off unless the user set it', () => {
