@@ -1,7 +1,7 @@
 /** Reader UI state (Zustand). Server state (documents, scripts) is fetched from the engine. */
 import { create } from 'zustand'
 
-import type { Block, DocumentOut, ReaderSettings, ScriptOut } from '@shared/api/client'
+import type { Block, DocumentOut, ScriptOut } from '@shared/api/client'
 import type { Anchor } from '@shared/api/ws.gen'
 import type { ReaderTarget } from '@shared/ipc'
 import type { WebViewState } from '@shared/ipc-channels'
@@ -33,7 +33,6 @@ export interface ReaderState {
   /** Web documents: the live page (WebContentsView) or the extracted text. */
   webMode: 'page' | 'text'
   web: WebViewState | null
-  settings: ReaderSettings | null
 }
 
 export const initialReaderState: ReaderState = {
@@ -51,7 +50,6 @@ export const initialReaderState: ReaderState = {
   follow: true,
   webMode: 'page',
   web: null,
-  settings: null,
 }
 
 export const useReaderStore = create<ReaderState>(() => ({ ...initialReaderState }))

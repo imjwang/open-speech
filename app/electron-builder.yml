@@ -19,7 +19,7 @@ files:
   - "!out/**/*.map"
 asar: true
 npmRebuild: false
-electronLanguages: [en]
+electronLanguages: [en, es]
 
 extraResources:
   # Menu-bar template images (src/main/index.ts reads <resources>/tray when packaged).

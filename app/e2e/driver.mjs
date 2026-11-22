@@ -14,6 +14,7 @@
 //   {op:"type", text} · {op:"press", key} · {op:"click", selector} · {op:"choose", selector, file}
 //   {op:"aria", selector} · {op:"axe", page} · {op:"dark", on} · {op:"logs"}
 //   {op:"fakemic"}    replace getUserMedia with a synthetic tone stream (never touches the real mic)
+//   {op:"voicemic"}   a microphone that is silent until {op:"say", file:"x.wav"} plays a recording into it
 // Before opening the bar, make windows non-focusable so the bar never takes the user's keystrokes:
 //   {op:"main", js:"BrowserWindow.getAllWindows().forEach(w=>w.setFocusable(false)); return 1"}
 // The bar exposes a read-only, content-free handle: window.__openSpeechBar.getState() and .log
@@ -109,6 +110,43 @@ async function handle(cmd) {
       })
       await p.reload()
       return 'ok'
+    }
+    case 'voicemic': {
+      // A microphone that is silent until {op:"say", file} plays a recording into it: spoken tests that never
+      // touch the real microphone or the speakers (make the recording with `say -o file.wav ...`).
+      await p.addInitScript(() => {
+        let ctx = null
+        let dest = null
+        const context = () => (ctx ??= new AudioContext())
+        navigator.mediaDevices.getUserMedia = async () => {
+          // A fresh destination per request: the app stops the tracks of the stream it was given.
+          dest = context().createMediaStreamDestination()
+          const hush = context().createGain()
+          hush.gain.value = 0
+          const osc = context().createOscillator()
+          osc.connect(hush).connect(dest)
+          osc.start()
+          return dest.stream
+        }
+        window.__sayIntoMic = async (b64) => {
+          if (!dest) throw new Error('the microphone is not open')
+          await context().resume()
+          const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+          const buffer = await context().decodeAudioData(bytes.buffer)
+          const source = context().createBufferSource()
+          source.buffer = buffer
+          source.connect(dest)
+          source.start()
+          return new Promise((resolve) => (source.onended = () => resolve(buffer.duration)))
+        }
+      })
+      await p.reload()
+      return 'ok'
+    }
+    case 'say': {
+      const fs = await import('node:fs')
+      const b64 = fs.readFileSync(cmd.file).toString('base64')
+      return await p.evaluate((b) => window.__sayIntoMic(b), b64)
     }
     case 'dark':
       await p.emulateMedia({ colorScheme: cmd.on === false ? 'light' : 'dark' })

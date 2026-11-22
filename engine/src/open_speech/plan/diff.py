@@ -12,10 +12,11 @@ import time
 from collections import Counter
 from collections.abc import Sequence
 
+from open_speech import i18n
 from open_speech.api.schemas import DiffRemoval, DiffReplacement, DiffTransform, SpeechDiff
 from open_speech.config import DEFAULT_LLM
 from open_speech.document.model import Block, BlockType, Document, MarkKind, SourceKind
-from open_speech.errors import MissingKey
+from open_speech.errors import Unavailable
 from open_speech.plan.build import BuildSpec, Memo, build_script
 from open_speech.plan.keys import active_rules
 from open_speech.plan.script import RuleHit
@@ -83,22 +84,27 @@ def _category(hit: RuleHit, block: Block | None) -> tuple[str, str]:
 
 
 def _plural(n: int, nouns: tuple[str, str]) -> str:
+    """ "2 footnotes" in the user's language. `nouns` is the English (singular, plural) pair, which is also
+    the key the catalogs translate from (`noun.<singular>.one` / `.other`)."""
+    key = f"noun.{nouns[0].lower().replace(' ', '_')}"
+    if i18n.has(f"{key}.one") and i18n.current_language() != "en":
+        return f"{n} {i18n.tn(key, n)}"
     return f"{n} {nouns[0] if n == 1 else nouns[1]}"
 
 
 def _join(items: Sequence[str]) -> str:
     if len(items) <= 1:
         return "".join(items)
-    return ", ".join(items[:-1]) + " and " + items[-1]
+    return ", ".join(items[:-1]) + i18n.t("list.and") + items[-1]
 
 
 def _where(doc: Document, window: Sequence[Block]) -> str:
     pages = {b.page for b in window if b.page is not None}
     if doc.kind == SourceKind.pdf:
-        return "On these pages" if len(pages) > 1 else "On this page"
+        return i18n.t("diff.on_these_pages") if len(pages) > 1 else i18n.t("diff.on_this_page")
     if doc.kind == SourceKind.web:
-        return "On this page"
-    return "In this document"
+        return i18n.t("diff.on_this_page")
+    return i18n.t("diff.in_this_document")
 
 
 def spoken_summary(
@@ -119,17 +125,17 @@ def spoken_summary(
         rest = sum(n for _, n in ranked[3:])
         if rest:
             phrases.append(_plural(rest, ("other passage", "other passages")))
-        parts.append("removes " + _join(phrases))
+        parts.append(i18n.t("diff.removes", what=_join(phrases)))
     if replacements:
-        parts.append("changes " + _plural(replacements, ("phrase", "phrases")))
+        parts.append(i18n.t("diff.changes", what=_plural(replacements, ("phrase", "phrases"))))
     if transforms:
-        parts.append("rewrites " + _plural(transforms, ("section", "sections")))
+        parts.append(i18n.t("diff.rewrites", what=_plural(transforms, ("section", "sections"))))
     if restored:
         ranked_r = sorted(restored.items(), key=lambda kv: (-kv[1], kv[0][0]))
-        parts.append("brings back " + _join([_plural(n, nouns) for nouns, n in ranked_r[:3]]))
+        parts.append(i18n.t("diff.brings_back", what=_join([_plural(n, nouns) for nouns, n in ranked_r[:3]])))
     if not parts:
-        return f"{where} it doesn't change anything. Save it {scope_phrase} anyway?"
-    return f"{where} that {_join(parts)}. Save it {scope_phrase}?"
+        return i18n.t("diff.no_change", where=where, scope=scope_phrase)
+    return i18n.t("diff.summary", where=where, what=_join(parts), scope=scope_phrase)
 
 
 def _covers(hits: Sequence[RuleHit], h: RuleHit) -> bool:
@@ -160,7 +166,7 @@ async def speech_diff(
 
     needs_llm = prop.tier in ("annotate", "transform")
     if needs_llm and llm is None:
-        raise MissingKey("anthropic", "Previewing that rule")
+        raise Unavailable("rule_preview")
 
     before = await build_script(
         BuildSpec(doc, base_filters, [], None, entries, speech_md, "classic", "", "diff-before"),

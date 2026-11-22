@@ -1,14 +1,17 @@
-import { ArrowDown, FileText, Globe, Pause, Play, ScrollText } from 'lucide-react'
+import { ArrowDownToLine, FileText, Globe, Mic, Pause, Play, ScrollText } from 'lucide-react'
 
 import type { PlaybackState } from '@shared/api/client'
 
-import { Button } from '@/components/ui/button'
-import { Kbd } from '@/components/ui/kbd'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { formatSpeed, formatTimeLeft } from '@/format'
+import { IconButton } from '@/components/ui/icon-button'
+import { formatDuration, formatSpeed } from '@/format'
+import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 
-/** Thin title strip (09 § Reader): title · p. 3/15 · 1.8x · Script toggle. Draggable on macOS. */
+/**
+ * Thin title strip (09 § Reader): play/pause, the title, where the reading is, and three icon toggles
+ * (follow the reading, live page ↔ extracted text, what is spoken) plus the microphone, which opens the
+ * command bar on this document. Draggable on macOS.
+ */
 export function TitleStrip({
   title,
   playback,
@@ -22,6 +25,7 @@ export function TitleStrip({
   followReleased,
   onBackToPlayhead,
   onPlayPause,
+  onCommand,
   mac,
 }: {
   title: string
@@ -36,75 +40,63 @@ export function TitleStrip({
   followReleased: boolean
   onBackToPlayhead(): void
   onPlayPause(): void
+  onCommand(): void
   mac: boolean
 }) {
+  const t = useT()
   const playingThis = isPlayingThis && (playback.state === 'playing' || playback.state === 'loading')
   const page = isPlayingThis ? playback.page : null
   const pages = (isPlayingThis ? playback.page_count : null) ?? pageCount
+  const position = page && pages ? `${page}/${pages}` : pages ? String(pages) : null
   const parts = [
-    page && pages ? `p. ${page}/${pages}` : pages ? `${pages} pages` : null,
+    position,
     isPlayingThis ? formatSpeed(playback.speed) : null,
-    isPlayingThis ? formatTimeLeft(playback.time_left_s) : null,
+    isPlayingThis && playback.time_left_s != null ? formatDuration(playback.time_left_s) : null,
   ].filter(Boolean)
   return (
     <header
       className={cn(
-        'flex h-10 shrink-0 items-center gap-2 border-b bg-background/95 pr-2 text-sm [-webkit-app-region:drag]',
+        'flex h-10 shrink-0 items-center gap-2 border-b bg-background pr-2 text-sm text-foreground [-webkit-app-region:drag]',
         mac ? 'pl-20' : 'pl-3',
       )}
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            className="shrink-0 [-webkit-app-region:no-drag]"
-            aria-label={playingThis ? 'Pause' : 'Play'}
-            onClick={onPlayPause}
-          >
-            {playingThis ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          {playingThis ? 'Pause' : 'Play'} <Kbd className="ml-1">Space</Kbd>
-        </TooltipContent>
-      </Tooltip>
+      <IconButton
+        label={playingThis ? t('row.pause') : t('row.play')}
+        shortcut="Space"
+        side="bottom"
+        onClick={onPlayPause}
+        className="size-7 bg-primary text-primary-foreground [-webkit-app-region:no-drag] hover:bg-primary/90 hover:text-primary-foreground"
+      >
+        {playingThis ? <Pause className="size-4 fill-current" /> : <Play className="size-4 fill-current" />}
+      </IconButton>
       <h1 className="min-w-0 truncate font-medium">{title}</h1>
       {parts.length > 0 && (
-        <p className="shrink-0 text-muted-foreground tabular-nums" aria-label="Position">
-          <span aria-hidden="true">· </span>
+        <p className="shrink-0 text-xs text-muted-foreground tabular-nums" aria-label={page && pages ? t('reader.page', { page, pages }) : undefined}>
           {parts.join(' · ')}
         </p>
       )}
-      <div className="ml-auto flex items-center gap-1 [-webkit-app-region:no-drag]">
+      <div className="ml-auto flex items-center gap-0.5 [-webkit-app-region:no-drag]">
         {followReleased && (
-          <Button size="sm" variant="secondary" onClick={onBackToPlayhead}>
-            <ArrowDown aria-hidden="true" />
-            Back to playhead
-          </Button>
+          <IconButton label={t('reader.back_to_playhead')} side="bottom" onClick={onBackToPlayhead} className="text-primary">
+            <ArrowDownToLine />
+          </IconButton>
         )}
         {web && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button size="sm" variant="ghost" aria-pressed={webMode === 'text'} onClick={onToggleWebMode}>
-                {webMode === 'text' ? <Globe aria-hidden="true" /> : <FileText aria-hidden="true" />}
-                {webMode === 'text' ? 'Live page' : 'Reader text'}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{webMode === 'text' ? 'Show the live site' : 'Show the extracted text'}</TooltipContent>
-          </Tooltip>
+          <IconButton
+            label={webMode === 'text' ? t('reader.page_view') : t('reader.text_view')}
+            side="bottom"
+            active={webMode === 'text'}
+            onClick={onToggleWebMode}
+          >
+            {webMode === 'text' ? <Globe /> : <FileText />}
+          </IconButton>
         )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button size="sm" variant={scriptView ? 'secondary' : 'ghost'} aria-pressed={scriptView} onClick={onToggleScript}>
-              <ScrollText aria-hidden="true" />
-              Script
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            Show exactly what will be spoken <Kbd className="ml-1">{mac ? '⌘⇧S' : 'Ctrl+Shift+S'}</Kbd>
-          </TooltipContent>
-        </Tooltip>
+        <IconButton label={t('reader.script')} shortcut={mac ? '⌘⇧S' : 'Ctrl+Shift+S'} side="bottom" active={scriptView} onClick={onToggleScript}>
+          <ScrollText />
+        </IconButton>
+        <IconButton label={t('reader.command')} shortcut={mac ? '⌘K' : 'Ctrl+K'} side="bottom" onClick={onCommand}>
+          <Mic />
+        </IconButton>
       </div>
     </header>
   )

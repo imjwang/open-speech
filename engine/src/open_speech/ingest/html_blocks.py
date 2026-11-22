@@ -11,6 +11,7 @@ import re
 from open_speech.api.schemas import HtmlBlocksPayload
 from open_speech.document.model import BlockType, Document, SourceKind
 from open_speech.ingest.common import DraftBlock, build_document, finalize_blocks, infer_title, site_for, source_id_url
+from open_speech.ingest.lead import lead_first
 
 _TYPE_MAP: dict[str, BlockType] = {
     "p": BlockType.paragraph,
@@ -71,7 +72,9 @@ def ingest_html_blocks(payload: HtmlBlocksPayload, *, title: str | None = None) 
         if (not hb.text or not hb.text.strip()) and bt != BlockType.figure:
             continue
         drafts.append(DraftBlock(type=bt, text=hb.text, level=level, dom_anchor=hb.dom_anchor, block_id=hb.id))
-    blocks = finalize_blocks(drafts)
+    # The preload posts blocks in DOM order; an infobox or picture caption ahead of the lead is read after it.
+    # Ids and anchors travel with each block, so highlighting on the live page is unaffected.
+    blocks = finalize_blocks(lead_first(drafts))
     source_id = source_id_url(payload.url, (b.text for b in blocks))
     return build_document(
         source_id=source_id,

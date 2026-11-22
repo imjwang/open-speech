@@ -1,12 +1,13 @@
 /**
  * Menu-bar icon (09 § Menu bar): idle (outline), listening (filled + pulse), playing (waveform),
- * attention (dot). Click opens the command bar; the menu has Play/Pause · Recent ▸ · Open Rules Folder
- * · Quit. The pulse is disabled under reduced motion.
+ * attention (dot). Click opens the command bar; the menu has Play/Pause · Recent ▸ · Rules… · Quit, in the
+ * app's language. The pulse is disabled under reduced motion.
  */
 import path from 'node:path'
 
 import { Menu, nativeImage, systemPreferences, Tray, type MenuItemConstructorOptions, type NativeImage } from 'electron'
 
+import { t } from '../shared/i18n'
 import { trayTooltip, trayVisual, type TrayInputs, type TrayVisual } from './tray-state'
 
 export interface RecentItem {
@@ -20,7 +21,7 @@ export interface TrayActions {
   playPause(): void
   playDocument(documentId: string): void
   loadRecents(): Promise<RecentItem[]>
-  openRulesFolder(): void
+  openRules(): void
   quit(): void
 }
 
@@ -116,13 +117,14 @@ export class TrayController {
           label: `${r.title}${r.progress > 0 ? ` · ${Math.round(r.progress * 100)}%` : ''}`,
           click: () => this.actions.playDocument(r.id),
         }))
-      : [{ label: 'Nothing yet', enabled: false }]
+      : [{ label: t('tray.nothing_recent'), enabled: false }]
     const template: MenuItemConstructorOptions[] = [
-      { label: this.inputs.playing ? 'Pause' : 'Play', click: () => this.actions.playPause() },
-      { label: 'Recent', submenu: recentItems },
-      { label: 'Open Rules Folder', click: () => this.actions.openRulesFolder() },
+      { label: t('tray.open'), click: () => this.actions.openBar() },
+      { label: this.inputs.playing ? t('tray.pause') : t('tray.play'), click: () => this.actions.playPause() },
+      { label: t('tray.recent'), submenu: recentItems },
+      { label: t('tray.rules'), click: () => this.actions.openRules() },
       { type: 'separator' },
-      { label: 'Quit Open Speech', role: 'quit', click: () => this.actions.quit() },
+      { label: t('tray.quit'), role: 'quit', click: () => this.actions.quit() },
     ]
     this.tray.popUpContextMenu(Menu.buildFromTemplate(template))
   }

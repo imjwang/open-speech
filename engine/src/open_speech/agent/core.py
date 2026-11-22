@@ -7,15 +7,18 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from open_speech.api import schemas as s
 from open_speech.api.ws_schema import AssistantDelta
-from open_speech.errors import EngineError, MissingKey
+from open_speech.errors import EngineError, Unavailable
+from open_speech.i18n import current_language, t
+from open_speech.service.commands import Reply, voice_display
 
 if TYPE_CHECKING:
-    from open_speech.service.assistant import AssistantService, Reply, _Session
+    from open_speech.service.assistant import Conversation
+    from open_speech.service.commands import Turn
     from open_speech.service.engine import Engine
 
-HISTORY_TURNS = 12  # user+assistant pairs kept per bar session
+HISTORY_TURNS = 12  # user+assistant pairs kept per conversation
+PREFERENCES_CHARS = 2000
 
 
 @cache
@@ -23,47 +26,69 @@ def system_prompt() -> str:
     return (Path(__file__).parent / "prompts" / "system.md").read_text("utf-8")
 
 
-def _turn_context(e: Engine, req: s.TurnRequest) -> str:
+def _voice_name(e: Engine, voice_id: str) -> str:
+    """How a voice is called aloud ("Heart"), not its id."""
+    voice = next((v for v in e.registry.voices() if v.id == voice_id), None)
+    return voice_display(voice)[0] if voice is not None else voice_id
+
+
+def turn_context(e: Engine, turn: Turn, failures: list[str]) -> str:
+    """What changes every turn. It goes after the cached prefix (system prompt + tools), in the user message."""
+    req = turn.request
     snap = e.playback.state()
     ctx: dict[str, Any] = {
+        "language": current_language(),  # reply in this language
+        "input": "spoken" if req.source == "spoken" else "typed",
         "playing": snap.state,
         "document": snap.document_title,
         "document_id": req.context.document_id or snap.document_id,
+        "queue": [q.title for q in snap.queue],
         "speed": snap.speed,
         "voice": snap.voice_id,
-        "has_pending_confirmation": e.assistant.latest_pending() is not None,
-        "input": "spoken" if req.source == "spoken" else "typed",
+        "voice_name": _voice_name(e, snap.voice_id or e.documents.voice_for(snap.document_id)),  # say this one
+        "theme": e.effective_theme(),
+        "has_pending_confirmation": turn.pending is not None,
     }
+    if turn.documents:
+        ctx["attachments"] = [{"document_id": d, "title": e.documents.title(d)} for d in turn.documents]
+    if failures:
+        ctx["attachments_that_failed"] = failures
     if req.context.selection:
         ctx["selection"] = f"<document_content>{req.context.selection[:2000]}</document_content>"
-    return json.dumps(ctx)
+    out = f"<turn_context>{json.dumps(ctx, ensure_ascii=False)}</turn_context>"
+    preferences = e.rule_store.speech_md().strip()
+    if preferences:
+        out += f"\n<user_preferences>{preferences[:PREFERENCES_CHARS]}</user_preferences>"
+    return out
 
 
-async def run_agent_turn(
-    e: Engine, assistant: AssistantService, *, turn_id: str, session: _Session, req: s.TurnRequest
-) -> Reply:
-    from open_speech.agent.tools import build_tools
-    from open_speech.service.assistant import Reply
+async def run_agent_turn(e: Engine, *, turn: Turn, conversation: Conversation, failures: list[str]) -> Reply:
+    from open_speech.agent.tools import TurnGuard, build_tools
 
     runner = e.agent_runner()
     if runner is None:
-        err = MissingKey("anthropic", "That request")
-        err.detail = (
-            "Free-form requests need an Anthropic key. Paste one here, or say “help” to hear what works without one."
-        )
-        raise err
+        raise Unavailable("assistant")
     e.budget.check_paid()
     settings = e.settings.get()
-    tools = build_tools(e, turn_id=turn_id, context=req.context)
-    user = f"<turn_context>{_turn_context(e, req)}</turn_context>\n\n{req.text}"
+    req = turn.request
+    guard = TurnGuard(hosts=set(conversation.hosts))
+    if req.context.document_id or e.playback.current_document_id():
+        try:
+            site = e.documents.load(req.context.document_id or e.playback.current_document_id() or "").site
+            if site:
+                guard.hosts.add(site.lower())
+        except EngineError:
+            pass
+    tools = build_tools(e, turn=turn, guard=guard)
+    user = f"{turn_context(e, turn, failures)}\n\n{req.text}"
 
     def on_delta(text: str) -> None:
-        e.events.publish(AssistantDelta(turn_id=turn_id, text=text))
+        e.events.publish(AssistantDelta(turn_id=turn.id, text=text))
 
     try:
         result = await runner.run(
             system=system_prompt(),
-            history=session.history[-2 * HISTORY_TURNS :],
+            history=conversation.history[-2 * HISTORY_TURNS :],
             user=user,
             tools=tools,
             model=settings.llm.model,
@@ -75,23 +100,25 @@ async def run_agent_turn(
     except Exception as err:  # noqa: BLE001 — SDK/network errors become a spoken error with the next step
         name = type(err).__name__
         if "Authentication" in name or "Permission" in name:
-            raise EngineError("missing_key", "Your Anthropic key was rejected. Paste a new one into the bar.") from err
+            e.keys.mark_invalid("anthropic")
+            raise Unavailable("assistant") from err
         if "RateLimit" in name:
-            raise EngineError("rate_limited", "Claude is busy right now. Try again in a moment.") from err
+            raise EngineError("rate_limited", t("agent.busy")) from err
         if "Connection" in name or "Timeout" in name:
-            raise EngineError(
-                "offline", "I can't reach Claude right now. Playback and simple commands still work."
-            ) from err
-        raise EngineError("provider_error", "Claude had a problem with that request. Please try again.") from err
+            raise EngineError("offline", t("agent.offline")) from err
+        raise EngineError("provider_error", t("agent.problem")) from err
 
     e.ledger.record(
-        provider="anthropic", model=result.model or settings.llm.model, op="chat", units=result.units, turn_id=turn_id
+        provider="anthropic", model=result.model or settings.llm.model, op="chat", units=result.units, turn_id=turn.id
     )
     e.budget.after_record()
     text = result.text
     if result.stop_reason == "refusal":
-        text = text or "I can't help with that one."
+        text = text or t("agent.refused")
     if not text:
-        text = "Done." if result.tool_calls else "Sorry, I don't have an answer for that."
-    session.history.extend([{"role": "user", "content": req.text}, {"role": "assistant", "content": text}])
+        text = t("done.generic") if result.tool_calls else t("agent.no_answer")
+    said = req.text
+    if turn.documents:
+        said += "\n[attached: " + ", ".join(e.documents.title(d) for d in turn.documents) + "]"
+    conversation.history.extend([{"role": "user", "content": said}, {"role": "assistant", "content": text}])
     return Reply(text=text)

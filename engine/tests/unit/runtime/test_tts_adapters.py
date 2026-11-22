@@ -79,7 +79,7 @@ async def test_openai_tts_error_mapping(catalog: ModelCatalog, recorder: Recorde
     assert ei.value.code == code and ei.value.retryable is retryable and ei.value.key_invalid is key_invalid
     assert len(recorder.requests) == 1  # no SDK-level retries: the synthesizer owns backoff
     if key_invalid:
-        assert "key was rejected" in ei.value.detail
+        assert "turned the request down" in ei.value.detail
 
 
 async def test_openai_tts_network_error_is_offline(catalog: ModelCatalog) -> None:
@@ -176,7 +176,8 @@ async def test_openai_compatible_server(recorder: Recorder) -> None:
         "response_format": "wav"}}}})
     from open_speech.providers.pcm import tone, wav_bytes
 
-    recorder.add("POST", "/audio/speech", lambda r: httpx2.Response(200, content=wav_bytes(tone(200, 0.5, 24000), 24000)))
+    wav = wav_bytes(tone(200, 0.5, 24000), 24000)
+    recorder.add("POST", "/audio/speech", lambda r: httpx2.Response(200, content=wav))
     tts = OpenAICompatibleTts(cat, http_client=recorder.client())
     assert [v.id for v in tts.voices()] == ["openai_compatible:kokoro-fastapi:af_heart"]
     chunks = await _drain(tts, TtsRequest(text="Hi.", model="kokoro-fastapi", voice="af_heart"))

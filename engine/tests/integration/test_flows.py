@@ -26,16 +26,37 @@ ARXIV_BLOCKS = {
     "url": "https://arxiv.org/abs/1706.03762",
     "title": "Attention Is All You Need",
     "blocks": [
-        {"id": "h1", "type": "heading", "level": 1, "text": "Attention Is All You Need",
-         "dom_anchor": {"xpath": "/html/body/h1[1]", "start_offset": 0}},
-        {"id": "p1", "type": "paragraph", "text": "The dominant sequence transduction models are based on recurrent networks [1].",
-         "dom_anchor": {"xpath": "/html/body/p[1]", "start_offset": 0}},
-        {"id": "f1", "type": "footnote", "text": "1 See appendix B for the full derivation.",
-         "dom_anchor": {"xpath": "/html/body/aside[1]", "start_offset": 0}},
-        {"id": "p2", "type": "paragraph", "text": "We propose a new simple network architecture, the Transformer.",
-         "dom_anchor": {"xpath": "/html/body/p[2]", "start_offset": 0}},
-        {"id": "f2", "type": "footnote", "text": "2 Equal contribution.",
-         "dom_anchor": {"xpath": "/html/body/aside[2]", "start_offset": 0}},
+        {
+            "id": "h1",
+            "type": "heading",
+            "level": 1,
+            "text": "Attention Is All You Need",
+            "dom_anchor": {"xpath": "/html/body/h1[1]", "start_offset": 0},
+        },
+        {
+            "id": "p1",
+            "type": "paragraph",
+            "text": "The dominant sequence transduction models are based on recurrent networks [1].",
+            "dom_anchor": {"xpath": "/html/body/p[1]", "start_offset": 0},
+        },
+        {
+            "id": "f1",
+            "type": "footnote",
+            "text": "1 See appendix B for the full derivation.",
+            "dom_anchor": {"xpath": "/html/body/aside[1]", "start_offset": 0},
+        },
+        {
+            "id": "p2",
+            "type": "paragraph",
+            "text": "We propose a new simple network architecture, the Transformer.",
+            "dom_anchor": {"xpath": "/html/body/p[2]", "start_offset": 0},
+        },
+        {
+            "id": "f2",
+            "type": "footnote",
+            "text": "2 Equal contribution.",
+            "dom_anchor": {"xpath": "/html/body/aside[2]", "start_offset": 0},
+        },
     ],
 }
 
@@ -192,9 +213,12 @@ def test_stop_reading_footnotes_on_this_site(api: tuple[Any, TestClient], home: 
         assert action["preview"]["removals"], "the card carries a speech diff"
         assert "arxiv.org" in r["done"]["text"] and "?" in r["done"]["text"]
         assert not list((home / "rules").glob("*footnote*arxiv*")), "nothing is written before confirmation"
+        seen = len(reader.seen)
         r2 = turn(client, reader, "yes", source="spoken")
         assert r2["done"]["handled_by"] == "fast_path"
-        reader.of_type("document.updated", document_id=doc_id)
+        # The re-plan is announced while the turn finishes or just after it, depending on timing.
+        if not any(m.get("type") == "document.updated" and m.get("document_id") == doc_id for m in reader.seen[seen:]):
+            reader.of_type("document.updated", document_id=doc_id)
     assert "appendix B" not in _script_text(client, doc_id)
     rules = client.get("/api/v1/rules").json()["items"]
     site_rules = [x for x in rules if "arxiv.org" in x["scope"]["sites"]]
@@ -272,7 +296,12 @@ def test_image_is_described(api: tuple[Any, TestClient]) -> None:
     Image.new("RGB", (64, 48), (200, 30, 30)).save(buf, format="PNG")
     r = client.post(
         "/api/v1/documents",
-        json={"kind": "image", "image_base64": base64.b64encode(buf.getvalue()).decode(), "media_type": "image/png", "image_mode": "describe"},
+        json={
+            "kind": "image",
+            "image_base64": base64.b64encode(buf.getvalue()).decode(),
+            "media_type": "image/png",
+            "image_mode": "describe",
+        },
     )
     assert r.status_code == 200, r.text
     doc = r.json()["document"]
@@ -291,17 +320,30 @@ def test_agent_without_key_explains_next_step(api: tuple[Any, TestClient]) -> No
         reader = WsReader(ws)
         r = turn(client, reader, "summarize the rest of this chapter")
         assert r["done"]["handled_by"] == "error"
-        assert "Anthropic key" in r["done"]["text"]
-        assert r["done"]["error"]["code"] == "missing_key"
+        assert r["done"]["error"]["code"] == "unavailable"
+        # It says what still works and never asks for a key: there is nothing the user could enter.
+        assert "aren't part of this build" in r["done"]["text"] and "key" not in r["done"]["text"].lower()
 
 
-def test_keys_are_write_only(api: tuple[Any, TestClient]) -> None:
+def test_no_key_can_be_read_or_set_through_the_api(api: tuple[Any, TestClient]) -> None:
     engine, client = api
-    st = client.get("/api/v1/keys").json()
-    assert set(st) == {"anthropic", "openai", "gemini"}
-    assert client.get("/api/v1/keys/openai").status_code in (404, 405)
-    r = client.put("/api/v1/keys/auto", json={"key": "not-a-key"}).json()
-    assert r["ok"] is False and "recognise" in r["detail"]
+    for method, path in (("get", "/api/v1/keys"), ("put", "/api/v1/keys/auto"), ("put", "/api/v1/keys/openai")):
+        assert getattr(client, method)(path, **({"json": {"key": "sk-x"}} if method == "put" else {})).status_code in (
+            404,
+            405,
+        )
+    caps = client.get("/api/v1/capabilities").json()
+    assert caps["speech_input"] == {
+        "available": True,
+        "provider": "fixture",
+        "local": True,
+        "model": "fixture-stt",
+        "reason": None,
+        "install_model": None,
+    }
+    assert caps["assistant"] is False and caps["cloud_voices"] == []
+    assert caps["languages"] == ["en", "es"] and caps["language"] in caps["languages"]
+    assert "key" not in json.dumps(caps).lower()
 
 
 def test_recents_and_search(api: tuple[Any, TestClient]) -> None:
@@ -330,7 +372,9 @@ def test_resume_position_survives_restart(engine_factory: Any) -> None:
     assert st["utterance_index"] == idx
 
 
-@pytest.mark.parametrize("cmd", ["show voices", "show rules", "show recents", "show presets", "show keys"])
+@pytest.mark.parametrize(
+    "cmd", ["show voices", "show rules", "show recents", "show presets", "show settings", "show queue"]
+)
 def test_rows_not_screens(api: tuple[Any, TestClient], cmd: str) -> None:
     engine, client = api
     with ws_connect(client) as ws:

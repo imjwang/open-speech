@@ -127,6 +127,16 @@ def find_citations(text: str) -> list[tuple[int, int]]:
     return sorted(spans)
 
 
+def balanced_spans(text: str, open_c: str, close_c: str) -> list[tuple[int, int]]:
+    """Outermost balanced `open_c … close_c` spans, brackets included."""
+    return _balanced(text, open_c, close_c)
+
+
+def find_citation_items(text: str) -> list[tuple[int, int]]:
+    """Author-year items anywhere in `text`, bracketed or not: "Smith et al., 2020", "see Lee and Kim 2019, p. 4"."""
+    return [(m.start(), m.end()) for m in _CITE_ITEM.finditer(text)]
+
+
 def find_formulas(text: str) -> list[tuple[int, int]]:
     spans = [(m.start(), m.end()) for m in _LATEX_INLINE.finditer(text)]
     for m in _FORMULA.finditer(text):

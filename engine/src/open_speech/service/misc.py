@@ -1,4 +1,4 @@
-"""Voices, usage, keys, local models and recordings use cases (04)."""
+"""Voices, usage, local models and recordings use cases (04)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from open_speech.api import schemas as s
 from open_speech.errors import EngineError, NotFound
+from open_speech.i18n import resolve_language, t
 from open_speech.ids import new_id
+from open_speech.providers.base import Voice
 
 if TYPE_CHECKING:
     from open_speech.service.engine import Engine
@@ -33,7 +35,53 @@ class VoiceService:
             voices = [v for v in voices if not v.languages or any(x.lower().startswith(lang_l) for x in v.languages)]
         return s.VoiceList(items=voices)
 
-    def find_by_name(self, name: str) -> s.Voice | None:  # type: ignore[name-defined]
+    # ------------------------------------------------------------------ languages
+
+    @staticmethod
+    def speaks(voice: Voice, language: str) -> bool:
+        """A voice with no declared languages is multilingual (cloud voices follow the text)."""
+        return not voice.languages or any(x.lower().split("-")[0] == language for x in voice.languages)
+
+    def for_language(self, preferred: str, language: str | None) -> str:
+        """`preferred` when it can pronounce `language`; otherwise the voice the user chose for that language,
+        or the first one that speaks it (local voices first). Unknown language: `preferred`."""
+        if not language:
+            return preferred
+        voices = {v.id: v for v in self.e.registry.voices() if v.available}
+        current = voices.get(preferred)
+        if current is not None and self.speaks(current, language):
+            return preferred
+        chosen = self.e.settings.get().defaults.voices.get(language)
+        if chosen in voices and self.speaks(voices[chosen], language):
+            return str(chosen)
+        native = [v for v in voices.values() if v.languages and self.speaks(v, language)]
+        native.sort(key=lambda v: not v.local)
+        return native[0].id if native else preferred
+
+    def assistant_voice(self) -> str:
+        """The voice replies are spoken in: the assistant voice, in the language the app is set to."""
+        settings = self.e.settings.get()
+        voices = {v.id: v for v in self.e.registry.voices() if v.available}
+        voice = settings.defaults.assistant_voice
+        if voice not in voices:
+            voice = self.e.registry.default_local_voice()
+        return self.for_language(voice, resolve_language(settings.language))
+
+    async def set_default(self, voice_id: str) -> None:
+        """Make a voice the default: for every language it speaks, and as the main voice when it speaks the
+        app's language (so choosing a Spanish voice while reading Spanish doesn't break English reading)."""
+        voice = self.e.registry.voice(voice_id)
+        settings = self.e.settings.get()
+        language = resolve_language(settings.language)
+        per_language = dict(settings.defaults.voices)
+        for code in {x.lower().split("-")[0] for x in voice.languages}:
+            per_language[code] = voice_id
+        patch: dict[str, Any] = {"voices": per_language}
+        if self.speaks(voice, language):
+            patch["voice"] = voice_id
+        await self.e.settings.patch({"defaults": patch})
+
+    def find_by_name(self, name: str) -> Voice | None:
         n = name.lower().replace(" ", "").replace("-", "").replace("_", "")
         candidates = [v for v in self.e.registry.voices() if v.available]
         for v in candidates:
@@ -47,9 +95,9 @@ class VoiceService:
     async def preview(self, voice_id: str, *, style: str | None = None, play: bool = True) -> s.PreviewResponse:
         voice = next((v for v in self.e.registry.voices() if v.id == voice_id), None)
         if voice is None:
-            raise NotFound(f"the voice {voice_id}")
+            raise NotFound(t("what.voice"))
         if not voice.available:
-            raise EngineError("missing_key", voice.unavailable_reason or f"{voice.name} isn't available.")
+            raise EngineError("unavailable", voice.unavailable_reason or f"{voice.name} isn't available.")
         res = await self.e.synth.synth(
             PREVIEW_TEXT.format(name=voice.name.split(" (")[0]), voice_id, style=style, op="preview"
         )
@@ -125,31 +173,6 @@ class UsageService:
         return self.budget()
 
 
-class KeyService:
-    def __init__(self, engine: Engine) -> None:
-        self.e = engine
-
-    def state(self) -> s.KeysState:
-        ks = self.e.keystore
-        return s.KeysState(anthropic=ks.status("anthropic"), openai=ks.status("openai"), gemini=ks.status("gemini"))
-
-    async def put(self, provider: str, key: str) -> s.KeyTestResult:
-        key = key.strip()
-        if provider == "auto":
-            detected = self.e.keystore.detect(key)
-            if detected is None:
-                return s.KeyTestResult(
-                    ok=False,
-                    provider="unknown",
-                    detail="I don't recognise that key. Anthropic keys start with sk-ant-, OpenAI with sk-, Gemini with AIza.",
-                )
-            provider = detected
-        ok, detail = await self.e.keystore.set(provider, key)
-        if ok:
-            self.e.registry.refresh()
-        return s.KeyTestResult(ok=ok, provider=provider, detail=detail)
-
-
 class ModelService:
     def __init__(self, engine: Engine) -> None:
         self.e = engine
@@ -206,7 +229,7 @@ class RecordingService:
     def path(self, recording_id: str) -> Path:
         row = self.e.db.one("SELECT path FROM recordings WHERE id=?", (recording_id,))
         if row is None or not Path(row["path"]).exists():
-            raise NotFound("that recording")
+            raise NotFound(t("what.recording"))
         return Path(row["path"])
 
     async def play(self, recording_id: str) -> s.PlaybackState:

@@ -1,35 +1,44 @@
 /**
- * The command bar (09 § 1): opens listening, live transcript in the input, results as cmdk rows.
- * Keyboard: Enter submits / confirms / runs the selected row; ⌘↵ secondary; ⇧↵ preview; Tab toggles
- * typing ↔ listening; Esc backs out one level and finally closes the bar.
+ * The command bar (09 § 1): a voice orb and a composer on top, what just happened below, the transport for
+ * what is playing, and a row of icons for everything else.
+ *
+ * Keyboard: Enter sends the composer (or confirms / runs the selected row when it is empty); ⌘↵ and ⇧↵ are
+ * a row's second and third actions; Tab toggles typing ↔ listening; `@` finds files; Esc backs out one level
+ * and finally closes the bar.
  */
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
+import { ArrowUp, Download, MicOff } from 'lucide-react'
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useStore } from 'zustand'
 
 import { unwrap, type DocumentOut } from '@shared/api/client'
 
 import type { Bridge } from '@/bridge'
-import { Command, CommandGroup, CommandInput, CommandList } from '@/components/ui/command'
+import { Command, CommandGroup, CommandList } from '@/components/ui/command'
+import { IconButton } from '@/components/ui/icon-button'
 import { Kbd } from '@/components/ui/kbd'
 import { useEngine, useEngineStore } from '@/engine'
+import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
-import type { BarActions } from './actions'
-import { KeyEntry } from './components/KeyEntry'
-import { MicIndicator } from './components/MicIndicator'
+import { usePrefs } from '@/prefs'
+import type { BarActions, RowModifier } from './actions'
+import { NowPlaying } from './components/NowPlaying'
 import { Onboarding } from './components/Onboarding'
+import { Orb, orbState } from './components/Orb'
 import { RowView, type RowHandlers } from './components/RowView'
+import { Toolbar } from './components/Toolbar'
+import { Composer, EMPTY_VALUE, type ComposerHandle, type ComposerValue } from './composer/Composer'
+import { fromDataTransfer } from './composer/attachments'
 import type { BarController } from './controller'
-import { classifyPastedText, itemFromDataTransfer, itemFromFile } from './dropped'
-import { buildRows, defaultSelection, findRow, type Row } from './rows'
-import { latestPendingAction, type BarState } from './store'
+import { buildRows, defaultSelection, findRow } from './rows'
+import { composerEmpty, latestPendingAction, type BarState } from './store'
 
-function isTypingKey(e: KeyboardEvent): boolean {
+function isTypingKey(e: ReactKeyboardEvent): boolean {
   if (e.metaKey || e.ctrlKey) return false
   if (e.altKey && e.key === ' ') return false
   return e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete'
 }
 
-function displayShortcut(accel: string | undefined, mac: boolean): string {
+export function displayShortcut(accel: string | undefined, mac: boolean): string {
   const a = accel ?? 'Alt+Space'
   if (!mac) return a
   return a
@@ -40,6 +49,27 @@ function displayShortcut(accel: string | undefined, mac: boolean): string {
     .replace(/Space/i, 'Space')
 }
 
+/** How the shortcut is said aloud ("Option Space"), in the interface language. */
+function spokenShortcut(accel: string | undefined, lang: string): string {
+  const es = lang === 'es'
+  return (accel ?? 'Alt+Space')
+    .split('+')
+    .map((part) => {
+      const k = part.toLowerCase()
+      if (k === 'alt') return es ? 'Opción' : 'Option'
+      if (k === 'shift') return es ? 'Mayúsculas' : 'Shift'
+      if (k === 'command' || k === 'cmd') return es ? 'Comando' : 'Command'
+      if (k === 'control' || k === 'ctrl') return 'Control'
+      if (k === 'space') return es ? 'Espacio' : 'Space'
+      return part
+    })
+    .join(' ')
+}
+
+function modifierOf(e: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }): RowModifier {
+  return e.metaKey || e.ctrlKey ? 'secondary' : e.shiftKey ? 'tertiary' : 'primary'
+}
+
 export interface BarAppProps {
   controller: BarController
   actions: BarActions
@@ -47,6 +77,7 @@ export interface BarAppProps {
 }
 
 export function BarApp({ controller, actions, bridge }: BarAppProps) {
+  const t = useT()
   const engine = useEngine()
   const store = controller.store
   const state = useStore(store) as BarState
@@ -54,47 +85,42 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
   const endpoint = useEngineStore((s) => s.endpoint)
   const engineProblem = useEngineStore((s) => s.problem)
   const socketStatus = useEngineStore((s) => s.status)
+  const settings = usePrefs((s) => s.settings)
+  const capabilities = usePrefs((s) => s.capabilities)
+  const language = usePrefs((s) => s.language)
   const [recents, setRecents] = useState<DocumentOut[]>([])
   const [search, setSearch] = useState<DocumentOut[] | null>(null)
   const [partialAnnouncement, setPartialAnnouncement] = useState('')
   const rootRef = useRef<HTMLElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const composerRef = useRef<ComposerHandle | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const mac = bridge.platform === 'darwin'
 
-  const groups = buildRows(state, { playback, recents, search })
+  const groups = buildRows(state, { recents, search })
   const selected = defaultSelection(groups, state)
-  const onboarding = state.open && state.settings !== null && state.settings.onboarding_completed === false
+  const onboarding = state.open && settings !== null && settings.onboarding_completed === false
+  const filled = !composerEmpty(state)
+  const speech = capabilities?.speech_input
 
-  // ---------------------------------------------------------------- data: settings, recents, search
+  const attachComposer = (handle: ComposerHandle | null) => {
+    composerRef.current = handle
+    controller.attachComposer(handle)
+    actions.composer = handle
+  }
+
+  // ---------------------------------------------------------------- data: capabilities, recents, search
 
   useEffect(() => {
-    // Whether talking works is known before the first open, so the bar never asks for the microphone
-    // (OS prompt) on a Mac that has no speech-to-text key.
-    if (!endpoint) return
-    const client = engine.client
-    if (!client) return
-    let cancelled = false
-    void Promise.all([unwrap(client.GET('/api/v1/keys')), unwrap(client.GET('/api/v1/health'))]).then(
-      ([keys, health]) =>
-        !cancelled &&
-        controller.setCanListen(keys.openai === 'configured' || keys.gemini === 'configured' || health.fixture_providers === true),
-      () => undefined,
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [endpoint, engine, controller, state.open])
+    // Whether the bar can listen is known before the first open, so the microphone (and its OS prompt)
+    // is never touched on a Mac where listening isn't set up yet.
+    if (speech) controller.setCanListen(speech.available)
+  }, [speech, controller])
 
   useEffect(() => {
     if (!state.open || !endpoint) return
     const client = engine.client
     if (!client) return
     let cancelled = false
-    void unwrap(client.GET('/api/v1/settings')).then(
-      (settings) => !cancelled && store.setState({ settings }),
-      () => undefined,
-    )
     void unwrap(client.GET('/api/v1/documents', { params: { query: { limit: 10 } } })).then(
       (list) => !cancelled && setRecents(list.items),
       () => undefined,
@@ -102,9 +128,9 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
     return () => {
       cancelled = true
     }
-  }, [state.open, endpoint, engine, store])
+  }, [state.open, endpoint, engine])
 
-  const query = state.mode === 'typing' && !state.dropped ? state.text.trim() : ''
+  const query = state.mode !== 'listening' && state.attachments.length === 0 ? state.draft.trim() : ''
   useEffect(() => {
     if (!query) {
       setSearch(null)
@@ -113,16 +139,16 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
     const client = engine.client
     if (!client) return
     let cancelled = false
-    const t = setTimeout(() => {
-      // Typing filters titles and full text (FR-BAR-8).
-      void unwrap(client.GET('/api/v1/documents', { params: { query: { q: query, limit: 10 } } })).then(
+    const timer = setTimeout(() => {
+      // Typing finds documents by title and text (FR-BAR-8).
+      void unwrap(client.GET('/api/v1/documents', { params: { query: { q: query, limit: 6 } } })).then(
         (list) => !cancelled && setSearch(list.items),
         () => !cancelled && setSearch([]),
       )
     }, 150)
     return () => {
       cancelled = true
-      clearTimeout(t)
+      clearTimeout(timer)
     }
   }, [query, engine])
 
@@ -138,8 +164,8 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
   }, [bridge])
 
   useEffect(() => {
-    if (state.open && !state.keyEntry && !onboarding) inputRef.current?.focus()
-  }, [state.open, state.keyEntry, onboarding, state.mode])
+    if (state.open && !onboarding) composerRef.current?.focus()
+  }, [state.open, onboarding, state.mode])
 
   useEffect(() => {
     // Push-to-talk: the first keyup of the held hotkey (Space or Option) inside the focused bar.
@@ -151,33 +177,35 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
   }, [controller])
 
   useEffect(() => {
-    // Rate-limited announcement of live partials (finals and replies go through `announcement`).
-    if (state.mode !== 'listening' || !state.text) return
-    const t = setTimeout(() => setPartialAnnouncement(state.text), 1500)
-    return () => clearTimeout(t)
-  }, [state.mode, state.text])
+    // Rate-limited announcement of the live transcript (finals and replies go through `announcement`).
+    if (state.mode !== 'listening' || !state.transcript) return
+    const timer = setTimeout(() => setPartialAnnouncement(state.transcript), 1500)
+    return () => clearTimeout(timer)
+  }, [state.mode, state.transcript])
 
   useEffect(() => {
-    actions.pickFile = () =>
-      new Promise<File | null>((resolve) => {
+    actions.pickFiles = () =>
+      new Promise<File[]>((resolve) => {
         const input = fileRef.current
-        if (!input) return resolve(null)
+        if (!input) return resolve([])
         input.value = ''
-        input.onchange = () => resolve(input.files?.[0] ?? null)
+        input.onchange = () => resolve(Array.from(input.files ?? []))
         input.click()
       })
     return () => {
-      actions.pickFile = null
+      actions.pickFiles = null
     }
   }, [actions])
 
-  // ---------------------------------------------------------------- rows
+  // ---------------------------------------------------------------- handlers
 
   const handlers: RowHandlers = {
     onSelect: (row) => void actions.runRow(row, 'primary'),
     onSecondary: (row) => void actions.runRow(row, 'secondary'),
     onTertiary: (row) => void actions.runRow(row, 'tertiary'),
     onCancelAction: (action) => void actions.cancelAction(action.actionId),
+    onTogglePreset: (card, row) => void actions.togglePreset(card, row),
+    onSetSetting: (card, row, value) => void actions.setSetting(card, row, value),
   }
 
   const close = () => {
@@ -188,33 +216,22 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
   /** Esc always backs out one level (09 § Accessibility), then closes the bar. */
   const escape = () => {
     const s = store.getState()
-    if (s.keyEntry) return store.setState({ keyEntry: false })
     if (s.localConfirm) return store.setState({ localConfirm: null })
     const pending = latestPendingAction(s)
     if (pending) return void actions.cancelAction(pending.actionId)
-    if (s.dropped) return store.setState({ dropped: null })
-    if (s.mode === 'typing' && s.text) return controller.setText('')
+    if (s.mode === 'listening' && s.transcript) return controller.toggle()
+    if (!composerEmpty(s)) return composerRef.current?.clear()
     close()
   }
 
-  const onRootKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+  /** Enter in the composer. */
+  const onEnter = (event: globalThis.KeyboardEvent) => {
     const s = store.getState()
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      escape()
-      return
-    }
-    if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && e.target === inputRef.current) {
-      e.preventDefault()
-      controller.toggle()
-      return
-    }
-    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
-    const row: Row | undefined = findRow(groups, selected)
+    const value: ComposerValue = composerRef.current?.getValue() ?? EMPTY_VALUE
+    const row = findRow(groups, selected)
     if (s.mode === 'listening') {
-      e.preventDefault()
       // With nothing said yet, Enter answers a pending confirmation instead of submitting silence.
-      if (!s.text.trim() && row?.kind === 'action' && row.action.status === 'pending') {
+      if (!s.transcript.trim() && row?.kind === 'action' && row.action.status === 'pending') {
         controller.keystroke()
         void actions.runRow(row, 'primary')
       } else {
@@ -222,26 +239,28 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
       }
       return
     }
-    if (s.mode === 'finalizing' || s.mode === 'waiting') {
-      e.preventDefault()
-      return
-    }
-    if (!row) {
-      e.preventDefault()
-      controller.submit('enter')
-      return
-    }
-    if (e.metaKey || e.ctrlKey) {
-      e.preventDefault()
-      void actions.runRow(row, 'secondary')
-    } else if (e.shiftKey) {
-      e.preventDefault()
-      void actions.runRow(row, 'tertiary')
-    }
-    // Plain Enter: cmdk calls the selected row's onSelect.
+    // A row the user moved to wins; otherwise what is in the composer is sent; otherwise the default row runs.
+    if (row && (s.selected === row.value || !(value.text || value.attachments.length))) void actions.runRow(row, modifierOf(event))
+    else void actions.submit(value)
   }
 
-  const onInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const onRootKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      escape()
+      return
+    }
+    if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !onboarding) {
+      const target = e.target as HTMLElement
+      if (target.closest('[data-slot="composer"]') || target === rootRef.current) {
+        e.preventDefault()
+        if (store.getState().canListen !== false) controller.toggle()
+      }
+    }
+  }
+
+  /** Keys on their way into the composer. */
+  const onComposerKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
     if (e.repeat && (e.key === ' ' || e.key === 'Alt') && controller.openedViaHotkey) {
       // Auto-repeat of the still-held hotkey: not typing (and ⌥Space would insert a no-break space).
       e.preventDefault()
@@ -249,168 +268,167 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
     }
     const s = store.getState()
     if (s.mode === 'listening' && isTypingKey(e)) controller.keystroke()
-    if ((e.key === 'Home' || e.key === 'End') && s.mode === 'typing') e.stopPropagation() // caret, not rows
-  }
-
-  const onPaste = (e: ClipboardEvent<HTMLInputElement>) => {
-    const file = e.clipboardData.files?.[0]
-    if (file) {
-      e.preventDefault()
-      store.setState({ dropped: itemFromFile(file), selected: 'dropped:read' })
-      return
-    }
-    const classified = classifyPastedText(e.clipboardData.getData('text/plain'))
-    if (!classified) {
-      if (store.getState().mode === 'listening') controller.keystroke()
-      return
-    }
-    e.preventDefault()
-    if (classified.kind === 'key') {
-      // Never put a key in the transcript (it would be sent to the assistant).
-      if (store.getState().mode === 'listening') controller.keystroke()
-      void actions.saveKey(classified.key)
-      return
-    }
-    if (store.getState().mode === 'listening') controller.keystroke()
-    store.setState({ dropped: classified, selected: 'dropped:read' })
+    if (e.key === 'Home' || e.key === 'End') e.stopPropagation() // the caret's, not the rows'
   }
 
   const onDrop = (e: DragEvent<HTMLElement>) => {
-    const item = itemFromDataTransfer(e.dataTransfer)
-    if (!item) return
+    // Anywhere on the bar outside the editor (the editor places its own drops at the caret).
+    const items = fromDataTransfer(e.dataTransfer, bridge.pathForFile)
+    if (!items.length) return
     e.preventDefault()
-    if (store.getState().mode === 'listening') controller.keystroke()
-    store.setState({ dropped: item, selected: 'dropped:read' })
+    composerRef.current?.insertAttachments(items)
+    composerRef.current?.focus()
+  }
+
+  const installSpeechModel = async () => {
+    const client = engine.client
+    const model = speech?.install_model
+    if (!client || !model) return
+    try {
+      const job = await unwrap(client.POST('/api/v1/models/local/{model_id}', { params: { path: { model_id: model } } }))
+      controller.onJobProgress({ type: 'job.progress', job_id: job.job_id, pct: 0, label: t('onboard.model') })
+    } catch (err) {
+      controller.notice('error', (err as Error).message)
+    }
   }
 
   const placeholder =
     state.mode === 'listening'
-      ? 'Listening… say what to read, or start typing'
-      : state.mode === 'finalizing'
-        ? 'Got it…'
-        : state.mode === 'waiting'
-          ? 'Working…'
-          : state.hint ??
-            (state.canListen !== false ? 'Type a command, or press Tab to talk' : 'Type what to read, or a command')
-
+      ? t('composer.placeholder.listening')
+      : state.canListen === false
+        ? t('composer.placeholder.typing_only')
+        : t('composer.placeholder.typing')
+  const orb = orbState(state.mode, { prompting: state.prompting, canListen: state.canListen, error: !!state.micError })
   const announcement = state.announcement?.text ?? ''
-  const shortcutLabel = displayShortcut(state.settings?.shortcuts?.open_bar, mac)
+  const shortcut = displayShortcut(settings?.shortcuts?.open_bar, mac)
+  const connecting = socketStatus === 'reconnecting' || socketStatus === 'connecting'
+  const showTransport = !!playback.document_id && playback.state !== 'idle'
+  const status = state.micError ?? state.hint
 
   return (
     <main
       ref={rootRef}
-      aria-label="Open Speech"
+      aria-label={t('app.name')}
       data-open={state.open}
       data-mode={state.mode}
-      className="overflow-hidden rounded-xl border bg-background/90 shadow-2xl backdrop-blur-xl supports-[backdrop-filter]:bg-background/80"
+      className="overflow-hidden rounded-2xl border bg-background/95 text-foreground shadow-2xl backdrop-blur-xl"
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
     >
-      <h1 className="sr-only">Open Speech</h1>
+      <h1 className="sr-only">{t('app.name')}</h1>
       <div className="sr-only" aria-live="polite" aria-atomic="true" data-testid="announcer">
         {announcement}
       </div>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {state.mode === 'listening' ? partialAnnouncement : ''}
       </div>
-      {(engineProblem || (socketStatus !== 'open' && socketStatus !== 'idle')) && (
+      {(engineProblem || connecting) && (
         <p role="status" className="border-b px-4 py-1.5 text-xs text-muted-foreground">
-          {engineProblem ?? (socketStatus === 'reconnecting' || socketStatus === 'connecting' ? 'Connecting to the engine…' : '')}
+          {engineProblem ?? t('connecting')}
         </p>
       )}
-      {onboarding ? (
-        <>
-          <div className="flex min-h-14 items-center gap-3 px-4">
-            <MicIndicator mode={state.mode} level={state.level} error={!!state.micError} />
-            <p className="flex-1 truncate text-lg text-muted-foreground" aria-live="polite">
-              {state.text ||
-                (state.prompting ? 'Speaking…' : state.mode === 'listening' ? 'Listening…' : state.canListen ? '' : 'Type or click to answer')}
-            </p>
-            <Kbd>esc</Kbd>
+      <Command
+        label={t('app.name')}
+        shouldFilter={false}
+        loop
+        vimBindings={false}
+        // Selection follows the keyboard and the conversation, not wherever the pointer happens to rest
+        // when new rows appear (Enter must act on what the user chose). Clicking still runs a row.
+        disablePointerSelection
+        value={selected}
+        onValueChange={(value) => store.setState({ selected: value })}
+        onKeyDown={onRootKeyDown}
+      >
+        {!onboarding && (
+          <div className="flex items-start gap-3 px-4 pt-3 pb-1.5" onKeyDownCapture={onComposerKeyDown}>
+            <Orb state={orb} level={state.level} onPress={() => controller.toggle()} />
+            <Composer
+              ref={attachComposer}
+              label={t('composer.label')}
+              placeholder={placeholder}
+              onEnter={onEnter}
+              onChange={(v) => controller.setDraft(v.text, v.attachments, v.multiline)}
+              searchFiles={bridge.searchFiles}
+              pathForFile={bridge.pathForFile}
+            />
+            {filled && state.mode !== 'listening' && (
+              <IconButton
+                label={t('send')}
+                shortcut="↵"
+                tabIndex={-1}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void actions.submit(composerRef.current?.getValue() ?? EMPTY_VALUE)}
+                className="mt-1 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+              >
+                <ArrowUp />
+              </IconButton>
+            )}
           </div>
+        )}
+        {onboarding ? (
           <Onboarding
             controller={controller}
             actions={actions}
-            openBarShortcut={shortcutLabel}
-            openBarSpoken={mac ? 'Option-Space' : shortcutLabel}
+            orb={<Orb state={orb} level={state.level} onPress={() => controller.toggle()} />}
+            heard={state.transcript}
+            openBarShortcut={shortcut}
+            openBarSpoken={spokenShortcut(settings?.shortcuts?.open_bar, language)}
             onFinished={() =>
-              store.setState((s) => ({ settings: s.settings ? { ...s.settings, onboarding_completed: true } : s.settings }))
+              usePrefs.setState((s) => ({ settings: s.settings ? { ...s.settings, onboarding_completed: true } : s.settings }))
             }
           />
-        </>
-      ) : (
-        <Command
-          label="Open Speech command bar"
-          shouldFilter={false}
-          loop
-          vimBindings={false}
-          // Selection follows the keyboard and the conversation, not wherever the pointer happens to rest
-          // when new rows appear (Enter must act on what the user chose). Clicking still runs a row.
-          disablePointerSelection
-          value={selected}
-          onValueChange={(value) => store.setState({ selected: value })}
-          onKeyDown={onRootKeyDown}
-        >
-          <CommandInput
-            ref={inputRef}
-            value={state.text}
-            onValueChange={(text) => {
-              controller.setText(text)
-              if (text.trim()) store.setState({ selected: 'submit' })
-            }}
-            readOnly={state.mode === 'finalizing' || state.mode === 'waiting'}
-            placeholder={placeholder}
-            aria-describedby="bar-hints"
-            onKeyDown={onInputKeyDown}
-            onPaste={onPaste}
-            leading={<MicIndicator mode={state.mode} level={state.level} error={!!state.micError} />}
-            trailing={<Kbd aria-hidden="true">{shortcutLabel}</Kbd>}
-          />
-          {state.keyEntry && <KeyEntry onSave={(key) => actions.saveKey(key)} onClose={() => store.setState({ keyEntry: false })} />}
-          {state.micError && (
-            <p role="alert" className="border-t px-4 py-1.5 text-xs text-muted-foreground">
-              {state.micError}
-            </p>
-          )}
-          <CommandList className={cn(groups.length > 0 && 'border-t')}>
-            {groups.map((group) => (
-              <CommandGroup key={group.id} heading={group.heading}>
-                {group.rows.map((row) => (
-                  <RowView key={row.value} row={row} handlers={handlers} />
-                ))}
-              </CommandGroup>
-            ))}
-          </CommandList>
-          <p id="bar-hints" className="flex items-center gap-3 border-t px-4 py-1.5 text-[11px] text-muted-foreground">
-            {state.mode === 'listening' ? (
-              <>
-                <span>Speak, or start typing</span>
-                <span><Kbd>↵</Kbd> send</span>
-                <span><Kbd>tab</Kbd> type</span>
-              </>
-            ) : (
-              <>
-                <span><Kbd>↵</Kbd> run</span>
-                {state.canListen !== false ? (
-                  <span><Kbd>tab</Kbd> talk</span>
-                ) : (
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    className="underline-offset-2 hover:text-foreground hover:underline"
-                    onClick={() => store.setState({ keyEntry: true })}
-                  >
-                    Add an OpenAI or Gemini key to talk
-                  </button>
+        ) : (
+          <>
+            {speech && !speech.available && (
+              <p role="status" className="flex items-center gap-2 px-4 pb-2 text-xs text-muted-foreground" data-testid="speech-unavailable">
+                <MicOff aria-hidden="true" className="size-3.5 shrink-0" />
+                <span className="min-w-0 flex-1">{speech.reason}</span>
+                {speech.install_model && (
+                  <IconButton label={t('row.install')} onClick={() => void installSpeechModel()} tabIndex={-1} className="size-6">
+                    <Download className="size-3.5" />
+                  </IconButton>
                 )}
-              </>
+              </p>
             )}
-            <span><Kbd>esc</Kbd> {latestPendingAction(state) ? 'cancel' : 'close'}</span>
-            {state.busy && <span className="ml-auto" role="status">{state.busy}</span>}
-          </p>
-        </Command>
-      )}
-      <input ref={fileRef} type="file" className="hidden" tabIndex={-1} aria-hidden="true" />
+            {status && (
+              <p role={state.micError ? 'alert' : 'status'} className="px-4 pb-2 text-xs text-muted-foreground">
+                {status}
+              </p>
+            )}
+            <CommandList className={cn(groups.length > 0 && 'border-t')}>
+              {groups.map((group) => (
+                <CommandGroup key={group.id}>
+                  {group.rows.map((row) => (
+                    <RowView key={row.value} row={row} handlers={handlers} />
+                  ))}
+                </CommandGroup>
+              ))}
+            </CommandList>
+            {showTransport && (
+              <NowPlaying
+                playback={playback}
+                handlers={{
+                  toggle: () => void actions.togglePlayback(playback),
+                  skip: (n) => void actions.skip(n),
+                  speed: (d) => void actions.changeSpeed(playback, d),
+                  next: () => void actions.nextDocument(),
+                  openReader: () => playback.document_id && bridge.openReader({ documentId: playback.document_id }),
+                }}
+              />
+            )}
+            <Toolbar
+              handlers={{
+                attach: () => void actions.attach(),
+                clipboard: () => actions.readClipboard(),
+                show: (what) => actions.show(what),
+                rules: () => actions.openRules(),
+              }}
+              trailing={<Kbd aria-hidden="true">{shortcut}</Kbd>}
+            />
+          </>
+        )}
+      </Command>
+      <input ref={fileRef} type="file" multiple className="hidden" tabIndex={-1} aria-hidden="true" />
     </main>
   )
 }

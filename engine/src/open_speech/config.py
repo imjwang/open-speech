@@ -1,7 +1,9 @@
 """Configuration.
 
 Two layers (03 § Storage, 08 § Keys):
-- `EngineEnv`: process environment + the repo-root `.env` (development keys, overrides). SecretStr keys.
+- `EngineEnv`: process environment, the repo-root `.env` in development and, in a packaged build, the
+  `provider.env` written into the bundled runtime at build time. Provider keys are build configuration:
+  users never enter one. SecretStr keys.
 - `UserSettings`: `settings.toml` in app data — shortcuts, defaults, budget, retention, modes. This is the
   schema the assistant must be able to read and write in full (FR-ASST-3) and that `GET/PATCH /settings`
   exposes.
@@ -25,11 +27,25 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_VOICE = "kokoro:kokoro-82m-v1.0:af_heart"
 DEFAULT_LLM = "claude-sonnet-5-5"
 SHELL_ORIGIN = "app://open-speech"
+BUNDLED_RUNTIME_ENV = "OPEN_SPEECH_BUNDLED_RUNTIME"
+PROVIDER_ENV_FILE = "provider.env"  # written by app/scripts/bundle-engine.sh from the build environment
+
+Language = Literal["en", "es"]
+LANGUAGES: tuple[Language, ...] = ("en", "es")
+
+
+def env_files() -> tuple[Path, ...]:
+    """Where keys and overrides are read from, lowest priority first (the process environment wins over all)."""
+    files = [REPO_ROOT / ".env"]
+    runtime = os.environ.get(BUNDLED_RUNTIME_ENV)
+    if runtime:
+        files.append(Path(runtime) / PROVIDER_ENV_FILE)
+    return tuple(files)
 
 
 class EngineEnv(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=REPO_ROOT / ".env", env_file_encoding="utf-8", extra="ignore", case_sensitive=False
+        env_file=env_files(), env_file_encoding="utf-8", extra="ignore", case_sensitive=False
     )
 
     anthropic_api_key: SecretStr | None = None
@@ -49,6 +65,8 @@ class EngineEnv(BaseSettings):
     # Extra browser origins allowed to call the engine (dev/test only, e.g. the Vite dev server used
     # by the UI test suite). The shell's own origin is always allowed.
     open_speech_allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # Let URL fetches reach this machine and the local network (tests against a local server only).
+    open_speech_allow_private_urls: bool = False
 
     @field_validator("anthropic_api_key", "openai_api_key", "gemini_api_key", mode="before")
     @classmethod
@@ -75,7 +93,7 @@ class Paths:
         self.home = home
         self.db = home / "db.sqlite"
         self.cache = home / "cache"
-        self.audio_cache = self.cache / "audio"
+        self.audio_cache = self.cache / "audio"  # voice assets (store/assets.py)
         self.extract_cache = self.cache / "extract"
         self.recordings = home / "recordings"
         self.rules = home / "rules"
@@ -120,6 +138,9 @@ class Shortcuts(BaseModel):
 class Defaults(BaseModel):
     voice: str = DEFAULT_VOICE
     assistant_voice: str = DEFAULT_VOICE  # 10 § Open questions: Kokoro by default (fast, $0)
+    # Preferred voice per language for text the default voice can't speak (e.g. {"es": "kokoro:…:ef_dora"}).
+    # Filled in when the user picks a voice while reading or speaking that language.
+    voices: dict[str, str] = Field(default_factory=dict)
     speed: float = Field(1.0, ge=0.5, le=5.0)
     mode: Literal["classic", "ai_enhanced"] = "classic"
     style: str | None = None
@@ -143,10 +164,8 @@ class Budget(BaseModel):
 class VoiceInput(BaseModel):
     end_of_speech_ms: int = Field(800, ge=200, le=5000)
     recording_retention_days: int = Field(30, ge=0, le=3650)  # 0 = never keep
-    stt_provider: Literal["auto", "openai", "gemini", "local"] = "auto"
-    # Spoken language hint for speech-to-text ("auto" = the Mac's first preferred language). Without a
-    # hint, noise is often transcribed as words in some other language.
-    language: str = "auto"
+    # "auto" prefers speech-to-text that runs on this Mac, then whatever cloud provider the build includes.
+    stt_provider: Literal["auto", "local", "openai", "gemini"] = "auto"
 
 
 class CacheSettings(BaseModel):
@@ -164,7 +183,11 @@ class ReaderSettings(BaseModel):
     line_spacing: float = Field(1.6, ge=1.0, le=3.0)
     font: Literal["system", "atkinson", "opendyslexic"] = "system"
     high_contrast: bool = False
-    theme: Literal["system", "light", "dark"] = "system"
+
+
+class Appearance(BaseModel):
+    # "system" follows the Mac: lavender (pastel, light) by day, ember (dark, orange) in dark mode.
+    theme: Literal["system", "lavender", "ember"] = "system"
 
 
 class PlaybackSettings(BaseModel):
@@ -174,6 +197,9 @@ class PlaybackSettings(BaseModel):
 
 
 class UserSettings(BaseModel):
+    # The language the app speaks, listens for and shows ("auto" = the Mac's, when it is one we support).
+    language: Literal["auto", "en", "es"] = "auto"
+    appearance: Appearance = Field(default_factory=Appearance)
     shortcuts: Shortcuts = Field(default_factory=Shortcuts)
     defaults: Defaults = Field(default_factory=Defaults)
     budget: Budget = Field(default_factory=Budget)

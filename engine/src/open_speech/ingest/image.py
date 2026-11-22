@@ -11,7 +11,7 @@ from typing import Any, Literal
 from pydantic import ValidationError
 
 from open_speech.document.model import BlockType, Document, SourceKind
-from open_speech.errors import EngineError, MissingKey
+from open_speech.errors import EngineError, Unavailable
 from open_speech.ingest.common import DraftBlock, build_document, finalize_blocks, infer_title, source_id_bytes
 from open_speech.providers.base import LlmCall, RuleBrief, VisionBlock, VisionProvider
 
@@ -111,7 +111,7 @@ async def ingest_image(
     extractor_version: str,
 ) -> tuple[Document, LlmCall]:
     if vision is None:
-        raise MissingKey("anthropic", "Describing images")
+        raise Unavailable("vision")
     image, media_type = prepare_image(data)
     call = await vision.describe_or_transcribe(image, media_type, list(rules), mode)
     drafts = vision_drafts(call.output)

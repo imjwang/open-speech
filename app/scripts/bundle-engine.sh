@@ -5,10 +5,14 @@
 #
 #   engine-runtime/
 #     python/                          relocatable CPython (uv-managed python-build-standalone build) with the
-#                                      engine and its locked dependencies, incl. the local-kokoro extra,
-#                                      installed into its own site-packages. Not a venv: no absolute paths.
+#                                      engine and its locked dependencies, incl. the local-kokoro and
+#                                      local-stt extras, installed into its own site-packages. Not a venv:
+#                                      no absolute paths.
 #     models/kokoro/kokoro-82m-v1.0/   Kokoro weights, pinned by commit + sha256 (FR-SETUP-3), read-only
 #                                      (engine/src/open_speech/local/bundled.py)
+#     models/stt/<model>/              the catalog's default speech-to-text model (about 640 MB), pinned by
+#                                      commit + sha256, read-only: the bar listens offline from first launch
+#     provider.env                     the provider keys this build ships with (see "Provider keys" below)
 #
 # Re-runnable; downloads are cached in engine-runtime-cache/. macOS arm64 only (NFR-6).
 #
@@ -16,6 +20,10 @@
 #   UV                         uv binary (default: uv on PATH, else ~/.local/bin/uv)
 #   OPEN_SPEECH_PYTHON         CPython version to bundle (default below)
 #   OPEN_SPEECH_BUNDLE_KOKORO  0 skips the weights (the engine then downloads them on first use)
+#   OPEN_SPEECH_BUNDLE_STT     0 skips the speech-to-text weights (the user downloads them from the model list)
+#   OPEN_SPEECH_BUNDLE_KEYS    0 builds without provider keys (local voice and local speech input only)
+#   ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
+#                              the keys to build in; when unset they are read from <repo>/.env
 set -euo pipefail
 
 PYTHON_VERSION="${OPEN_SPEECH_PYTHON:-3.13.11}"
@@ -55,6 +63,9 @@ fcf73c989033e9233e0b98713eca600c8c74dcc1614b37009d5450ff4a2274a0  voices/am_puck
 f889083196807b4adb15e9204252165f503b8d33d3982e681c52443c49d798f1  voices/bm_fable.bin
 c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc  voices/bm_george.bin
 b8f671cef828c30e66fdf0b0756a76bba58f6bb3398cbbf27058642acbcedb97  voices/bm_lewis.bin
+f66ec66bd295acb18372e37008533a9a3228483ccd294e7538d5d9294ac9a532  voices/ef_dora.bin
+27809e9eafdcbcfff90a3016c697568676531de2a2c39cee29c96c7bd6b83e95  voices/em_alex.bin
+ad43b774e1ca24d05c6161297d8aeb770ac3d29bb95daf516727af5f7d543683  voices/em_santa.bin
 '
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -107,8 +118,8 @@ install_name_tool -id "@rpath/libpython$PYV.dylib" "$PY/lib/libpython$PYV.dylib"
 codesign --force --sign - "$PY/lib/libpython$PYV.dylib"
 
 # --------------------------------------------------------------------------- engine + dependencies
-step "Engine and locked dependencies (uv.lock, --extra local-kokoro, no dev group)"
-"$UV" export --project "$ENGINE_DIR" --frozen --no-dev --extra local-kokoro --no-emit-project \
+step "Engine and locked dependencies (uv.lock, --extra local-kokoro --extra local-stt, no dev group)"
+"$UV" export --project "$ENGINE_DIR" --frozen --no-dev --extra local-kokoro --extra local-stt --no-emit-project \
   --format requirements.txt --no-header --output-file "$CACHE/requirements.txt" >/dev/null
 "$UV" pip install --no-config --python "$PY/bin/python3" --link-mode copy --only-binary :all: \
   --require-hashes -r "$CACHE/requirements.txt"
@@ -146,14 +157,17 @@ env -i HOME="$HOME" PATH=/usr/bin:/bin PYTHONNOUSERSITE=1 ORT_DISABLE_TELEMETRY=
 import os, sys
 root = os.path.realpath(sys.argv[1])
 import open_speech, open_speech.cli.main, open_speech.api.app  # noqa: E401,F401
-import onnxruntime, misaki, numpy, sounddevice, soundfile, pypdfium2, keyring  # noqa: E401,F401
+import onnxruntime, misaki, numpy, sounddevice, soundfile, pypdfium2  # noqa: E401,F401
+import sherpa_onnx  # noqa: E402  local speech-to-text; ships its own onnxruntime next to the wheel's
+sherpa_onnx.OfflineRecognizer.from_transducer, sherpa_onnx.VadModel.create  # what providers/local_stt.py calls
 outside = [p for p in sys.path if p and not os.path.realpath(p).startswith(root)]
 if outside:
     sys.exit(f"sys.path entries outside the runtime: {outside}")
 data = os.path.join(os.path.dirname(open_speech.__file__), "data", "models.toml")
 if not os.path.exists(data):
     sys.exit("open_speech/data/models.toml missing from the installed package")
-print(f"python {sys.version.split()[0]}, open-speech {open_speech.__version__}, onnxruntime {onnxruntime.__version__}")
+print(f"python {sys.version.split()[0]}, open-speech {open_speech.__version__}, onnxruntime {onnxruntime.__version__}, "
+      f"sherpa-onnx {sherpa_onnx.__version__}")
 print("sys.path:", " ".join(os.path.relpath(p, root) for p in sys.path if p))
 PYCODE
 
@@ -245,6 +259,104 @@ print(f"{len(files)} files, {sum(f['bytes'] for f in files.values()) / 1e6:.0f} 
 PYCODE
 else
   step "Skipping Kokoro weights (OPEN_SPEECH_BUNDLE_KOKORO=0): the engine downloads them on first use"
+fi
+
+# --------------------------------------------------------------------------- speech-to-text weights
+if [[ "${OPEN_SPEECH_BUNDLE_STT:-1}" != 0 ]]; then
+  # The model id, the download URLs and the sha256 of every file come from the catalog installed in the
+  # runtime (engine/src/open_speech/data/models.toml → [stt.local]): the same pins the engine verifies when
+  # it installs the model itself. A file without a pin is refused. Lines: "<sha256> <path> <url>".
+  stt_pins="$("$PY/bin/python3" -I - <<'PYCODE'
+import sys
+from open_speech.local.catalog import ModelCatalog
+e = ModelCatalog.load().default_local_stt_model()
+if e is None or e.weights is None:
+    sys.exit("the catalog has no default local speech-to-text model with weights")
+base = e.weights.base_url()
+print(e.model, f"{e.weights.url}@{e.weights.revision}")
+for f in e.weights.all_files():
+    if len(f.sha256) != 64:
+        sys.exit(f"{e.model}: {f.path} has no sha256 pin in the catalog")
+    print(f.sha256, f.path, f.url or f"{base}/{f.path}")
+PYCODE
+)"
+  read -r STT_MODEL STT_SOURCE <<<"$(head -n 1 <<<"$stt_pins")"
+  step "Speech-to-text weights ($STT_MODEL, $STT_SOURCE)"
+  dl="$CACHE/stt/$STT_MODEL"
+  dest="$OUT/models/stt/$STT_MODEL"
+  while read -r sha rel url; do
+    [[ -n "${url:-}" ]] || continue
+    f="$dl/$rel"
+    if [[ ! -f "$f" ]] || [[ "$(shasum -a 256 "$f" | awk '{print $1}')" != "$sha" ]]; then
+      mkdir -p "$(dirname "$f")"
+      curl -fsSL --retry 3 --retry-delay 2 -o "$f.part" "$url"
+      got="$(shasum -a 256 "$f.part" | awk '{print $1}')"
+      [[ "$got" == "$sha" ]] || { rm -f "$f.part"; die "$rel: sha256 $got, expected $sha"; }
+      mv "$f.part" "$f"
+    fi
+    mkdir -p "$(dirname "$dest/$rel")"
+    cp "$f" "$dest/$rel"
+  done < <(tail -n +2 <<<"$stt_pins")
+
+  "$PY/bin/python3" -I - "$dest" "$STT_MODEL" "$STT_SOURCE" <<'PYCODE'
+import hashlib, json, sys
+from datetime import UTC, datetime
+from pathlib import Path
+from open_speech.local.catalog import ModelCatalog
+dest, model, source = Path(sys.argv[1]), *sys.argv[2:]
+entry = ModelCatalog.load().local_stt_model(model)
+missing = [f for f in entry.required_files() if not (dest / f).is_file()]
+if missing:
+    sys.exit(f"{model}: missing after download: {missing}")
+def sha256(p):
+    h = hashlib.sha256()
+    with p.open("rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+files = {
+    str(p.relative_to(dest)): {"sha256": sha256(p), "bytes": p.stat().st_size, "pinned": True}
+    for p in sorted(dest.rglob("*")) if p.is_file() and p.name != "manifest.json"
+}
+manifest = {"model": model, "provider": "local", "kind": "stt", "installed_at": datetime.now(UTC).isoformat(),
+            "pinned": True, "bundled": True, "source": source, "files": files}
+(dest / "manifest.json").write_text(json.dumps(manifest, indent=2), "utf-8")
+print(f"{len(files)} files, {sum(f['bytes'] for f in files.values()) / 1e6:.0f} MB")
+PYCODE
+else
+  step "Skipping speech-to-text weights (OPEN_SPEECH_BUNDLE_STT=0): the user downloads them from the model list"
+fi
+
+# --------------------------------------------------------------------------- provider keys
+# Keys are build configuration: the app never asks a user for one. Whatever is set when this script runs is
+# written to provider.env, which the packaged engine reads (engine/src/open_speech/config.py). Only the three
+# provider keys are copied, never the rest of .env.
+#
+# A key shipped inside an app can be read by anyone who has the app. That is acceptable for builds that stay
+# on our own machines; anything distributed further must use the hosted deployment instead of bundled keys.
+if [[ "${OPEN_SPEECH_BUNDLE_KEYS:-1}" != 0 ]]; then
+  step "Provider keys (build configuration)"
+  keys_file="$OUT/provider.env"
+  ( umask 077; : > "$keys_file" )
+  included=()
+  for name in ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY; do
+    value="${!name:-}"
+    if [[ -z "$value" && -f "$REPO_DIR/.env" ]]; then
+      value="$(grep -E "^${name}=" "$REPO_DIR/.env" | tail -n 1 | cut -d= -f2- | sed -e "s/^[\"']//" -e "s/[\"']\$//" || true)"
+    fi
+    if [[ -n "$value" ]]; then
+      printf '%s=%s\n' "$name" "$value" >> "$keys_file"
+      included+=("${name%_API_KEY}")
+    fi
+  done
+  if (( ${#included[@]} )); then
+    echo "built in: ${included[*]} (readable by anyone who has this build: keep it on your own machines)"
+  else
+    rm -f "$keys_file"
+    echo "no provider keys set: this build reads with the local voice and listens with the local model only"
+  fi
+else
+  step "Skipping provider keys (OPEN_SPEECH_BUNDLE_KEYS=0)"
 fi
 
 step "Done"

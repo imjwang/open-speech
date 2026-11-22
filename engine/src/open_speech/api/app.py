@@ -126,10 +126,16 @@ async def _handle(engine: Engine, msg: Any, topics: set[str]) -> None:
         case ws.MicStart():
             await engine.voice_input.start(msg.session_id, msg.mode, msg.context, transcribe_only=msg.transcribe_only)
         case ws.MicStop():
-            await engine.voice_input.stop(msg.session_id, submit=msg.submit)
+            await engine.voice_input.stop(msg.session_id, submit=msg.submit, attachments=msg.attachments)
         case ws.Command():
             await engine.assistant.submit(
-                TurnRequest(text=msg.text, source=msg.source, session_id=msg.session_id, context=msg.context)
+                TurnRequest(
+                    text=msg.text,
+                    source=msg.source,
+                    session_id=msg.session_id,
+                    context=msg.context,
+                    attachments=msg.attachments,
+                )
             )
         case ws.Subscribe():
             topics.clear()

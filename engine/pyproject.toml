@@ -1,7 +1,7 @@
 [project]
 name = "open-speech"
 version = "0.1.0"
-description = "Open Speech engine: a headless, bring-your-own-key speech engine with a local REST/WebSocket API."
+description = "Open Speech engine: a headless speech engine with a local REST/WebSocket API."
 readme = "README.md"
 license = "Apache-2.0"
 # 03 § Engine: the newest Python with wheels for every pin. 3.14 builds were not
@@ -28,7 +28,6 @@ dependencies = [
   "pysbd>=0.3.4",
   "pillow>=11.0",
   "zstandard>=0.23",
-  "keyring>=25.5",
   "watchfiles>=0.24",
   "python-multipart>=0.0.12",
   "tomli-w>=1.1",
@@ -43,6 +42,9 @@ local-kokoro = [
     "misaki>=0.9.4",
     "onnxruntime>=1.20",
 ]
+# On-device speech-to-text for the command bar (providers/local_stt.py): Parakeet TDT via sherpa-onnx
+# (Apache-2.0; it bundles its own onnxruntime build).
+local-stt = ["sherpa-onnx>=2.0"]
 mcp = ["mcp>=1.2"]
 
 [project.scripts]

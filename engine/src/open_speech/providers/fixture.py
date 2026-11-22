@@ -17,9 +17,9 @@ Test hooks (class-level, reset with `reset()`): `FixtureTts.latency_s`, `Fixture
 from __future__ import annotations
 
 import asyncio
-import os
 import hashlib
 import math
+import os
 import re
 from collections import deque
 from collections.abc import AsyncIterator, Sequence

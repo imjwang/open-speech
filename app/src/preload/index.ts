@@ -3,10 +3,17 @@
  * `window.openSpeech` via contextBridge. No Node APIs reach the page; every call is an IPC message the
  * main process validates.
  */
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 
 import type { OpenSpeechBridge } from '../shared/bridge-types'
-import { IPC, type BarOpenedEvent, type ClipboardContent, type WebViewState } from '../shared/ipc-channels'
+import {
+  IPC,
+  type BarOpenedEvent,
+  type ClipboardContent,
+  type FileHit,
+  type FileSearchResult,
+  type WebViewState,
+} from '../shared/ipc-channels'
 import type { EngineInfo, ReaderTarget } from '../shared/ipc'
 
 function subscribe<T>(channel: string, cb: (value: T) => void): () => void {
@@ -34,8 +41,17 @@ const bridge: OpenSpeechBridge = {
   onWebState: (cb) => subscribe<WebViewState>(IPC.webState, cb),
   openExternal: (url) => ipcRenderer.send(IPC.shellOpenExternal, { url }),
   readClipboard: () => ipcRenderer.invoke(IPC.clipboardRead) as Promise<ClipboardContent>,
-  openFileDialog: () => ipcRenderer.invoke(IPC.dialogOpenFile) as Promise<{ path: string } | null>,
-  openRuleFile: (ruleId) => ipcRenderer.send(IPC.rulesOpenFile, { ruleId }),
+  pickFiles: () => ipcRenderer.invoke(IPC.dialogOpenFiles) as Promise<FileHit[]>,
+  searchFiles: (query) => ipcRenderer.invoke(IPC.fsSearch, { query }) as Promise<FileSearchResult>,
+  pathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
+  },
+  openRules: (item) => ipcRenderer.send(IPC.rulesOpen, item ? { item } : {}),
+  onRulesShow: (cb) => subscribe<string | null>(IPC.rulesShow, cb),
   openRulesFolder: () => ipcRenderer.send(IPC.rulesOpenFolder),
 }
 

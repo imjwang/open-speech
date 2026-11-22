@@ -9,7 +9,7 @@ import { getBridge } from '@/bridge'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { EngineProvider, LiveEngine } from '@/engine'
 import { newSessionId } from '@/ids'
-import { applyTheme } from '@/theme'
+import { syncPrefs, usePrefs } from '@/prefs'
 import { BarActions } from './actions'
 import { BarApp } from './BarApp'
 import { BarController, wireBarEvents } from './controller'
@@ -17,10 +17,10 @@ import { createBarStore } from './store'
 
 const bridge = getBridge()
 document.documentElement.classList.toggle('in-browser', !bridge.capabilities.electron)
-applyTheme('system')
 
 const engine = new LiveEngine()
 engine.start(bridge)
+syncPrefs(engine) // theme and language follow the engine from here on
 
 const store = createBarStore()
 const controller = new BarController(store, {
@@ -28,8 +28,9 @@ const controller = new BarController(store, {
   sendAudio: (pcm) => engine.socket.sendAudio(pcm),
   mic: new BrowserMic(),
   setListening: (listening) => bridge.setListening(listening),
-  endOfSpeechMs: () => store.getState().settings?.voice_input?.end_of_speech_ms ?? 800,
+  endOfSpeechMs: () => usePrefs.getState().settings?.voice_input?.end_of_speech_ms ?? 800,
   newSessionId,
+  newConversationId: newSessionId,
   now: () => performance.now(),
 })
 wireBarEvents(engine.socket, controller)
@@ -47,10 +48,15 @@ for (const type of ['stt.partial', 'stt.final', 'assistant.turn', 'assistant.don
   })
 store.subscribe((s, prev) => {
   if (s.mode !== prev.mode || s.prompting !== prev.prompting)
-    debugLog.push(`${Math.round(performance.now())} state mode=${s.mode} prompting=${s.prompting} chars=${s.text.length}`)
+    debugLog.push(`${Math.round(performance.now())} state mode=${s.mode} prompting=${s.prompting} chars=${s.transcript.length}`)
   if (debugLog.length > 200) debugLog.splice(0, debugLog.length - 200)
 })
-;(window as unknown as { __openSpeechBar?: unknown }).__openSpeechBar = { getState: () => store.getState(), log: debugLog }
+;(window as unknown as { __openSpeechBar?: unknown }).__openSpeechBar = {
+  getState: () => store.getState(),
+  getPrefs: () => usePrefs.getState(),
+  composer: () => actions.composer,
+  log: debugLog,
+}
 
 bridge.onBarOpened((event) => controller.open(event))
 bridge.onBarClosed(() => controller.close())

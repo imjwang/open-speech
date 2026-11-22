@@ -18,9 +18,11 @@ from pydantic import ValidationError
 from open_speech.api.schemas import LexiconEntry
 from open_speech.document.model import Anchor, BBox, Block, BlockType, Document
 from open_speech.errors import EngineError
+from open_speech.i18n import t, tn
 from open_speech.ids import sha256_hex
-from open_speech.plan.annotate import apply_ops, locate_ops, parse_ops
+from open_speech.plan.annotate import MarkedText, apply_ops, cuts_for, locate_ops, mark_cuts, parse_ops
 from open_speech.plan.chunk import chunk_text
+from open_speech.plan.guard import OpGuard
 from open_speech.plan.keys import PROMPT_VERSION
 from open_speech.plan.script import RuleHit, SpanOp, SpeechScript, Utterance
 from open_speech.plan.textmap import MappedText
@@ -49,7 +51,8 @@ class BlockState:
     drop: RuleHit | None = None
     mt: MappedText | None = None
     hits: list[RuleHit] = field(default_factory=list)
-    annotate_input: str = ""
+    annotate_input: str = ""  # tier-1 text: what is spoken if Claude changes nothing
+    view: MarkedText | None = None  # the same text as Claude sees it, with a marker at every tier-1 cut
 
     @property
     def speakable(self) -> bool:
@@ -111,6 +114,7 @@ def stage1(doc: Document, plan: FilterPlan) -> list[BlockState]:
             mt.cleanup(punctuation=block.type != BlockType.code)
             st.mt = mt
             st.annotate_input = mt.text
+            st.view = mark_cuts(mt.text, cuts_for(block, mt, st.hits))
         states.append(st)
     return states
 
@@ -157,8 +161,12 @@ def annotate_signature(spec: BuildSpec) -> str:
     )
 
 
+def annotate_text(st: BlockState) -> str:
+    return st.view.text if st.view is not None else st.annotate_input
+
+
 def annotate_key(signature: str, st: BlockState) -> str:
-    return sha256_hex(signature, st.block.id, st.annotate_input)
+    return sha256_hex(signature, st.block.id, annotate_text(st))
 
 
 async def run_annotate(
@@ -168,12 +176,14 @@ async def run_annotate(
     llm: LlmProvider | None,
     memo: Memo,
     calls: list[tuple[str, LlmCall]],
+    guard: OpGuard,
 ) -> bool:
     """Annotate every batch up to `upto_order` that isn't pinned yet. Returns False if a needed call
     couldn't run (no key, provider error)."""
     sig = annotate_signature(spec)
     briefs = [r.brief() for r in spec.annotate]
     dropped_total = 0
+    refused_total = 0
     for batch in batches:
         if batch[0].block.order > upto_order:
             break
@@ -181,15 +191,15 @@ async def run_annotate(
         if not missing:
             continue
         if llm is None:
-            spec.warnings.append("AI Enhanced needs an Anthropic key; the rest is read with Classic filters.")
+            spec.warnings.append(t("unavailable.ai_cleanup"))
             return False
         blocks = [
-            st.block.model_copy(update={"text": st.annotate_input, "marks": [], "word_boxes": []}) for st in missing
+            st.block.model_copy(update={"text": annotate_text(st), "marks": [], "word_boxes": []}) for st in missing
         ]
         try:
             call = await llm.annotate(blocks, briefs, spec.speech_md)
         except EngineError as e:
-            spec.warnings.append(f"AI Enhanced paused: {e.detail}")
+            spec.warnings.append(t("plan.ai_paused", detail=e.detail))
             log.warning("annotate failed: %s", e.detail)
             return False
         calls.append(("annotate", call))
@@ -204,19 +214,21 @@ async def run_annotate(
                 continue
             by_block.setdefault(op.block_id, []).append(op)
         for st in missing:
-            located, dropped = locate_ops(st.annotate_input, by_block.get(st.block.id, []))
-            dropped_total += len(dropped)
-            for reason in dropped:
-                log.warning("dropped span op %s", reason)
+            located, dropped = locate_ops(st.view or st.annotate_input, by_block.get(st.block.id, []), guard)
+            for d in dropped:
+                log.warning("dropped span op %s", d.reason)
+            refused = sum(1 for d in dropped if d.overreach)
+            refused_total += refused
+            dropped_total += len(dropped) - refused
             memo.put_annotate(annotate_key(sig, st), [lo.op.model_dump() for lo in located])
     if dropped_total:
-        spec.warnings.append(
-            f"Dropped {dropped_total} AI span op{'s' if dropped_total != 1 else ''} that didn't match the text exactly."
-        )
+        spec.warnings.append(tn("plan.ops_dropped", dropped_total))
+    if refused_total:
+        spec.warnings.append(tn("plan.ops_refused", refused_total))
     return True
 
 
-def apply_annotations(spec: BuildSpec, states: Sequence[BlockState], memo: Memo) -> int:
+def apply_annotations(spec: BuildSpec, states: Sequence[BlockState], memo: Memo, guard: OpGuard) -> int:
     """Apply pinned span ops; return the highest block order annotated contiguously from the start."""
     sig = annotate_signature(spec)
     rules_by_id = {r.id: r for r in spec.annotate}
@@ -235,7 +247,9 @@ def apply_annotations(spec: BuildSpec, states: Sequence[BlockState], memo: Memo)
             upto = st.block.order
         ops = [SpanOp.model_validate(o) for o in raw]
         assert st.mt is not None
-        hits, _ = apply_ops(st.block, st.mt, ops, rules_by_id=rules_by_id, annotate_rules=spec.annotate)
+        hits, _ = apply_ops(
+            st.block, st.mt, ops, rules_by_id=rules_by_id, annotate_rules=spec.annotate, view=st.view, guard=guard
+        )
         st.hits.extend(hits)
     return upto
 
@@ -290,20 +304,20 @@ async def run_transform(
         if key in memo.transform:
             continue
         if llm is None:
-            spec.warnings.append(f"“{rule.name}” needs an Anthropic key; reading the original text instead.")
+            spec.warnings.append(t("plan.rule_unavailable", name=rule.name))
             return False
         blocks = [st.block.model_copy(update={"text": st.annotate_input, "marks": [], "word_boxes": []}) for st in sec]
         try:
             call = await llm.transform(blocks, rule.instruction, spec.speech_md)
         except EngineError as e:
-            spec.warnings.append(f"“{rule.name}” paused: {e.detail}")
+            spec.warnings.append(t("plan.rule_paused", name=rule.name, detail=e.detail))
             return False
         calls.append(("transform", call))
         out = call.output
         try:
             parsed = out if isinstance(out, TransformOutput) else TransformOutput.model_validate(out)
         except ValidationError:
-            spec.warnings.append(f"“{rule.name}” returned something unusable for one section; read as is.")
+            spec.warnings.append(t("plan.rule_unusable", name=rule.name))
             continue
         ids = {st.block.id for st in sec}
         anchors = [b for b in parsed.anchor_block_ids if b in ids] or [st.block.id for st in sec]
@@ -340,6 +354,8 @@ def _page_for(block: Block, lo: int, hi: int) -> int | None:
 class _Assembler:
     def __init__(self, spec: BuildSpec) -> None:
         self.spec = spec
+        # Sentence rules follow the document's language (Spanish abbreviations, ¿ ¡ openers).
+        self.language = spec.document.language
         self.utterances: list[Utterance] = []
         self.removed: list[RuleHit] = []
         self.headings: list[tuple[int, str]] = []
@@ -372,7 +388,9 @@ class _Assembler:
         if block.type == BlockType.heading:
             chunks = [(0, len(text))]
         else:
-            chunks = chunk_text(text, first_single=not self.utterances, boundary_ok=mt.boundary_ok)
+            chunks = chunk_text(
+                text, first_single=not self.utterances, boundary_ok=mt.boundary_ok, language=self.language
+            )
         ranges = [mt.source_range(cs, ce) or (0, 0) for cs, ce in chunks]
         traces: list[list[RuleHit]] = [[] for _ in chunks]
         for h in st.hits:
@@ -423,7 +441,7 @@ class _Assembler:
         path = self.heading_path()
         for text in out.get("utterances", []):
             spoken = _respell(text, self.spec.lexicon)
-            pieces = chunk_text(spoken, first_single=not self.utterances)
+            pieces = chunk_text(spoken, first_single=not self.utterances, language=self.language)
             for k, (cs, ce) in enumerate(pieces):
                 self.add(
                     text=spoken[cs:ce],
@@ -511,9 +529,10 @@ async def build_script(
             if everything
             else target_order(batches, playhead_order, ahead)
         )
-        ok = await run_annotate(spec, batches, upto, llm, memo, calls)
+        guard = OpGuard(spec.annotate, speech_md=spec.speech_md, document=doc)
+        ok = await run_annotate(spec, batches, upto, llm, memo, calls, guard)
         degraded = degraded or not ok
-        annotated_upto = apply_annotations(spec, states, memo)
+        annotated_upto = apply_annotations(spec, states, memo, guard)
         complete = annotated_upto >= max((b.order for b in doc.blocks), default=-1)
 
     # Lexicon after filters and span ops, then a final tidy.

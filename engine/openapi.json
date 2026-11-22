@@ -634,6 +634,89 @@
         }
       }
     },
+    "/api/v1/playback/queue": {
+      "post": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Enqueue",
+        "description": "Read several documents one after another.",
+        "operationId": "enqueue_api_v1_playback_queue_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Clear Queue",
+        "operationId": "clear_queue_api_v1_playback_queue_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback/next": {
+      "post": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Next Document",
+        "description": "Leave the current document and start the next one in the queue.",
+        "operationId": "next_document_api_v1_playback_next_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/playback/speed": {
       "put": {
         "tags": [
@@ -1123,6 +1206,159 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LexiconList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules/files": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Rule Files",
+        "description": "The text files behind the rules: standing preferences, pronunciations, and one file per rule.",
+        "operationId": "rule_files_api_v1_rules_files_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleFileList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Create Rule File",
+        "operationId": "create_rule_file_api_v1_rules_files_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleFileWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleFileContent"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules/files/{file_id}": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Read Rule File",
+        "operationId": "read_rule_file_api_v1_rules_files__file_id__get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleFileContent"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Write Rule File",
+        "operationId": "write_rule_file_api_v1_rules_files__file_id__put",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleFileWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleFileContent"
                 }
               }
             }
@@ -1763,79 +1999,21 @@
         }
       }
     },
-    "/api/v1/keys": {
+    "/api/v1/capabilities": {
       "get": {
         "tags": [
-          "settings"
+          "system"
         ],
-        "summary": "Keys State",
-        "operationId": "keys_state_api_v1_keys_get",
+        "summary": "Capabilities",
+        "description": "What this build can do. Provider keys are build configuration, so this is all a client ever learns\nabout them: which features exist.",
+        "operationId": "capabilities_api_v1_capabilities_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/KeysState"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/keys/{provider}": {
-      "put": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "Put Key",
-        "description": "Write-only. `auto` detects the provider from the key prefix. There is no GET for keys.",
-        "operationId": "put_key_api_v1_keys__provider__put",
-        "parameters": [
-          {
-            "name": "provider",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "enum": [
-                "anthropic",
-                "openai",
-                "gemini",
-                "auto"
-              ],
-              "type": "string",
-              "title": "Provider"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/KeyIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/KeyTestResult"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/Capabilities"
                 }
               }
             }
@@ -2202,6 +2380,97 @@
         "title": "Anchor",
         "description": "Where spoken text lives in the source. One of the three shapes in 04 (`playback.word`)."
       },
+      "Appearance": {
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "system",
+              "lavender",
+              "ember"
+            ],
+            "title": "Theme",
+            "default": "system"
+          }
+        },
+        "type": "object",
+        "title": "Appearance"
+      },
+      "Attachment": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "file",
+              "url",
+              "text",
+              "document"
+            ],
+            "title": "Kind"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "Attachment",
+        "description": "Something attached to a command in the composer: a file, a link, pasted text, or a document that was\nalready imported (uploads)."
+      },
       "BBox": {
         "properties": {
           "page": {
@@ -2547,6 +2816,53 @@
         "type": "object",
         "title": "CacheSettings"
       },
+      "Capabilities": {
+        "properties": {
+          "speech_input": {
+            "$ref": "#/components/schemas/SpeechInput"
+          },
+          "assistant": {
+            "type": "boolean",
+            "title": "Assistant"
+          },
+          "ai_cleanup": {
+            "type": "boolean",
+            "title": "Ai Cleanup"
+          },
+          "vision": {
+            "type": "boolean",
+            "title": "Vision"
+          },
+          "cloud_voices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cloud Voices"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "en"
+          }
+        },
+        "type": "object",
+        "required": [
+          "speech_input",
+          "assistant",
+          "ai_cleanup",
+          "vision"
+        ],
+        "title": "Capabilities",
+        "description": "What this build can do (GET /capabilities). Cloud features depend on the providers configured at\nbuild time; nothing here can be changed from inside the app."
+      },
       "CreateDocumentRequest": {
         "properties": {
           "kind": {
@@ -2729,6 +3045,13 @@
             "type": "string",
             "title": "Assistant Voice",
             "default": "kokoro:kokoro-82m-v1.0:af_heart"
+          },
+          "voices": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Voices"
           },
           "speed": {
             "type": "number",
@@ -2945,6 +3268,17 @@
             },
             "type": "array",
             "title": "Flags"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
           },
           "has_source_file": {
             "type": "boolean",
@@ -3311,80 +3645,6 @@
         ],
         "title": "JobAccepted"
       },
-      "KeyIn": {
-        "properties": {
-          "key": {
-            "type": "string",
-            "title": "Key"
-          }
-        },
-        "type": "object",
-        "required": [
-          "key"
-        ],
-        "title": "KeyIn"
-      },
-      "KeyTestResult": {
-        "properties": {
-          "ok": {
-            "type": "boolean",
-            "title": "Ok"
-          },
-          "provider": {
-            "type": "string",
-            "title": "Provider"
-          },
-          "detail": {
-            "type": "string",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "required": [
-          "ok",
-          "provider",
-          "detail"
-        ],
-        "title": "KeyTestResult"
-      },
-      "KeysState": {
-        "properties": {
-          "anthropic": {
-            "type": "string",
-            "enum": [
-              "configured",
-              "missing",
-              "invalid"
-            ],
-            "title": "Anthropic"
-          },
-          "openai": {
-            "type": "string",
-            "enum": [
-              "configured",
-              "missing",
-              "invalid"
-            ],
-            "title": "Openai"
-          },
-          "gemini": {
-            "type": "string",
-            "enum": [
-              "configured",
-              "missing",
-              "invalid"
-            ],
-            "title": "Gemini"
-          }
-        },
-        "type": "object",
-        "required": [
-          "anthropic",
-          "openai",
-          "gemini"
-        ],
-        "title": "KeysState"
-      },
       "LedgerPage": {
         "properties": {
           "items": {
@@ -3600,6 +3860,15 @@
             "type": "string",
             "title": "Status",
             "default": ""
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "tts",
+              "stt"
+            ],
+            "title": "Kind",
+            "default": "tts"
           }
         },
         "type": "object",
@@ -3777,6 +4046,11 @@
                 "type": "null"
               }
             ]
+          },
+          "confirm_estimate": {
+            "type": "boolean",
+            "title": "Confirm Estimate",
+            "default": false
           }
         },
         "type": "object",
@@ -3961,6 +4235,13 @@
               }
             ],
             "title": "Error"
+          },
+          "queue": {
+            "items": {
+              "$ref": "#/components/schemas/QueueItem"
+            },
+            "type": "array",
+            "title": "Queue"
           }
         },
         "type": "object",
@@ -4108,6 +4389,58 @@
         ],
         "title": "PreviewResponse"
       },
+      "QueueItem": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "title"
+        ],
+        "title": "QueueItem"
+      },
+      "QueueRequest": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Document Ids"
+          },
+          "when": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "last"
+            ],
+            "title": "When",
+            "default": "now"
+          },
+          "confirm_estimate": {
+            "type": "boolean",
+            "title": "Confirm Estimate",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_ids"
+        ],
+        "title": "QueueRequest",
+        "description": "Read several documents one after another. `now` replaces what is playing and starts the first;\n`next` goes right after the current document; `last` appends."
+      },
       "ReaderSettings": {
         "properties": {
           "font_size": {
@@ -4138,20 +4471,268 @@
             "type": "boolean",
             "title": "High Contrast",
             "default": false
-          },
-          "theme": {
-            "type": "string",
-            "enum": [
-              "system",
-              "light",
-              "dark"
-            ],
-            "title": "Theme",
-            "default": "system"
           }
         },
         "type": "object",
         "title": "ReaderSettings"
+      },
+      "RuleFile": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "preferences",
+              "lexicon",
+              "rule",
+              "preset"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "filter",
+                  "annotate",
+                  "transform"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "path"
+        ],
+        "title": "RuleFile",
+        "description": "One text file under rules/: the standing preferences, the pronunciation list, or a rule."
+      },
+      "RuleFileContent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "preferences",
+              "lexicon",
+              "rule",
+              "preset"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "filter",
+                  "annotate",
+                  "transform"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "path",
+          "text",
+          "body"
+        ],
+        "title": "RuleFileContent"
+      },
+      "RuleFileList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RuleFile"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "RuleFileList"
+      },
+      "RuleFileWrite": {
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "RuleFileWrite",
+        "description": "Save a rule file. Send `body` to change what a rule says (the engine works out how to apply it again),\nor `text` to replace the whole file including its header. `name` creates or renames a rule."
       },
       "RuleHit": {
         "properties": {
@@ -4731,6 +5312,69 @@
         "type": "object",
         "title": "SpeechDiff"
       },
+      "SpeechInput": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "local": {
+            "type": "boolean",
+            "title": "Local",
+            "default": false
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "install_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Install Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "title": "SpeechInput",
+        "description": "Whether the bar can listen, and with what."
+      },
       "SpeedRequest": {
         "properties": {
           "speed": {
@@ -4816,6 +5460,17 @@
               }
             ],
             "title": "Selection"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
           }
         },
         "type": "object",
@@ -4825,13 +5480,15 @@
         "properties": {
           "text": {
             "type": "string",
-            "title": "Text"
+            "title": "Text",
+            "default": ""
           },
           "source": {
             "type": "string",
             "enum": [
               "typed",
-              "spoken"
+              "spoken",
+              "button"
             ],
             "title": "Source",
             "default": "typed"
@@ -4860,12 +5517,17 @@
           },
           "context": {
             "$ref": "#/components/schemas/TurnContext"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Attachments"
           }
         },
         "type": "object",
-        "required": [
-          "text"
-        ],
         "title": "TurnRequest"
       },
       "UsageLine": {
@@ -4959,6 +5621,19 @@
       },
       "UserSettings": {
         "properties": {
+          "language": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "en",
+              "es"
+            ],
+            "title": "Language",
+            "default": "auto"
+          },
+          "appearance": {
+            "$ref": "#/components/schemas/Appearance"
+          },
           "shortcuts": {
             "$ref": "#/components/schemas/Shortcuts"
           },
@@ -5220,16 +5895,11 @@
             "type": "string",
             "enum": [
               "auto",
+              "local",
               "openai",
-              "gemini",
-              "local"
+              "gemini"
             ],
             "title": "Stt Provider",
-            "default": "auto"
-          },
-          "language": {
-            "type": "string",
-            "title": "Language",
             "default": "auto"
           }
         },

@@ -39,12 +39,19 @@ class SettingsService:
         except FileNotFoundError:
             return self._settings
         if mtime != self._mtime:
-            try:
-                self._settings = load_user_settings(self.paths.settings_toml)
-            except (ValidationError, ValueError):
-                pass  # keep the last good settings; a half-saved editor buffer shouldn't crash the engine
             self._mtime = mtime
+            try:
+                new = load_user_settings(self.paths.settings_toml)
+            except (ValidationError, ValueError):
+                return self._settings  # keep the last good settings; a half-saved buffer shouldn't crash us
+            old, self._settings = self._settings, new
+            if new != old:
+                self._notify(old, new)
         return self._settings
+
+    def _notify(self, old: UserSettings, new: UserSettings) -> None:
+        for fn in list(self._listeners):
+            fn(old, new)
 
     def on_change(self, fn: Callable[[UserSettings, UserSettings], None]) -> None:
         self._listeners.append(fn)
@@ -57,8 +64,7 @@ class SettingsService:
             except ValidationError as e:
                 raise EngineError("invalid_request", f"Invalid settings: {e.errors()[0]['msg']}") from e
             self._write(new)
-            for fn in self._listeners:
-                fn(old, new)
+            self._notify(old, new)
             return new
 
     async def set_key(self, key: str, value: Any) -> UserSettings:
@@ -72,8 +78,7 @@ class SettingsService:
             except ValidationError as e:
                 raise EngineError("invalid_request", f"{key}: {e.errors()[0]['msg']}") from e
             self._write(new)
-            for fn in self._listeners:
-                fn(old, new)
+            self._notify(old, new)
             return new
 
     def _write(self, new: UserSettings) -> None:

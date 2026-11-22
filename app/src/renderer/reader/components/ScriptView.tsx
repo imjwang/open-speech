@@ -1,9 +1,11 @@
+import { AudioLines, EyeOff, Sparkles, Zap } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
 import type { Block, ScriptOut } from '@shared/api/client'
 import { codePointIndexTable, cpToUtf16 } from '@shared/text'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { scriptEntries } from '../highlight'
 import type { WordState } from '../store'
@@ -41,12 +43,24 @@ export function ScriptView({
   onStart(utteranceId: string): void
   style?: CSSProperties
 }) {
+  const t = useT()
   const order = new Map(blocks.map((b) => [b.id, b.order]))
   const entries = scriptEntries(script, order)
   return (
-    <article className="mx-auto max-w-[72ch] px-6 py-8" style={style} aria-label="Script: what will be spoken" data-testid="script-view">
-      <p className="mb-4 text-xs text-muted-foreground">
-        {script.mode === 'ai_enhanced' ? 'AI Enhanced' : 'Classic'} · {script.utterances.length} utterances · {script.removed.length} spans skipped
+    <article className="mx-auto max-w-[72ch] px-6 py-8" style={style} aria-label={t('reader.script')} data-testid="script-view">
+      <p className="mb-4 flex items-center gap-3 text-xs text-muted-foreground" data-testid="script-summary">
+        <span className="inline-flex items-center gap-1" title={t(script.mode === 'ai_enhanced' ? 'mode.ai_enhanced' : 'mode.classic')}>
+          {script.mode === 'ai_enhanced' ? <Sparkles aria-hidden="true" className="size-3.5" /> : <Zap aria-hidden="true" className="size-3.5" />}
+          <span className="sr-only">{t(script.mode === 'ai_enhanced' ? 'mode.ai_enhanced' : 'mode.classic')}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 tabular-nums">
+          <AudioLines aria-hidden="true" className="size-3.5" />
+          {script.utterances.length}
+        </span>
+        <span className="inline-flex items-center gap-1 tabular-nums">
+          <EyeOff aria-hidden="true" className="size-3.5" />
+          {script.removed.length}
+        </span>
       </p>
       {(script.warnings ?? []).length > 0 && (
         <ul className="mb-4 text-xs text-muted-foreground">
@@ -92,7 +106,7 @@ export function ScriptView({
                   tabIndex={0}
                   className="rounded-sm text-[0.9em] text-skipped line-through opacity-70 focus-visible:no-underline"
                   data-skipped={hit.rule_name}
-                  aria-label={`Skipped by ${hit.rule_name}: ${text}`}
+                  aria-label={`${t('reader.skipped_by', { rule: hit.rule_name })}: ${text}`}
                 >
                   {text.length > 280 ? `${text.slice(0, 277)}…` : text}
                 </p>

@@ -5,6 +5,7 @@
  * sentence in view until the user scrolls; click a sentence to start there; Script view shows exactly
  * what will be spoken.
  */
+import { ArrowDownToLine } from 'lucide-react'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import { fetchAllBlocks, fetchSource, unwrap, type Block, type DocumentOut } from '@shared/api/client'
@@ -12,6 +13,8 @@ import type { ReaderTarget } from '@shared/ipc'
 
 import type { Bridge } from '@/bridge'
 import { useEngine, useEngineStore, useServerEvent } from '@/engine'
+import { useT } from '@/i18n'
+import { usePrefs } from '@/prefs'
 import { prefersReducedMotion } from '@/theme'
 import { PdfView } from './components/PdfView'
 import { ScriptView } from './components/ScriptView'
@@ -63,6 +66,7 @@ function staticMarks(blocks: readonly Block[], script: ReturnType<typeof useRead
 }
 
 export function ReaderApp({ bridge }: { bridge: Bridge }) {
+  const t = useT()
   const engine = useEngine()
   const endpoint = useEngineStore((s) => s.endpoint)
   const playback = useEngineStore((s) => s.playback)
@@ -185,15 +189,6 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
     bridge.setWebMode(showLivePage ? { mode: 'page', url: doc.url, documentId: doc.id } : { mode: 'text' })
   }, [st.doc, showLivePage, bridge])
 
-  useEffect(() => {
-    const client = engine.client
-    if (!client || !endpoint) return
-    void unwrap(client.GET('/api/v1/settings')).then(
-      (s) => useReaderStore.setState({ settings: s.reader ?? null }),
-      () => undefined,
-    )
-  }, [endpoint, engine])
-
   // ---------------------------------------------------------------- engine events
 
   useServerEvent('playback.word', (msg) => {
@@ -280,7 +275,7 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
     const thisDoc = !!docId && p.document_id === docId
     if (thisDoc && (p.state === 'playing' || p.state === 'loading')) void call(() => unwrap(client.POST('/api/v1/playback/pause')))
     else if (thisDoc && p.state === 'paused') void call(() => unwrap(client.POST('/api/v1/playback/resume')))
-    else if (docId) void call(() => unwrap(client.POST('/api/v1/playback/play', { body: { document_id: docId } })))
+    else if (docId) void call(() => unwrap(client.POST('/api/v1/playback/play', { body: { document_id: docId, confirm_estimate: false } })))
   }
   const playPauseRef = useRef(playPause)
   playPauseRef.current = playPause
@@ -289,7 +284,7 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
     const client = engine.client
     if (!client || !docId) return
     useReaderStore.setState({ follow: true })
-    void call(() => unwrap(client.POST('/api/v1/playback/play', { body: { document_id: docId, from } })))
+    void call(() => unwrap(client.POST('/api/v1/playback/play', { body: { document_id: docId, from, confirm_estimate: false } })))
   }
 
   useEffect(() => {
@@ -331,10 +326,8 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
 
   // ---------------------------------------------------------------- render
 
-  const settings = st.settings
-  useEffect(() => {
-    document.documentElement.classList.toggle('high-contrast', !!settings?.high_contrast)
-  }, [settings?.high_contrast])
+  // Reader options live in the shared preferences, so "bigger text" by voice shows here at once.
+  const settings = usePrefs((s) => s.settings?.reader ?? null)
   const contentStyle: CSSProperties = {
     fontSize: `${settings?.font_size ?? 18}px`,
     lineHeight: settings?.line_spacing ?? 1.6,
@@ -397,7 +390,7 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
           </figure>
         )}
         <TextView blocks={st.blocks} marksFor={marksFor} outlined={outlined} onStart={(id) => playFrom({ utterance_id: id })} style={contentStyle} />
-        {st.loading && <p className="px-6 text-sm text-muted-foreground">Loading…</p>}
+        {st.loading && <p className="px-6 text-sm text-muted-foreground">{t('reader.loading')}</p>}
       </>
     )
   }
@@ -417,6 +410,7 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
         followReleased={followReleased && (isPlayingThis || showLivePage)}
         onBackToPlayhead={backToPlayhead}
         onPlayPause={() => playPauseRef.current()}
+        onCommand={() => bridge.openBar(docId ? { documentId: docId } : {})}
         mac={mac}
       />
       <main ref={scrollRef} className="relative flex-1 overflow-y-auto" onScroll={onScroll} tabIndex={0} aria-label={title}>
@@ -424,10 +418,12 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
         {!showLivePage && followReleased && isPlayingThis && (
           <button
             type="button"
-            className="fixed bottom-5 left-1/2 -translate-x-1/2 rounded-full border bg-background px-3 py-1.5 text-sm shadow-lg focus-visible:outline-2"
+            aria-label={t('reader.back_to_playhead')}
+            title={t('reader.back_to_playhead')}
+            className="fixed bottom-5 left-1/2 grid size-10 -translate-x-1/2 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg focus-visible:outline-2"
             onClick={backToPlayhead}
           >
-            ↓ Back to playhead
+            <ArrowDownToLine aria-hidden="true" className="size-5" />
           </button>
         )}
       </main>

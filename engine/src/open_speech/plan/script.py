@@ -70,6 +70,14 @@ class SpeechScript(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+# The text Claude annotates shows `⟦label⟧` (e.g. `⟦url⟧`, `⟦citation⟧`) wherever a Classic filter already
+# removed a span, so a sentence with a hole in it doesn't read as damage to repair. Markers are never spoken.
+CUT_OPEN = "⟦"
+CUT_CLOSE = "⟧"
+# `SpanOp.rule_id` of an op that SPEECH.md asks for, rather than a rule file.
+SPEECH_MD_RULE_ID = "speech_md"
+
+
 class SpanOp(BaseModel):
     """Claude annotate output (05 § Tier 2). Quote-anchored, never numeric offsets."""
 

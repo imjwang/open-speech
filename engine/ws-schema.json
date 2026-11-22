@@ -1,10 +1,90 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Open Speech WebSocket protocol",
-  "protocol": 1,
+  "protocol": 2,
   "binary_frames": "Mic audio: 16-bit LE PCM, 16 kHz mono, between mic.start and mic.stop",
   "client": {
     "$defs": {
+      "Attachment": {
+        "description": "Something attached to a command in the composer: a file, a link, pasted text, or a document that was\nalready imported (uploads).",
+        "properties": {
+          "kind": {
+            "enum": [
+              "file",
+              "url",
+              "text",
+              "document"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Text"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Document Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "Attachment",
+        "type": "object"
+      },
       "BarState": {
         "description": "The bar tells the engine it opened or closed, for ducking (07 \u00a7 Ducking).",
         "properties": {
@@ -66,6 +146,7 @@
             "type": "string"
           },
           "text": {
+            "default": "",
             "title": "Text",
             "type": "string"
           },
@@ -73,7 +154,8 @@
             "default": "typed",
             "enum": [
               "typed",
-              "spoken"
+              "spoken",
+              "button"
             ],
             "title": "Source",
             "type": "string"
@@ -92,11 +174,16 @@
           },
           "context": {
             "$ref": "#/$defs/TurnContext"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/$defs/Attachment"
+            },
+            "maxItems": 50,
+            "title": "Attachments",
+            "type": "array"
           }
         },
-        "required": [
-          "text"
-        ],
         "title": "Command",
         "type": "object"
       },
@@ -184,6 +271,14 @@
             "default": true,
             "title": "Submit",
             "type": "boolean"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/$defs/Attachment"
+            },
+            "maxItems": 50,
+            "title": "Attachments",
+            "type": "array"
           }
         },
         "required": [
@@ -252,6 +347,18 @@
             ],
             "default": null,
             "title": "Selection"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Conversation Id"
           }
         },
         "title": "TurnContext",
@@ -375,6 +482,22 @@
           }
         },
         "title": "Anchor",
+        "type": "object"
+      },
+      "Appearance": {
+        "properties": {
+          "theme": {
+            "default": "system",
+            "enum": [
+              "system",
+              "lavender",
+              "ember"
+            ],
+            "title": "Theme",
+            "type": "string"
+          }
+        },
+        "title": "Appearance",
         "type": "object"
       },
       "AssistantAction": {
@@ -542,8 +665,9 @@
               "recents",
               "models",
               "where",
-              "keys",
               "presets",
+              "settings",
+              "queue",
               "info"
             ],
             "title": "Kind",
@@ -737,7 +861,8 @@
           "source": {
             "enum": [
               "typed",
-              "spoken"
+              "spoken",
+              "button"
             ],
             "title": "Source",
             "type": "string"
@@ -753,6 +878,13 @@
             ],
             "default": null,
             "title": "Recording Id"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/$defs/AttachmentOut"
+            },
+            "title": "Attachments",
+            "type": "array"
           }
         },
         "required": [
@@ -761,6 +893,48 @@
           "source"
         ],
         "title": "AssistantTurn",
+        "type": "object"
+      },
+      "AttachmentOut": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Document Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          }
+        },
+        "required": [
+          "kind",
+          "title"
+        ],
+        "title": "AttachmentOut",
         "type": "object"
       },
       "BBox": {
@@ -795,6 +969,129 @@
           "y1"
         ],
         "title": "BBox",
+        "type": "object"
+      },
+      "Budget": {
+        "properties": {
+          "monthly_usd": {
+            "default": "10",
+            "title": "Monthly Usd",
+            "type": "string"
+          },
+          "warn_at": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Warn At",
+            "type": "number"
+          },
+          "hard_stop": {
+            "default": true,
+            "title": "Hard Stop",
+            "type": "boolean"
+          },
+          "estimate_threshold_usd": {
+            "default": "0.50",
+            "title": "Estimate Threshold Usd",
+            "type": "string"
+          }
+        },
+        "title": "Budget",
+        "type": "object"
+      },
+      "CacheSettings": {
+        "properties": {
+          "max_gb": {
+            "default": 5.0,
+            "maximum": 500,
+            "minimum": 0.1,
+            "title": "Max Gb",
+            "type": "number"
+          }
+        },
+        "title": "CacheSettings",
+        "type": "object"
+      },
+      "Capabilities": {
+        "description": "What this build can do (GET /capabilities). Cloud features depend on the providers configured at\nbuild time; nothing here can be changed from inside the app.",
+        "properties": {
+          "speech_input": {
+            "$ref": "#/$defs/SpeechInput"
+          },
+          "assistant": {
+            "title": "Assistant",
+            "type": "boolean"
+          },
+          "ai_cleanup": {
+            "title": "Ai Cleanup",
+            "type": "boolean"
+          },
+          "vision": {
+            "title": "Vision",
+            "type": "boolean"
+          },
+          "cloud_voices": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cloud Voices",
+            "type": "array"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "language": {
+            "default": "en",
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "speech_input",
+          "assistant",
+          "ai_cleanup",
+          "vision"
+        ],
+        "title": "Capabilities",
+        "type": "object"
+      },
+      "CapabilitiesChanged": {
+        "description": "What the build can do changed while running, e.g. the local speech model finished installing.",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "capabilities.changed",
+            "default": "capabilities.changed",
+            "title": "Type",
+            "type": "string"
+          },
+          "capabilities": {
+            "$ref": "#/$defs/Capabilities"
+          }
+        },
+        "required": [
+          "capabilities"
+        ],
+        "title": "CapabilitiesChanged",
         "type": "object"
       },
       "CardRow": {
@@ -847,6 +1144,57 @@
           "title"
         ],
         "title": "CardRow",
+        "type": "object"
+      },
+      "Defaults": {
+        "properties": {
+          "voice": {
+            "default": "kokoro:kokoro-82m-v1.0:af_heart",
+            "title": "Voice",
+            "type": "string"
+          },
+          "assistant_voice": {
+            "default": "kokoro:kokoro-82m-v1.0:af_heart",
+            "title": "Assistant Voice",
+            "type": "string"
+          },
+          "voices": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Voices",
+            "type": "object"
+          },
+          "speed": {
+            "default": 1.0,
+            "maximum": 5.0,
+            "minimum": 0.5,
+            "title": "Speed",
+            "type": "number"
+          },
+          "mode": {
+            "default": "classic",
+            "enum": [
+              "classic",
+              "ai_enhanced"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Style"
+          }
+        },
+        "title": "Defaults",
         "type": "object"
       },
       "DiffRemoval": {
@@ -1061,7 +1409,7 @@
             "type": "string"
           },
           "protocol": {
-            "default": 1,
+            "default": 2,
             "title": "Protocol",
             "type": "integer"
           },
@@ -1119,6 +1467,67 @@
           "label"
         ],
         "title": "JobProgress",
+        "type": "object"
+      },
+      "LlmSettings": {
+        "properties": {
+          "model": {
+            "default": "claude-sonnet-5-5",
+            "title": "Model",
+            "type": "string"
+          },
+          "annotate_effort": {
+            "default": "low",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Annotate Effort",
+            "type": "string"
+          },
+          "assistant_effort": {
+            "default": "low",
+            "enum": [
+              "low",
+              "medium",
+              "auto"
+            ],
+            "title": "Assistant Effort",
+            "type": "string"
+          }
+        },
+        "title": "LlmSettings",
+        "type": "object"
+      },
+      "PlaybackSettings": {
+        "properties": {
+          "fallback": {
+            "default": "kokoro",
+            "enum": [
+              "same_provider",
+              "another_voice",
+              "kokoro"
+            ],
+            "title": "Fallback",
+            "type": "string"
+          },
+          "prefetch_seconds": {
+            "default": 30,
+            "maximum": 600,
+            "minimum": 5,
+            "title": "Prefetch Seconds",
+            "type": "integer"
+          },
+          "max_ahead_seconds": {
+            "default": 120,
+            "maximum": 3600,
+            "minimum": 10,
+            "title": "Max Ahead Seconds",
+            "type": "integer"
+          }
+        },
+        "title": "PlaybackSettings",
         "type": "object"
       },
       "PlaybackState": {
@@ -1280,6 +1689,13 @@
             ],
             "default": null,
             "title": "Error"
+          },
+          "queue": {
+            "items": {
+              "$ref": "#/$defs/QueueItem"
+            },
+            "title": "Queue",
+            "type": "array"
           }
         },
         "title": "PlaybackState",
@@ -1396,6 +1812,164 @@
         "title": "PlaybackWord",
         "type": "object"
       },
+      "QueueItem": {
+        "properties": {
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "title"
+        ],
+        "title": "QueueItem",
+        "type": "object"
+      },
+      "ReaderSettings": {
+        "properties": {
+          "font_size": {
+            "default": 18,
+            "maximum": 48,
+            "minimum": 10,
+            "title": "Font Size",
+            "type": "integer"
+          },
+          "line_spacing": {
+            "default": 1.6,
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Line Spacing",
+            "type": "number"
+          },
+          "font": {
+            "default": "system",
+            "enum": [
+              "system",
+              "atkinson",
+              "opendyslexic"
+            ],
+            "title": "Font",
+            "type": "string"
+          },
+          "high_contrast": {
+            "default": false,
+            "title": "High Contrast",
+            "type": "boolean"
+          }
+        },
+        "title": "ReaderSettings",
+        "type": "object"
+      },
+      "RulesChanged": {
+        "description": "A rule file, the pronunciation list or the preferences changed (by voice, the editor or on disk).",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "rules.changed",
+            "default": "rules.changed",
+            "title": "Type",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "RulesChanged",
+        "type": "object"
+      },
+      "SettingsChanged": {
+        "description": "settings.toml changed (by voice, the API or a hand edit): theme, language and shortcuts apply at once.",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "settings.changed",
+            "default": "settings.changed",
+            "title": "Type",
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/$defs/UserSettings"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "settings",
+          "language"
+        ],
+        "title": "SettingsChanged",
+        "type": "object"
+      },
+      "Shortcuts": {
+        "properties": {
+          "open_bar": {
+            "default": "Alt+Space",
+            "title": "Open Bar",
+            "type": "string"
+          },
+          "play_pause": {
+            "default": "Alt+Shift+Space",
+            "title": "Play Pause",
+            "type": "string"
+          },
+          "read_clipboard": {
+            "default": "Alt+Shift+R",
+            "title": "Read Clipboard",
+            "type": "string"
+          },
+          "read_selection": {
+            "default": "Alt+A",
+            "title": "Read Selection",
+            "type": "string"
+          },
+          "screenshot": {
+            "default": "Alt+X",
+            "title": "Screenshot",
+            "type": "string"
+          }
+        },
+        "title": "Shortcuts",
+        "type": "object"
+      },
       "SpeechDiff": {
         "properties": {
           "document_id": {
@@ -1445,6 +2019,73 @@
           }
         },
         "title": "SpeechDiff",
+        "type": "object"
+      },
+      "SpeechInput": {
+        "description": "Whether the bar can listen, and with what.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider"
+          },
+          "local": {
+            "default": false,
+            "title": "Local",
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "install_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Install Model"
+          }
+        },
+        "required": [
+          "available"
+        ],
+        "title": "SpeechInput",
         "type": "object"
       },
       "SttFinal": {
@@ -1544,6 +2185,59 @@
         "title": "SttPartial",
         "type": "object"
       },
+      "UiOpen": {
+        "description": "The assistant asks the shell to show something: the rules editor (optionally on one file), the reader\nfor a document, or the bar.",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "ui.open",
+            "default": "ui.open",
+            "title": "Type",
+            "type": "string"
+          },
+          "target": {
+            "enum": [
+              "rules",
+              "reader",
+              "bar"
+            ],
+            "title": "Target",
+            "type": "string"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Item"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "title": "UiOpen",
+        "type": "object"
+      },
       "UsageAlert": {
         "properties": {
           "ts": {
@@ -1597,6 +2291,85 @@
         ],
         "title": "UsageAlert",
         "type": "object"
+      },
+      "UserSettings": {
+        "properties": {
+          "language": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "en",
+              "es"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
+          "appearance": {
+            "$ref": "#/$defs/Appearance"
+          },
+          "shortcuts": {
+            "$ref": "#/$defs/Shortcuts"
+          },
+          "defaults": {
+            "$ref": "#/$defs/Defaults"
+          },
+          "budget": {
+            "$ref": "#/$defs/Budget"
+          },
+          "voice_input": {
+            "$ref": "#/$defs/VoiceInput"
+          },
+          "cache": {
+            "$ref": "#/$defs/CacheSettings"
+          },
+          "llm": {
+            "$ref": "#/$defs/LlmSettings"
+          },
+          "reader": {
+            "$ref": "#/$defs/ReaderSettings"
+          },
+          "playback": {
+            "$ref": "#/$defs/PlaybackSettings"
+          },
+          "onboarding_completed": {
+            "default": false,
+            "title": "Onboarding Completed",
+            "type": "boolean"
+          }
+        },
+        "title": "UserSettings",
+        "type": "object"
+      },
+      "VoiceInput": {
+        "properties": {
+          "end_of_speech_ms": {
+            "default": 800,
+            "maximum": 5000,
+            "minimum": 200,
+            "title": "End Of Speech Ms",
+            "type": "integer"
+          },
+          "recording_retention_days": {
+            "default": 30,
+            "maximum": 3650,
+            "minimum": 0,
+            "title": "Recording Retention Days",
+            "type": "integer"
+          },
+          "stt_provider": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "local",
+              "openai",
+              "gemini"
+            ],
+            "title": "Stt Provider",
+            "type": "string"
+          }
+        },
+        "title": "VoiceInput",
+        "type": "object"
       }
     },
     "discriminator": {
@@ -1607,14 +2380,18 @@
         "assistant.delta": "#/$defs/AssistantDelta",
         "assistant.done": "#/$defs/AssistantDone",
         "assistant.turn": "#/$defs/AssistantTurn",
+        "capabilities.changed": "#/$defs/CapabilitiesChanged",
         "document.updated": "#/$defs/DocumentUpdated",
         "error": "#/$defs/ErrorMsg",
         "hello": "#/$defs/Hello",
         "job.progress": "#/$defs/JobProgress",
         "playback.state": "#/$defs/PlaybackStateMsg",
         "playback.word": "#/$defs/PlaybackWord",
+        "rules.changed": "#/$defs/RulesChanged",
+        "settings.changed": "#/$defs/SettingsChanged",
         "stt.final": "#/$defs/SttFinal",
         "stt.partial": "#/$defs/SttPartial",
+        "ui.open": "#/$defs/UiOpen",
         "usage.alert": "#/$defs/UsageAlert"
       },
       "propertyName": "type"
@@ -1661,6 +2438,18 @@
       },
       {
         "$ref": "#/$defs/DocumentUpdated"
+      },
+      {
+        "$ref": "#/$defs/RulesChanged"
+      },
+      {
+        "$ref": "#/$defs/SettingsChanged"
+      },
+      {
+        "$ref": "#/$defs/CapabilitiesChanged"
+      },
+      {
+        "$ref": "#/$defs/UiOpen"
       },
       {
         "$ref": "#/$defs/ErrorMsg"

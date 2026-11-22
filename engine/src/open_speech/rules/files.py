@@ -43,7 +43,10 @@ MODES_FILE = "modes.toml"
 INSTALLED_PRESETS_FILE = ".installed-presets"
 _SKIP_FILES = {"speech.md", "readme.md"}
 
-DEFAULT_SPEECH_MD = """<!--
+# The preferences file starts empty: the editor explains what it is for, in the user's language. Earlier
+# versions wrote an explanatory comment into the file; it is recognised so the editor shows such a file as empty.
+DEFAULT_SPEECH_MD = ""
+LEGACY_SPEECH_MD = """<!--
 SPEECH.md: standing preferences for how Open Speech reads to you, in your own words.
 Everything outside this comment is included in every AI Enhanced (Claude) plan call. Examples:
 

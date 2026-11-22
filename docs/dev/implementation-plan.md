@@ -29,7 +29,7 @@ below, add to it rather than changing it, and say so in your final report.
 | `engine/src/open_speech/plan/script.py` | `Utterance` (with `segments` spoken→source map), `TextSegment`, `RuleHit`, `SpeechScript`, `SpanOp` |
 | `engine/src/open_speech/providers/base.py` | `TtsProvider`, `SttProvider`, `LlmProvider`, `VisionProvider` protocols; `Voice`, `TtsRequest`, `AudioChunk`, `WordTiming`, `Units`, `LlmCall`, `RuleBrief`, `CompiledRuleDraft`, `TransformOutput`, `VisionBlock` |
 | `engine/src/open_speech/config.py` | `EngineEnv` (.env/keys/flags), `Paths` (app-data layout), `UserSettings` (settings.toml schema; dotted-key get/set) |
-| `engine/src/open_speech/errors.py` | `EngineError(code, detail)` + `MissingKey`, `BudgetExceeded`, `EstimateRequired`, `NotFound` |
+| `engine/src/open_speech/errors.py` | `EngineError(code, detail)` + `Unavailable`, `BudgetExceeded`, `EstimateRequired`, `NotFound` |
 | `engine/src/open_speech/store/db.py` | `Database` (SQLite, WAL, migrations). Tables: documents(+fts), positions, plans, ledger, recordings, turns, actions, kv |
 | `engine/src/open_speech/api/schemas.py`, `ws_schema.py` | REST and WS contracts. `engine/openapi.json` and `engine/ws-schema.json` are generated from them (`uv run python -m open_speech.api.export`) |
 | `engine/src/open_speech/api/routes.py`, `app.py`, `auth.py` | Routers (thin) calling `engine.<service>.<method>`; token + Host/Origin guard; WS endpoint |
@@ -62,7 +62,7 @@ class IngestResult(BaseModel):
 
 async def ingest(src: SourceInput, *, extract_cache: ExtractCache, vision: VisionProvider | None = None,
                  vision_rules: Sequence[RuleBrief] = ()) -> IngestResult
-# Raises MissingKey("anthropic", "Describing images") when an image needs vision and vision is None.
+# Raises Unavailable("vision") when an image needs vision and vision is None.
 
 # document/segment.py
 def sentences(text: str) -> list[tuple[int, int]]        # char spans, stable, abbreviation-aware (pysbd)
@@ -101,7 +101,7 @@ class Lexicon: entries: list[LexiconEntry]; add(entry) / remove(term) persist to
 async def compile_rule(instruction: str, *, site: str | None, doc_kind: str | None, doc_id: str | None,
                        scope_hint: str | None, llm: LlmProvider | None) -> tuple[Rule, LlmCall | None]
 # Deterministic fallback when llm is None (or for obvious phrasings): "skip/stop reading X" for every preset
-# noun, "only read the body", "say X as Y" handled elsewhere. Unknown instructions without a key → MissingKey.
+# noun, "only read the body", "say X as Y" handled elsewhere. Unknown instructions without an LLM in the build → Unavailable.
 
 # plan/planner.py
 class PlanContext(BaseModel): document; rules: list[Rule]; lexicon: Lexicon; speech_md: str; mode; llm_model: str
@@ -131,19 +131,17 @@ engine dependencies (`uv add` if needed).
 Binding interface:
 
 ```python
-# providers/keys.py
-class KeyStore:
-    def __init__(self, env: EngineEnv, *, use_keychain: bool) -> None   # env overrides keychain (08 § Keys)
+# providers/keys.py — keys are build configuration (08 § Keys): read from the environment, never set at run time
+class ProviderKeys:
+    def __init__(self, env: EngineEnv) -> None
     def get(self, provider: str) -> str | None
     def status(self, provider: str) -> Literal["configured","missing","invalid"]
-    @staticmethod
-    def detect(key: str) -> str | None                   # sk-ant- → anthropic, sk- → openai, AIza → gemini
-    async def set(self, provider: str, key: str) -> tuple[bool, str]    # test call, then store; never logs the key
+    def mark_invalid(self, provider: str) -> None        # the provider rejected the build's key
 
 # local/catalog.py — ModelCatalog.load(paths) merges data/models.toml with paths.models_toml
 # providers/registry.py
 class ProviderRegistry:
-    def __init__(self, env: EngineEnv, paths: Paths, catalog: ModelCatalog, keys: KeyStore) -> None
+    def __init__(self, env: EngineEnv, paths: Paths, catalog: ModelCatalog, keys: ProviderKeys) -> None
     def voices(self) -> list[Voice]                      # every catalog voice with available/unavailable_reason
     def tts_for(self, voice_id: str) -> tuple[TtsProvider, TtsRequest-template (model, voice)]
     def llm(self) -> LlmProvider | None; def vision(self) -> VisionProvider | None; def stt(self) -> SttProvider | None

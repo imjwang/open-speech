@@ -15,15 +15,15 @@ import json
 import logging
 from collections.abc import Callable
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, cast
 
 from open_speech.api.ws_schema import UsageAlert
 from open_speech.config import UserSettings
 from open_speech.errors import BudgetExceeded
+from open_speech.i18n import say, t
 from open_speech.service.events import EventBus
 from open_speech.usage.ledger import Ledger
 from open_speech.usage.pricing import money
-from open_speech.usage.spoken import budget_words, money_words
 
 log = logging.getLogger(__name__)
 _KV = "budget_alert_state"
@@ -83,7 +83,7 @@ class BudgetGuard:
         if data.get("key") != self._period_key():
             return "none"
         lvl = data.get("level", "none")
-        return lvl if lvl in _RANK else "none"  # type: ignore[no-any-return]
+        return cast(Level, lvl) if lvl in _RANK else "none"
 
     def _set_level(self, level: Level) -> None:
         self.ledger.db.set_kv(_KV, json.dumps({"key": self._period_key(), "level": level}))
@@ -109,16 +109,15 @@ class BudgetGuard:
             return  # nothing to say, or this crossing was already announced
         hard = self._settings().budget.hard_stop
         if level == "warn":
-            msg = (
-                f"Heads up: you've used about {round(float(spent / budget) * 100)} percent of your "
-                f"{budget_words(budget)} budget this month (about {money_words(spent)}, estimated)."
+            msg = t(
+                "budget.warn",
+                pct=round(float(spent / budget) * 100),
+                budget=say.budget(budget),
+                spent=say.money(spent),
             )
         elif hard:
-            msg = (
-                f"You've reached your {budget_words(budget)} monthly budget. I'll keep reading with the local "
-                "voice; say 'raise my budget' to change it."
-            )
+            msg = t("budget.stop", budget=say.budget(budget))
         else:
-            msg = f"You've passed your {budget_words(budget)} monthly budget (about {money_words(spent)}, estimated)."
+            msg = t("budget.passed", budget=say.budget(budget), spent=say.money(spent))
         self._set_level(level)
         self._events.publish(UsageAlert(level=level, spent=money(spent), budget=money(budget), message=msg))

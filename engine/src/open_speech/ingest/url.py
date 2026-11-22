@@ -24,6 +24,7 @@ from open_speech.ingest.common import (
     site_for,
     source_id_url,
 )
+from open_speech.ingest.lead import lead_first
 
 USER_AGENT = "Mozilla/5.0 (compatible; OpenSpeech/0.1; +https://open-speech.dev)"
 MAX_BYTES = 50 * 1024 * 1024
@@ -125,7 +126,8 @@ def extract_html(html: str | bytes, *, url: str, title: str | None = None) -> Do
     if not xml:
         raise EngineError("invalid_request", "I couldn't find any readable text on that page.")
     root = etree.fromstring(xml.encode("utf-8") if isinstance(xml, str) else xml)
-    drafts = _xml_to_drafts(root)
+    # trafilatura keeps document order: an infobox table or image ahead of the lead is read after it.
+    drafts = lead_first(_xml_to_drafts(root))
     blocks = finalize_blocks(drafts)
     if not blocks:
         raise EngineError("invalid_request", "I couldn't find any readable text on that page.")

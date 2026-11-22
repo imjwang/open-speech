@@ -1,85 +1,127 @@
 @import 'tailwindcss';
 
-/* shadcn/ui tokens (Tailwind v4). The app follows the OS light/dark setting (09 § Visual design); the
-   `.dark` class is set from prefers-color-scheme (or the reader theme setting) by theme.ts. */
+/* shadcn/ui tokens (Tailwind v4) for the two themes (09 § Visual design), set by theme.ts as
+   `data-theme` on <html>. `.dark` goes with ember so Tailwind's `dark:` variant keeps working. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-:root {
-  --radius: 0.75rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.48 0 0);
-  --accent: oklch(0.95 0.01 255);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.55 0.22 27);
-  --border: oklch(0.9 0 0);
-  --input: oklch(0.9 0 0);
-  --ring: oklch(0.52 0.2 262);
-  /* One accent for listening and highlight (09 § Visual design). */
-  --listen: #1d4ed8;
+/* ------------------------------------------------------------------ lavender: pastel, light */
+:root,
+:root[data-theme='lavender'] {
+  --radius: 0.9rem;
+  --background: #f8f5ff;
+  --foreground: #2b2440;
+  --card: #ffffff;
+  --card-foreground: #2b2440;
+  --popover: #ffffff;
+  --popover-foreground: #2b2440;
+  --primary: #7459d9;
+  --primary-foreground: #ffffff;
+  --secondary: #ebe5fb;
+  --secondary-foreground: #3a3160;
+  --muted: #efeafb;
+  --muted-foreground: #675d86;
+  --accent: #e6defc;
+  --accent-foreground: #2b2440;
+  --destructive: #c2415d;
+  --success: #24815f;
+  --warning: #9a6412;
+  --border: #ddd4f3;
+  --input: #d3c8ee;
+  --ring: #8b6ff0;
+  /* One accent for listening and highlight. */
+  --listen: #7459d9;
   --listen-foreground: #ffffff;
+  --glow: rgb(116 89 217 / 32%);
+  /* Pastel tints for badges: what kind of thing an attachment is, at a glance. */
+  --tint-file: #fbd9e3;
+  --tint-file-foreground: #8a2846;
+  --tint-web: #d6e8fc;
+  --tint-web-foreground: #1f4f86;
+  --tint-text: #e6defc;
+  --tint-text-foreground: #4a3794;
+  --tint-image: #d1f0e2;
+  --tint-image-foreground: #1c6247;
+  --tint-folder: #fbefc6;
+  --tint-folder-foreground: #74510c;
   /* Reader highlight (09 § Reader): the sentence is a soft tint, the current word is strong (≥ 3:1 against
      the page) and underlined, so position is never colour alone. Text keeps ≥ 4.5:1 on both. PDF pages are
      always white, so they use the *-page variants in every theme. */
   --page: #ffffff;
-  --page-foreground: #0a0a0a;
-  --hl-sentence: #dbe7fd;
-  --hl-sentence-foreground: #0a0a0a;
-  --hl-word: #1d4ed8;
+  --page-foreground: #1f1a2e;
+  --hl-sentence: #e9e0ff;
+  --hl-sentence-foreground: #1f1a2e;
+  --hl-word: #6a4fd3;
   --hl-word-foreground: #ffffff;
-  --hl-outline: #1d4ed8;
-  --hl-sentence-page: #d3e2fd;
-  --hl-word-page: #1d4ed8;
-  --skipped: #6b7280;
+  --hl-outline: #6a4fd3;
+  --hl-sentence-page: #e2d6ff;
+  --hl-word-page: #6a4fd3;
+  --skipped: #746b90;
 }
 
-.dark {
-  --background: oklch(0.16 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.2 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.2 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.74 0 0);
-  --accent: oklch(0.3 0.02 255);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.7 0.19 22);
-  --border: oklch(1 0 0 / 14%);
-  --input: oklch(1 0 0 / 18%);
-  --ring: oklch(0.72 0.14 255);
-  --listen: #93c5fd;
-  --listen-foreground: #0b1220;
-  --page: #0b0b0d;
-  --page-foreground: #f4f4f5;
-  --hl-sentence: #1c2f4f;
-  --hl-sentence-foreground: #f4f4f5;
-  --hl-word: #93c5fd;
-  --hl-word-foreground: #0b1220;
-  --hl-outline: #93c5fd;
-  --skipped: #9ca3af;
+/* ------------------------------------------------------------------ ember: dark, lit in orange */
+:root[data-theme='ember'] {
+  --background: #15110e;
+  --foreground: #f7ede2;
+  --card: #1e1712;
+  --card-foreground: #f7ede2;
+  --popover: #221a14;
+  --popover-foreground: #f7ede2;
+  --primary: #ff8a3c;
+  --primary-foreground: #1a0f06;
+  --secondary: #2b2019;
+  --secondary-foreground: #f7ede2;
+  --muted: #271d16;
+  --muted-foreground: #bba998;
+  --accent: #38261a;
+  --accent-foreground: #fff3e6;
+  --destructive: #ff7b72;
+  --success: #62d2a2;
+  --warning: #ffc857;
+  --border: rgb(255 170 110 / 17%);
+  --input: rgb(255 170 110 / 24%);
+  --ring: #ff9d57;
+  --listen: #ff8a3c;
+  --listen-foreground: #1a0f06;
+  --glow: rgb(255 138 60 / 38%);
+  --tint-file: #4b2330;
+  --tint-file-foreground: #ffb6c9;
+  --tint-web: #1c3552;
+  --tint-web-foreground: #a3ceff;
+  --tint-text: #4a2c12;
+  --tint-text-foreground: #ffc38f;
+  --tint-image: #173e30;
+  --tint-image-foreground: #92e4c2;
+  --tint-folder: #463910;
+  --tint-folder-foreground: #ffe08a;
+  --page: #15110e;
+  --page-foreground: #f3e9df;
+  --hl-sentence: #4d2b12;
+  --hl-sentence-foreground: #fff3e6;
+  --hl-word: #ff9d57;
+  --hl-word-foreground: #1a0f06;
+  --hl-outline: #ff9d57;
+  --hl-sentence-page: #ffe1c7;
+  --hl-word-page: #c2500a;
+  --skipped: #9c8b7c;
 }
 
 /* High contrast (settings.reader.high_contrast). */
 .high-contrast {
   --background: #000000;
   --foreground: #ffffff;
+  --card: #000000;
+  --popover: #000000;
+  --muted: #1a1a1a;
   --muted-foreground: #e5e5e5;
+  --accent: #262626;
+  --accent-foreground: #ffffff;
   --border: #ffffff;
+  --input: #ffffff;
   --ring: #ffff00;
+  --primary: #ffff00;
+  --primary-foreground: #000000;
+  --listen: #ffff00;
+  --listen-foreground: #000000;
   --page: #000000;
   --page-foreground: #ffffff;
   --hl-sentence: #ffff00;
@@ -93,8 +135,8 @@
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 3px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --color-background: var(--background);
@@ -112,11 +154,23 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-listen: var(--listen);
   --color-listen-foreground: var(--listen-foreground);
+  --color-tint-file: var(--tint-file);
+  --color-tint-file-foreground: var(--tint-file-foreground);
+  --color-tint-web: var(--tint-web);
+  --color-tint-web-foreground: var(--tint-web-foreground);
+  --color-tint-text: var(--tint-text);
+  --color-tint-text-foreground: var(--tint-text-foreground);
+  --color-tint-image: var(--tint-image);
+  --color-tint-image-foreground: var(--tint-image-foreground);
+  --color-tint-folder: var(--tint-folder);
+  --color-tint-folder-foreground: var(--tint-folder-foreground);
   --color-page: var(--page);
   --color-page-foreground: var(--page-foreground);
   --color-hl-sentence: var(--hl-sentence);
@@ -128,6 +182,7 @@
   --color-hl-word-page: var(--hl-word-page);
   --color-skipped: var(--skipped);
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 @layer base {
@@ -145,6 +200,119 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 30%, transparent);
+  }
+  /* Thin, theme-coloured scrollbars inside the small windows. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+  }
+}
+
+/* ------------------------------------------------------------------ the voice orb
+   One control for the microphone: idle, listening (it breathes with the level in --level, 0..1), thinking,
+   speaking. Shape and motion carry the state; the icon inside says which one for people who can't see motion. */
+.orb {
+  --level: 0;
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+.orb::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 calc(2px + var(--level) * 9px) var(--glow);
+  opacity: 0;
+  transition:
+    box-shadow 90ms linear,
+    opacity 160ms ease;
+  pointer-events: none;
+}
+.orb[data-state='listening'] {
+  background: var(--listen);
+  color: var(--listen-foreground);
+}
+.orb[data-state='listening']::before {
+  opacity: 1;
+}
+.orb[data-state='thinking'] {
+  background: color-mix(in oklab, var(--listen) 22%, var(--muted));
+  color: var(--listen);
+}
+.orb[data-state='speaking'] {
+  background: color-mix(in oklab, var(--listen) 22%, var(--muted));
+  color: var(--listen);
+}
+.orb[data-state='speaking']::before {
+  opacity: 1;
+  animation: orb-speak 1.4s ease-in-out infinite;
+}
+@keyframes orb-speak {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px var(--glow);
+  }
+  50% {
+    box-shadow: 0 0 0 8px var(--glow);
+  }
+}
+
+/* ------------------------------------------------------------------ inline badges (attachments in an editor) */
+.badge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  max-width: 16em;
+  margin: 0 0.1em;
+  padding: 0.05em 0.5em 0.05em 0.35em;
+  border-radius: 9999px;
+  font-size: 0.86em;
+  line-height: 1.5;
+  vertical-align: baseline;
+  white-space: nowrap;
+  user-select: none;
+  cursor: default;
+  background: var(--tint-text);
+  color: var(--tint-text-foreground);
+}
+.badge-chip[data-kind='file'] {
+  background: var(--tint-file);
+  color: var(--tint-file-foreground);
+}
+.badge-chip[data-kind='url'] {
+  background: var(--tint-web);
+  color: var(--tint-web-foreground);
+}
+.badge-chip[data-kind='image'] {
+  background: var(--tint-image);
+  color: var(--tint-image-foreground);
+}
+.badge-chip[data-kind='folder'] {
+  background: var(--tint-folder);
+  color: var(--tint-folder-foreground);
+}
+.badge-chip[data-selected='true'] {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.badge-chip > svg {
+  width: 0.95em;
+  height: 0.95em;
+  flex: none;
+}
+.badge-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Motion is minimal and disabled under reduced motion (09 § Visual design). */

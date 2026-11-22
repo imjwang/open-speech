@@ -9,6 +9,8 @@
 - Remove deletes the model directory. Qwen3-TTS (P2) is listed as unsupported/later.
 - Packaged builds ship Kokoro read-only inside the app (`local/bundled.py`, FR-SETUP-3). It counts as installed
   when app data has no complete copy, and is never written to or removed.
+- Speech-to-text models (`[stt.local."<model>"]`, kind "stt") are listed, installed and removed the same way;
+  their files live in `models/stt/<model>/`, in app data and in the packaged runtime alike.
 """
 
 from __future__ import annotations
@@ -38,11 +40,12 @@ from open_speech.config import Paths
 from open_speech.errors import EngineError, NotFound
 from open_speech.ids import new_id
 from open_speech.local.bundled import bundled_models_dir
-from open_speech.local.catalog import ModelCatalog, TtsModel, WeightFile
+from open_speech.local.catalog import LOCAL_STT_DIR, LocalSttModel, ModelCatalog, TtsModel, WeightFile
 from open_speech.service.events import EventBus
 
 log = logging.getLogger(__name__)
 Fit = Literal["fits", "slow", "unsupported"]
+LocalEntry = TtsModel | LocalSttModel
 
 
 class HardwareInfo(BaseModel):
@@ -89,7 +92,7 @@ def probe_hardware(*, run: Callable[..., Any] = subprocess.run, system: str | No
     return info
 
 
-def fit_for(entry: TtsModel, hw: HardwareInfo) -> tuple[Fit, str]:
+def fit_for(entry: LocalEntry, hw: HardwareInfo) -> tuple[Fit, str]:
     if entry.status == "later":
         return "unsupported", "Planned for a later release."
     if entry.requires == "apple-silicon" and not hw.apple_silicon:
@@ -149,41 +152,46 @@ class LocalModelManager:
             self._hw = probe_hardware()
         return self._hw
 
-    def entry(self, model_id: str) -> TtsModel:
-        e = self.catalog.local_model(model_id)
+    def entry(self, model_id: str) -> LocalEntry:
+        """A local voice model or a local speech-to-text model, by catalog id."""
+        e = self.catalog.local_model(model_id) or self.catalog.local_stt_model(model_id)
         if e is None:
             raise NotFound(f"a local model called {model_id}")
         return e
 
-    def model_dir(self, entry: TtsModel) -> Path:
-        """Where installs go (app data). See `installed_dir` for where weights are read from."""
-        return self.paths.models / entry.provider / entry.model
+    @staticmethod
+    def _subdir(entry: LocalEntry) -> str:
+        return LOCAL_STT_DIR if isinstance(entry, LocalSttModel) else entry.provider
 
-    def _complete(self, entry: TtsModel, d: Path) -> bool:
+    def model_dir(self, entry: LocalEntry) -> Path:
+        """Where installs go (app data). See `installed_dir` for where weights are read from."""
+        return self.paths.models / self._subdir(entry) / entry.model
+
+    def _complete(self, entry: LocalEntry, d: Path) -> bool:
         return entry.weights is not None and all((d / f.path).exists() for f in entry.weights.all_files())
 
-    def bundled_dir(self, entry: TtsModel) -> Path | None:
+    def bundled_dir(self, entry: LocalEntry) -> Path | None:
         """The read-only copy shipped with the app, when it has every weight file."""
         if self._bundled is None:
             return None
-        d = self._bundled / entry.provider / entry.model
+        d = self._bundled / self._subdir(entry) / entry.model
         return d if self._complete(entry, d) else None
 
-    def installed_dir(self, entry: TtsModel) -> Path | None:
+    def installed_dir(self, entry: LocalEntry) -> Path | None:
         """The complete copy in app data, else the bundled one, else None."""
         d = self.model_dir(entry)
         return d if self._complete(entry, d) else self.bundled_dir(entry)
 
-    def _files(self, entry: TtsModel) -> list[WeightFile]:
+    def _files(self, entry: LocalEntry) -> list[WeightFile]:
         w = entry.weights
         if w is None:
             return []
         files = w.all_files()
-        if w.voice_file:
+        if isinstance(entry, TtsModel) and w.voice_file:
             files += [WeightFile(path=w.voice_file.format(voice=v), size_mb=w.voice_size_mb) for v in entry.voices]
         return files
 
-    def manifest(self, entry: TtsModel) -> dict[str, Any] | None:
+    def manifest(self, entry: LocalEntry) -> dict[str, Any] | None:
         p = (self.installed_dir(entry) or self.model_dir(entry)) / "manifest.json"
         if not p.exists():
             return None
@@ -199,7 +207,8 @@ class LocalModelManager:
     def list(self) -> list[LocalModel]:
         out: list[LocalModel] = []
         hw = self.hardware
-        for entry in self.catalog.local_models():
+        entries: list[LocalEntry] = [*self.catalog.local_models(), *self.catalog.local_stt_models()]
+        for entry in entries:
             fit, note = fit_for(entry, hw)
             installed = entry.weights is not None and self.installed(entry.model)
             job = self._by_model.get(entry.model)
@@ -225,6 +234,7 @@ class LocalModelManager:
                     installed=installed,
                     fit=fit,
                     status=status,
+                    kind="stt" if isinstance(entry, LocalSttModel) else "tts",
                 )
             )
         return out
@@ -275,7 +285,7 @@ class LocalModelManager:
             self._on_change(entry.model)
         return True
 
-    async def _install(self, entry: TtsModel, job: _Job) -> Path:
+    async def _install(self, entry: LocalEntry, job: _Job) -> Path:
         if entry.status == "later" or entry.weights is None:
             err = EngineError("invalid_request", f"{entry.name or entry.model} can't be installed yet.")
             self._fail(job, err)
@@ -302,7 +312,7 @@ class LocalModelManager:
                         self._progress(job, min(99.0, (_base + n) * 100 / total),
                                        f"Downloading {name} ({(_base + n) / 1024**2:.0f} of {total / 1024**2:.0f} MB)")
 
-                    digest, size = await self._download(client, f"{base}/{f.path}", d / f.path, progress)
+                    digest, size = await self._download(client, f.url or f"{base}/{f.path}", d / f.path, progress)
                     if f.sha256:
                         if digest.lower() != f.sha256.lower():
                             with contextlib.suppress(FileNotFoundError):
@@ -329,6 +339,7 @@ class LocalModelManager:
                 {
                     "model": entry.model,
                     "provider": entry.provider,
+                    "kind": "stt" if isinstance(entry, LocalSttModel) else "tts",
                     "installed_at": datetime.now(UTC).isoformat(),
                     "pinned": all_pinned,
                     "files": manifest_files,

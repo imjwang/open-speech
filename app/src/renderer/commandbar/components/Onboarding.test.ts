@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Voice } from '@shared/api/client'
+import { en } from '@shared/i18n/en'
+import { es } from '@shared/i18n/es'
 
 import { matchVoiceAnswer, pickSampleVoices, stepPrompt } from './Onboarding'
 
@@ -15,138 +17,111 @@ const voice = (id: string, provider: string, patch: Partial<Voice> = {}): Voice 
   local: provider === 'kokoro',
   available: true,
   timestamps: true,
+  languages: [],
   ...patch,
 })
 
-const kokoro = (short: string, patch: Partial<Voice> = {}) => voice(`${KOKORO}:${short}`, 'kokoro', patch)
+const kokoro = (short: string, patch: Partial<Voice> = {}) =>
+  voice(`${KOKORO}:${short}`, 'kokoro', { languages: [short.startsWith('e') ? 'es' : short.startsWith('b') ? 'en-GB' : 'en-US'], ...patch })
 
-const LOCAL = [kokoro('af_heart'), kokoro('af_bella'), kokoro('am_michael'), kokoro('bf_emma'), kokoro('bm_george')]
+const ENGLISH = [kokoro('af_heart'), kokoro('af_bella'), kokoro('am_michael'), kokoro('bf_emma'), kokoro('bm_george')]
+const SPANISH = [kokoro('ef_dora'), kokoro('em_alex'), kokoro('em_santa')]
 const DEFAULT = `${KOKORO}:af_heart`
 
 const ids = (vs: Voice[]) => vs.map((v) => v.id.split(':').pop())
 
 describe('pickSampleVoices', () => {
-  it('keyless: the default Kokoro voice, then contrasting accents/genders', () => {
-    expect(ids(pickSampleVoices(LOCAL, DEFAULT))).toEqual(['af_heart', 'am_michael', 'bf_emma'])
+  it('the default voice first, then contrasting accents and genders', () => {
+    expect(ids(pickSampleVoices(ENGLISH, DEFAULT))).toEqual(['af_heart', 'am_michael', 'bf_emma'])
   })
 
-  it('without a default, starts with the first Kokoro voice', () => {
-    expect(ids(pickSampleVoices(LOCAL, null))[0]).toBe('af_heart')
+  it('without a default, starts with the first voice', () => {
+    expect(ids(pickSampleVoices(ENGLISH, null))[0]).toBe('af_heart')
   })
 
-  it('includes one voice per keyed cloud provider after the default', () => {
-    const voices = [
-      voice('openai:gpt-4o-mini-tts:alloy', 'openai'),
-      voice('openai:gpt-4o-mini-tts:echo', 'openai'),
-      ...LOCAL,
-      voice('gemini:tts:Kore', 'gemini'),
-    ]
-    expect(ids(pickSampleVoices(voices, DEFAULT))).toEqual(['af_heart', 'alloy', 'Kore'])
-    expect(ids(pickSampleVoices(voices.filter((v) => v.provider !== 'gemini'), DEFAULT))).toEqual(['af_heart', 'alloy', 'am_michael'])
+  it('offers voices that speak the interface language', () => {
+    const all = [...ENGLISH, ...SPANISH]
+    expect(ids(pickSampleVoices(all, DEFAULT, 'es'))).toEqual(['ef_dora', 'em_alex', 'em_santa'])
+    expect(ids(pickSampleVoices(all, DEFAULT, 'en'))).toEqual(['af_heart', 'am_michael', 'bf_emma'])
   })
 
-  it('never offers unavailable voices', () => {
-    const voices = [
-      voice('openai:gpt-4o-mini-tts:alloy', 'openai', { available: false }),
-      kokoro('af_heart'),
-      kokoro('am_michael', { available: false }),
-      kokoro('bf_emma'),
-      kokoro('bm_george'),
-    ]
-    const picked = pickSampleVoices(voices, DEFAULT)
-    expect(ids(picked)).toEqual(['af_heart', 'bf_emma', 'bm_george'])
-    expect(picked.every((v) => v.available)).toBe(true)
+  it('cloud voices (no declared language) speak any language, after the local ones', () => {
+    const cloud = voice('openai:gpt-4o-mini-tts:coral', 'openai')
+    expect(ids(pickSampleVoices([cloud, ...SPANISH.slice(0, 2)], null, 'es'))).toEqual(['ef_dora', 'em_alex', 'coral'])
   })
 
-  it('skips an unavailable default and falls back to Kokoro', () => {
-    const voices = [voice('openai:gpt-4o-mini-tts:alloy', 'openai', { available: false }), ...LOCAL]
-    expect(ids(pickSampleVoices(voices, 'openai:gpt-4o-mini-tts:alloy'))[0]).toBe('af_heart')
+  it('never offers unavailable voices, and falls back to any language when none matches', () => {
+    const voices = [kokoro('af_heart', { available: false }), kokoro('am_michael'), kokoro('bf_emma')]
+    expect(ids(pickSampleVoices(voices, DEFAULT))).toEqual(['am_michael', 'bf_emma'])
+    expect(ids(pickSampleVoices(ENGLISH, null, 'es'))).toHaveLength(3)
   })
 
   it('returns at most three, without duplicates, and copes with tiny catalogs', () => {
-    const many = [...LOCAL, kokoro('af_nicole'), kokoro('am_adam'), kokoro('bf_lily')]
-    const picked = pickSampleVoices(many, DEFAULT)
-    expect(picked).toHaveLength(3)
-    expect(new Set(picked.map((v) => v.id)).size).toBe(3)
-    expect(ids(pickSampleVoices([kokoro('af_heart')], DEFAULT))).toEqual(['af_heart'])
     expect(pickSampleVoices([], null)).toEqual([])
+    expect(ids(pickSampleVoices([kokoro('af_heart')], DEFAULT))).toEqual(['af_heart'])
+    const picked = ids(pickSampleVoices([...ENGLISH, ...ENGLISH], DEFAULT))
+    expect(picked).toHaveLength(3)
+    expect(new Set(picked).size).toBe(3)
   })
 })
 
 describe('matchVoiceAnswer', () => {
-  it('keys step: skip / later / none', () => {
-    expect(matchVoiceAnswer('keys', 'Skip')).toBe('skip')
-    expect(matchVoiceAnswer('keys', 'maybe later')).toBe('skip')
-    expect(matchVoiceAnswer('keys', 'I have no key')).toBe('skip')
-    expect(matchVoiceAnswer('keys', 'hello')).toBeNull()
-  })
-
-  it('voice step: one/two/three, digits and ordinals', () => {
-    expect(matchVoiceAnswer('voice', 'One.')).toBe('voice:0')
-    expect(matchVoiceAnswer('voice', 'number 2')).toBe('voice:1')
-    expect(matchVoiceAnswer('voice', 'three please')).toBe('voice:2')
-    expect(matchVoiceAnswer('voice', 'the first')).toBe('voice:0')
-    expect(matchVoiceAnswer('voice', 'third')).toBe('voice:2')
-    expect(matchVoiceAnswer('voice', 'someone')).toBeNull()
-  })
-
-  // Suspected bug (Onboarding.tsx:68): "one" is checked before the ordinals, so "the second one" picks voice 1.
-  it('voice step: "the second one" picks the second voice', () => {
+  it('voice step: one/two/three, digits and ordinals, in English and Spanish', () => {
+    expect(matchVoiceAnswer('voice', 'one')).toBe('voice:0')
+    expect(matchVoiceAnswer('voice', 'Number 2 please')).toBe('voice:1')
+    expect(matchVoiceAnswer('voice', 'three')).toBe('voice:2')
     expect(matchVoiceAnswer('voice', 'the second one')).toBe('voice:1')
+    expect(matchVoiceAnswer('voice', 'la primera')).toBe('voice:0')
+    expect(matchVoiceAnswer('voice', 'dos')).toBe('voice:1')
+    expect(matchVoiceAnswer('voice', 'La tercera, por favor.')).toBe('voice:2')
+    expect(matchVoiceAnswer('voice', 'keep this one')).toBe('keep')
+    expect(matchVoiceAnswer('voice', 'hmm')).toBeNull()
   })
 
-  it('cleanup step: yes / smart / no', () => {
-    expect(matchVoiceAnswer('cleanup', 'Yes')).toBe('yes')
-    expect(matchVoiceAnswer('cleanup', 'yeah sure')).toBe('yes')
+  it('cleanup step: yes / smart / no, in English and Spanish', () => {
+    expect(matchVoiceAnswer('cleanup', 'Yes please')).toBe('yes')
     expect(matchVoiceAnswer('cleanup', 'smart')).toBe('smart')
-    expect(matchVoiceAnswer('cleanup', 'use AI')).toBe('smart')
-    expect(matchVoiceAnswer('cleanup', 'no')).toBe('no')
-    expect(matchVoiceAnswer('cleanup', "don't")).toBe('no')
-    expect(matchVoiceAnswer('cleanup', 'maybe')).toBeNull()
+    expect(matchVoiceAnswer('cleanup', 'no thanks')).toBe('no')
+    expect(matchVoiceAnswer('cleanup', 'Sí')).toBe('yes')
+    expect(matchVoiceAnswer('cleanup', 'vale')).toBe('yes')
+    expect(matchVoiceAnswer('cleanup', 'inteligente')).toBe('smart')
+    expect(matchVoiceAnswer('cleanup', 'No.')).toBe('no')
+    expect(matchVoiceAnswer('cleanup', 'what?')).toBeNull()
   })
 
   it('done step: anything finishes', () => {
-    expect(matchVoiceAnswer('done', 'thanks')).toBe('finish')
+    expect(matchVoiceAnswer('done', 'okay')).toBe('finish')
     expect(matchVoiceAnswer('done', '  ')).toBeNull()
   })
 
-  it('"skip setup" skips onboarding from the later steps', () => {
+  it('"skip setup" skips onboarding from any step, in either language', () => {
     expect(matchVoiceAnswer('voice', 'skip setup')).toBe('skip-all')
     expect(matchVoiceAnswer('cleanup', 'skip all')).toBe('skip-all')
-    expect(matchVoiceAnswer('voice', 'skip onboarding')).toBe('skip-all')
-  })
-
-  // Suspected bug (Onboarding.tsx:66): on the first step the plain "skip" match wins, so "skip setup" only
-  // advances to the voice step instead of ending onboarding.
-  it('"skip setup" on the keys step skips onboarding', () => {
-    expect(matchVoiceAnswer('keys', 'skip setup')).toBe('skip-all')
+    expect(matchVoiceAnswer('voice', 'saltar la configuración')).toBe('skip-all')
   })
 })
 
 describe('stepPrompt', () => {
-  const o = { canListen: true, hasClaude: false, shortcut: 'Option Space' }
-
-  it('keys step works with no keys', () => {
-    expect(stepPrompt('keys', o)).toMatch(/continue without one/i)
+  it('asks for a spoken answer only when the bar can listen', () => {
+    expect(stepPrompt('voice', { canListen: true, smart: false })).toBe('onboard.voice')
+    expect(stepPrompt('voice', { canListen: false, smart: false })).toBe('onboard.voice.no_mic')
+    expect(stepPrompt('done', { canListen: false, smart: false })).toBe('onboard.done.no_mic')
   })
 
-  it('voice step asks for a spoken number only when it can listen', () => {
-    expect(stepPrompt('voice', o)).toMatch(/say one, two or three/i)
-    expect(stepPrompt('voice', { ...o, canListen: false })).not.toMatch(/say/i)
-    expect(stepPrompt('voice', { ...o, canListen: false })).toMatch(/press play/i)
+  it('names only as many numbers as there are voices to choose from', () => {
+    expect(stepPrompt('voice', { canListen: true, smart: false, voices: 3 })).toBe('onboard.voice')
+    expect(stepPrompt('voice', { canListen: true, smart: false, voices: 2 })).toBe('onboard.voice.two')
+    expect(stepPrompt('voice', { canListen: false, smart: false, voices: 2 })).toBe('onboard.voice.no_mic')
   })
 
-  it('cleanup step offers "smart" only with an Anthropic key', () => {
-    expect(stepPrompt('cleanup', { ...o, hasClaude: true })).toMatch(/smart/)
-    expect(stepPrompt('cleanup', o)).not.toMatch(/smart/)
+  it('offers "smart" cleanup only when the build includes it', () => {
+    expect(stepPrompt('cleanup', { canListen: true, smart: true })).toBe('onboard.cleanup.smart')
+    expect(stepPrompt('cleanup', { canListen: true, smart: false })).toBe('onboard.cleanup')
   })
 
-  it('done step: keyless wording mentions typing and Option-Shift-R', () => {
-    const keyless = stepPrompt('done', { ...o, canListen: false })
-    expect(keyless).toContain('Option Space')
-    expect(keyless).toMatch(/type/)
-    expect(keyless).toContain('Option-Shift-R')
-    expect(stepPrompt('done', o)).toMatch(/tell me what to read/)
-    expect(stepPrompt('done', o)).not.toContain('Option-Shift-R')
+  it('never mentions keys, accounts or sign-in, in any language', () => {
+    for (const catalog of [en, es])
+      for (const [key, text] of Object.entries(catalog))
+        if (key.startsWith('onboard.')) expect(text).not.toMatch(/\bkeys?\b|clave|account|cuenta|sign in|iniciar sesión/i)
   })
 })

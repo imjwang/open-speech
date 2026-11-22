@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Literal
 
+from open_speech.i18n import t
+
 ErrorCode = Literal[
-    "missing_key",
+    "unavailable",
     "budget_exceeded",
     "estimate_required",
     "provider_error",
@@ -18,7 +21,7 @@ ErrorCode = Literal[
 ]
 
 _STATUS: dict[str, int] = {
-    "missing_key": 424,
+    "unavailable": 424,
     "budget_exceeded": 402,
     "estimate_required": 409,
     "provider_error": 502,
@@ -54,23 +57,23 @@ class EngineError(Exception):
         }
 
 
-class MissingKey(EngineError):
-    def __init__(self, provider: str, feature: str = "this") -> None:
-        names = {"anthropic": "Anthropic", "openai": "OpenAI", "gemini": "Gemini"}
-        super().__init__(
-            "missing_key",
-            f"{feature.capitalize()} needs an {names.get(provider, provider)} key. "
-            "Paste one into the bar, or keep going with the local voice.",
-            provider=provider,
-        )
+Feature = Literal["assistant", "ai_cleanup", "vision", "speech_input", "voice", "rule", "rule_preview"]
+
+
+class Unavailable(EngineError):
+    """A feature this build doesn't include: its provider was not configured when the app was built. Nothing
+    the user can enter fixes it, so the message says what still works instead of asking for anything."""
+
+    def __init__(self, feature: Feature, *, detail: str | None = None, provider: str | None = None) -> None:
+        extra = {"provider": provider} if provider else {}
+        super().__init__("unavailable", detail or t(f"unavailable.{feature}"), feature=feature, **extra)
 
 
 class BudgetExceeded(EngineError):
     def __init__(self, spent: str, budget: str) -> None:
         super().__init__(
             "budget_exceeded",
-            f"You've reached your ${budget} monthly budget. I'll keep reading with the local voice; "
-            "say 'raise my budget' to change it.",
+            t("error.budget_exceeded", budget=budget),
             spent=spent,
             budget=budget,
         )
@@ -80,7 +83,10 @@ class EstimateRequired(EngineError):
     def __init__(self, usd_estimate: str, operation: str) -> None:
         super().__init__(
             "estimate_required",
-            f"That will cost about ${usd_estimate}. Confirm to go ahead.",
+            t(
+                "error.estimate_required.read" if operation == "read" else "error.estimate_required",
+                usd=f"{Decimal(usd_estimate):.2f}",
+            ),
             usd_estimate=usd_estimate,
             operation=operation,
         )
@@ -88,4 +94,4 @@ class EstimateRequired(EngineError):
 
 class NotFound(EngineError):
     def __init__(self, what: str) -> None:
-        super().__init__("not_found", f"I couldn't find {what}.")
+        super().__init__("not_found", t("error.not_found", what=what))

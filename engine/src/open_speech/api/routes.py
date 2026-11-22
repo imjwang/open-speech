@@ -127,6 +127,23 @@ async def skip(body: s.SkipRequest, engine: E) -> s.PlaybackState:
     return await engine.playback.skip(body)
 
 
+@router.post("/playback/queue", response_model=s.PlaybackState, tags=["playback"])
+async def enqueue(body: s.QueueRequest, engine: E) -> s.PlaybackState:
+    """Read several documents one after another."""
+    return await engine.playback.enqueue(body)
+
+
+@router.delete("/playback/queue", response_model=s.PlaybackState, tags=["playback"])
+async def clear_queue(engine: E) -> s.PlaybackState:
+    return await engine.playback.clear_queue()
+
+
+@router.post("/playback/next", response_model=s.PlaybackState, tags=["playback"])
+async def next_document(engine: E) -> s.PlaybackState:
+    """Leave the current document and start the next one in the queue."""
+    return await engine.playback.next_document()
+
+
 @router.put("/playback/speed", response_model=s.PlaybackState, tags=["playback"])
 async def speed(body: s.SpeedRequest, engine: E) -> s.PlaybackState:
     return await engine.playback.set_speed(body.speed)
@@ -191,6 +208,27 @@ async def add_lexicon(body: s.LexiconEntry, engine: E) -> s.LexiconList:
 @router.delete("/rules/lexicon/{term}", response_model=s.LexiconList, tags=["rules"])
 async def delete_lexicon(term: str, engine: E) -> s.LexiconList:
     return await engine.rules.delete_lexicon(term)
+
+
+@router.get("/rules/files", response_model=s.RuleFileList, tags=["rules"])
+async def rule_files(engine: E) -> s.RuleFileList:
+    """The text files behind the rules: standing preferences, pronunciations, and one file per rule."""
+    return engine.rules.files()
+
+
+@router.post("/rules/files", response_model=s.RuleFileContent, tags=["rules"])
+async def create_rule_file(body: s.RuleFileWrite, engine: E) -> s.RuleFileContent:
+    return await engine.rules.write_file(None, body)
+
+
+@router.get("/rules/files/{file_id}", response_model=s.RuleFileContent, tags=["rules"])
+async def read_rule_file(file_id: str, engine: E) -> s.RuleFileContent:
+    return engine.rules.read_file(file_id)
+
+
+@router.put("/rules/files/{file_id}", response_model=s.RuleFileContent, tags=["rules"])
+async def write_rule_file(file_id: str, body: s.RuleFileWrite, engine: E) -> s.RuleFileContent:
+    return await engine.rules.write_file(file_id, body)
 
 
 @router.patch("/rules/{rule_id}", response_model=s.RuleOut, tags=["rules"])
@@ -276,7 +314,7 @@ async def put_budget(body: s.BudgetUpdate, engine: E) -> s.BudgetState:
     return await engine.usage.set_budget(body)
 
 
-# ------------------------------------------------------------------ settings, keys, models, recordings
+# ------------------------------------------------------------------ settings, capabilities, models, recordings
 
 
 @router.get("/settings", response_model=UserSettings, tags=["settings"])
@@ -290,17 +328,11 @@ async def patch_settings(body: dict[str, Any], engine: E) -> UserSettings:
     return await engine.settings.patch(body)
 
 
-@router.get("/keys", response_model=s.KeysState, tags=["settings"])
-async def keys_state(engine: E) -> s.KeysState:
-    return engine.keys.state()
-
-
-@router.put("/keys/{provider}", response_model=s.KeyTestResult, tags=["settings"])
-async def put_key(
-    provider: Literal["anthropic", "openai", "gemini", "auto"], body: s.KeyIn, engine: E
-) -> s.KeyTestResult:
-    """Write-only. `auto` detects the provider from the key prefix. There is no GET for keys."""
-    return await engine.keys.put(provider, body.key)
+@router.get("/capabilities", response_model=s.Capabilities, tags=["system"])
+async def capabilities(engine: E) -> s.Capabilities:
+    """What this build can do. Provider keys are build configuration, so this is all a client ever learns
+    about them: which features exist."""
+    return engine.capabilities()
 
 
 @router.get("/models/local", response_model=s.LocalModelList, tags=["settings"])

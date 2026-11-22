@@ -11,6 +11,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
+from open_speech import i18n
 from open_speech.api.schemas import RuleScope
 from open_speech.document.model import Document
 
@@ -44,15 +45,19 @@ def normalize_host(host: str | None) -> str:
 
 
 def site_matches(pattern: str, host: str | None) -> bool:
-    """`arxiv.org` matches arxiv.org (and www.); `*.acm.org` matches dl.acm.org and acm.org."""
+    """A site covers itself and everything under it: `wikipedia.org` matches wikipedia.org, www.wikipedia.org
+    and en.wikipedia.org (a rule "on Wikipedia" must reach the article the user is looking at), while
+    `en.wikipedia.org` leaves es.wikipedia.org alone. `*.acm.org` says the same as `acm.org`; other
+    wildcards (`docs.*.example`) are matched as written."""
     h = normalize_host(host)
     p = normalize_host(pattern) if "*" not in pattern else pattern.strip().lower()
     if not h or not p:
         return False
     if p.startswith("*."):
-        base = p[2:]
-        return h == base or h.endswith("." + base) or fnmatch.fnmatchcase(h, p)
-    return fnmatch.fnmatchcase(h, p)
+        p = p[2:]
+    if "*" in p:
+        return fnmatch.fnmatchcase(h, p)
+    return h == p or h.endswith("." + p)
 
 
 def _lang_matches(pattern: str, lang: str | None) -> bool:
@@ -103,20 +108,23 @@ def normalized_scope(scope: RuleScope) -> RuleScope:
 def _join(items: list[str]) -> str:
     if len(items) <= 1:
         return "".join(items)
-    return ", ".join(items[:-1]) + " and " + items[-1]
+    return ", ".join(items[:-1]) + i18n.t("list.and") + items[-1]
 
 
 def describe_scope(scope: RuleScope) -> str:
     """Spoken scope phrase: "for arxiv.org", "for this document", "for PDFs", "everywhere"."""
     if scope.docs:
-        return "for this document" if len(scope.docs) == 1 else f"for these {len(scope.docs)} documents"
+        return (
+            i18n.t("scope.for_document") if len(scope.docs) == 1 else i18n.t("scope.for_documents", n=len(scope.docs))
+        )
     if scope.sites:
-        return "for " + _join(list(scope.sites))
+        return i18n.t("scope.for", what=_join(list(scope.sites)))
     if scope.types:
-        return "for " + _join([TYPE_NOUNS.get(t, t) for t in scope.types])
+        types = [i18n.t(f"type.{x}") if i18n.has(f"type.{x}") else TYPE_NOUNS.get(x, x) for x in scope.types]
+        return i18n.t("scope.for", what=_join(types))
     if scope.languages:
-        return "for " + _join(list(scope.languages)) + " documents"
-    return "everywhere"
+        return i18n.t("scope.for_languages", what=_join(list(scope.languages)))
+    return i18n.t("scope.everywhere")
 
 
 def level_reason(level: int) -> str:

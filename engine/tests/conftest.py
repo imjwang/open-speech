@@ -32,6 +32,15 @@ class NetworkBlocked(RuntimeError):
 
 @pytest.fixture(autouse=True)
 def _hermetic_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # No test plays sound: an Engine built in a test would otherwise open the Mac's output device.
+    monkeypatch.setenv("OPEN_SPEECH_AUDIO_OUTPUT", os.environ.get("OPEN_SPEECH_AUDIO_OUTPUT") or "null")
+    # Tests read English unless they choose a language: not whatever this Mac is set to, and not whatever the
+    # previous test left behind.
+    from open_speech import i18n
+
+    monkeypatch.setattr(i18n, "system_language", lambda: "en")
+    i18n.set_default_language("en")
+    i18n._override.set(None)
     if os.environ.get("OPEN_SPEECH_LIVE") == "1":
         return
     for name in _STRIP:

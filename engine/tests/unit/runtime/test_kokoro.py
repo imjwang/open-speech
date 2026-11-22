@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -10,10 +12,13 @@ import pytest
 
 from open_speech.config import Paths
 from open_speech.errors import EngineError
+from open_speech.local.bundled import bundled_models_dir
 from open_speech.local.catalog import ModelCatalog
+from open_speech.playback.timing import WORD_RE
 from open_speech.providers.base import TtsProvider, TtsRequest
 from open_speech.providers.g2p import LexiconPhonemizer, PhonemeToken, letter_to_sound, misaki_available
-from open_speech.providers.kokoro import KokoroTts
+from open_speech.providers.g2p_es import SpanishPhonemizer
+from open_speech.providers.kokoro import KokoroTts, voice_display, voice_language
 from open_speech.providers.pcm import bytes_to_f32
 
 MODEL = "kokoro-82m-v1.0"
@@ -90,12 +95,14 @@ def test_voices_unavailable_without_weights(catalog: ModelCatalog, paths: Paths)
     tts, _ = make_kokoro(catalog, paths)
     assert isinstance(tts, TtsProvider)
     vs = tts.voices()
-    assert len(vs) == 27 and all(not v.available for v in vs)
+    assert len(vs) == 30 and all(not v.available for v in vs)
     assert all(v.local and v.timestamps for v in vs)
     assert "Download the local Kokoro voice" in (vs[0].unavailable_reason or "")
     heart = next(v for v in vs if v.id == "kokoro:kokoro-82m-v1.0:af_heart")
     assert heart.name == "Heart (Kokoro, American English)" and heart.languages == ["en-US"]
     assert next(v for v in vs if v.id.endswith("bm_george")).languages == ["en-GB"]
+    dora = next(v for v in vs if v.id.endswith("ef_dora"))
+    assert dora.name == "Dora (Kokoro, Spanish)" and dora.languages == ["es"]
 
 
 async def test_synthesize_without_weights_raises_clear_error(catalog: ModelCatalog, paths: Paths) -> None:
@@ -154,6 +161,108 @@ async def test_idle_unload(catalog: ModelCatalog, paths: Paths) -> None:
     assert tts.loaded()
     await asyncio.sleep(0.12)
     assert not tts.loaded()
+
+
+# ------------------------------------------------------------------ language of a voice
+
+SPANISH_VOCAB = " .,!?;:—…\"()“”aeiouɛjwIWAʊɪptkbdɡβðɣfθsxʧʤʃʦmnɲŋlʎɾrʝːˈˌ"
+
+
+def install_spanish_weights(paths: Paths, voices: tuple[str, ...] = ("ef_dora", "af_heart")) -> dict[str, int]:
+    d = install_fake_weights(paths, voices)
+    vocab = {"$": 0, **{c: i + 1 for i, c in enumerate(SPANISH_VOCAB)}}
+    (d / "tokenizer.json").write_text(json.dumps({"model": {"type": "WordLevel", "vocab": vocab}}))
+    return vocab
+
+
+def test_spanish_voices_are_listed_by_language(catalog: ModelCatalog, paths: Paths) -> None:
+    assert voice_display("ef_dora") == ("Dora (Kokoro, Spanish)", "es")
+    assert voice_display("em_santa") == ("Santa (Kokoro, Spanish)", "es")
+    assert voice_language("em_alex") == "es" and voice_language("kokoro:kokoro-82m-v1.0:ef_dora") == "es"
+    assert voice_language("af_heart") == "en-US" and voice_language("bm_george") == "en-GB"
+    install_spanish_weights(paths)
+    tts = KokoroTts(catalog, paths, session_factory=lambda p: FakeSession())
+    spanish = tts.voices_for_language("es")
+    assert [v.id.rsplit(":", 1)[-1] for v in spanish] == ["ef_dora", "em_alex", "em_santa"]
+    assert all(v.languages == ["es"] for v in spanish)
+    assert tts.voices_for_language("es-MX") == spanish  # matched on the base language
+    assert [v.id.rsplit(":", 1)[-1] for v in tts.voices_for_language("es", available_only=True)] == ["ef_dora"]
+    english = tts.voices_for_language("en")
+    assert len(english) == 27 and english[0].id.endswith(":af_heart")
+    assert tts.voices_for_language(None) == english
+    assert "es" in tts.limits(MODEL).languages
+
+
+async def test_spanish_voice_uses_the_spanish_phonemizer(catalog: ModelCatalog, paths: Paths) -> None:
+    vocab = install_spanish_weights(paths)
+    sess = FakeSession()
+    tts = KokoroTts(catalog, paths, session_factory=lambda p: sess)  # no phonemizer injected
+    assert isinstance(tts._phon("ef_dora"), SpanishPhonemizer)
+    assert isinstance(tts._phon("af_heart"), LexiconPhonemizer)
+    assert isinstance(tts._phon("bm_george"), LexiconPhonemizer)
+
+    text = "Hola, ¿qué tal? Un beso."
+    chunks = [c async for c in tts.synthesize(TtsRequest(text=text, model=MODEL, voice="ef_dora"))]
+    by_id = {i: c for c, i in vocab.items()}
+    sent = "".join(by_id[i] for i in sess.calls[0]["input_ids"][0].tolist()[1:-1])
+    assert sent == "ˈola, kˈe tˈal? ˈum bˈeso."  # ¿ is not in the vocabulary; "un beso" → "um beso"
+    words = chunks[0].words
+    assert [text[w.start : w.end] for w in words] == ["Hola", "qué", "tal", "Un", "beso"]
+    assert all(a.t0 < a.t1 <= b.t0 for a, b in zip(words, words[1:], strict=False))
+    assert words[-1].t1 <= bytes_to_f32(chunks[0].pcm).size / 24000
+
+    # an injected phonemizer still wins, whatever the voice
+    injected, sess2 = make_kokoro(catalog, paths)
+    assert isinstance(injected._phon("ef_dora"), LettersPhonemizer)
+
+
+def test_voice_added_after_install_comes_from_bundled_copy(catalog: ModelCatalog, paths: Paths, tmp_path: Path) -> None:
+    install_fake_weights(paths, ("af_heart",))  # an app-data copy from before the Spanish voices existed
+    runtime = tmp_path / "runtime"
+    install_fake_weights(Paths(runtime), ("af_heart", "ef_dora"))
+    tts, _ = make_kokoro(catalog, paths, bundled_models=runtime / "models")
+    assert tts.model_dir(MODEL) == paths.models / "kokoro" / MODEL
+    assert tts.voice_path(MODEL, "ef_dora") == runtime / "models" / "kokoro" / MODEL / "voices" / "ef_dora.bin"
+    assert tts.voice_path(MODEL, "af_heart") == paths.models / "kokoro" / MODEL / "voices" / "af_heart.bin"
+    voices = {v.id.rsplit(":", 1)[-1]: v for v in tts.voices()}
+    assert voices["ef_dora"].available and not voices["em_alex"].available
+
+
+def _real_weights() -> Path | None:
+    """A complete Kokoro model directory with the Spanish voices: $OPEN_SPEECH_KOKORO_DIR, or the bundle."""
+    candidates = [os.environ.get("OPEN_SPEECH_KOKORO_DIR")]
+    root = bundled_models_dir()
+    if root is not None:
+        candidates.append(str(root / "kokoro" / MODEL))
+    for c in candidates:
+        d = Path(c) if c else None
+        if d and (d / "onnx" / "model_quantized.onnx").exists() and (d / "voices" / "ef_dora.bin").exists():
+            return d
+    return None
+
+
+@pytest.mark.skipif(
+    _real_weights() is None or importlib.util.find_spec("onnxruntime") is None,
+    reason="real Kokoro weights with the Spanish voices not present (set OPEN_SPEECH_KOKORO_DIR)",
+)
+async def test_real_weights_speak_spanish_with_word_timings(catalog: ModelCatalog, tmp_path: Path) -> None:
+    weights = _real_weights()
+    assert weights is not None
+    home = Paths(tmp_path / "home").ensure()
+    (home.models / "kokoro").mkdir(parents=True)
+    (home.models / "kokoro" / MODEL).symlink_to(weights, target_is_directory=True)
+    tts = KokoroTts(catalog, home, bundled_models=tmp_path / "none")
+    text = "Hola, ¿cómo estás? Hoy cumplo 21 años y vivo en la ciudad de México."
+    chunks = [c async for c in tts.synthesize(TtsRequest(text=text, model=MODEL, voice="ef_dora"))]
+    pcm = np.concatenate([bytes_to_f32(c.pcm) for c in chunks])
+    words = [w for c in chunks for w in c.words]
+    duration = pcm.size / 24000
+    assert 2.5 < duration < 12 and float(np.abs(pcm).max()) > 0.05
+    assert [text[w.start : w.end] for w in words] == [m.group(0) for m in WORD_RE.finditer(text)]
+    assert all(a.t0 < a.t1 and a.t1 <= b.t0 + 1e-6 for a, b in zip(words, words[1:], strict=False))
+    assert words[0].t0 >= 0 and words[-1].t1 <= duration + 1e-6
+    spoken = sum(w.t1 - w.t0 for w in words)
+    assert 0.6 * duration < spoken <= duration  # the rest is the pauses at the punctuation
 
 
 # ------------------------------------------------------------------ G2P

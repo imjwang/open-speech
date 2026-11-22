@@ -1,42 +1,51 @@
+/**
+ * How each row looks. Icons carry the meaning; text is the content itself (what was said, a title, a name).
+ * Every icon-only control has a name for assistive technology, and key hints appear only on the selected row.
+ */
 import {
-  AlertTriangle,
-  BookOpen,
   Check,
+  ChevronUp,
   CircleAlert,
-  Clipboard,
-  CornerDownLeft,
-  DollarSign,
+  Cloud,
+  Download,
   FileText,
-  FolderOpen,
-  History,
+  Globe,
   Image as ImageIcon,
   Info,
-  KeyRound,
-  Link2,
+  Keyboard,
+  Laptop,
+  ListMusic,
   Loader2,
-  Pause,
+  Mic,
+  Minus,
+  Monitor,
+  Moon,
+  Pencil,
   Play,
+  Plus,
   ShieldQuestion,
   Sparkles,
-  Type,
-  User,
+  Sun,
+  TriangleAlert,
   Volume2,
   X,
+  Zap,
+  type LucideIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { CardRow } from '@shared/api/ws.gen'
 
-import { Badge } from '@/components/ui/badge'
-import { CommandItem, CommandShortcut } from '@/components/ui/command'
+import { CommandItem } from '@/components/ui/command'
 import { Kbd } from '@/components/ui/kbd'
 import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
-import { formatPercent, formatSpeed, formatTimeLeft } from '@/format'
+import { formatPercent } from '@/format'
+import { useT, useTMaybe } from '@/i18n'
 import { cn } from '@/lib/utils'
-import { describeDropped, URL_RE } from '../dropped'
 import { cardRowEnabled, type Row } from '../rows'
-import type { ActionModel, CardModel } from '../store'
+import type { ActionModel, CardModel, TurnAttachment } from '../store'
+import { documentIcon, PRESET_ICONS, SETTING_ICONS } from './icons'
 import { SpeechDiffExcerpt } from './SpeechDiffExcerpt'
 import { UsageCard } from './UsageCard'
 
@@ -45,23 +54,22 @@ export interface RowHandlers {
   onSecondary(row: Row): void
   onTertiary(row: Row): void
   onCancelAction(action: ActionModel): void
+  onTogglePreset(card: CardModel, row: CardRow): void
+  onSetSetting(card: CardModel, row: CardRow, value: unknown): void
 }
 
-/** Key hints are shown and also read (visually hidden prefix) so screen readers get them too. */
-function Hints({ items }: { items: Array<[string, string]> }) {
+/** Key hints, on the selected row only. Glyphs, not words; the row's own label says what Enter does. */
+function Keys({ keys, className }: { keys: string[]; className?: string }) {
   return (
-    <CommandShortcut className="hidden group-data-[selected=true]/item:flex">
-      {items.map(([key, label]) => (
-        <span key={key + label} className="flex items-center gap-1">
-          <Kbd>{key}</Kbd>
-          <span className="tracking-normal">{label}</span>
-        </span>
+    <span aria-hidden="true" className={cn('ml-auto hidden shrink-0 items-center gap-1 group-data-[selected=true]/item:flex', className)}>
+      {keys.map((k) => (
+        <Kbd key={k}>{k}</Kbd>
       ))}
-    </CommandShortcut>
+    </span>
   )
 }
 
-function SrHint({ children }: { children: ReactNode }) {
+function Sr({ children }: { children: ReactNode }) {
   return <span className="sr-only">{children}</span>
 }
 
@@ -71,7 +79,7 @@ function Item({ row, handlers, className, children }: { row: Row; handlers: RowH
       value={row.value}
       onSelect={() => handlers.onSelect(row)}
       disabled={row.kind === 'pending'}
-      className={cn('group/item hover:bg-muted/50', className)}
+      className={cn('group/item', className)}
       data-row-kind={row.kind}
     >
       {children}
@@ -79,62 +87,88 @@ function Item({ row, handlers, className, children }: { row: Row; handlers: RowH
   )
 }
 
-function droppedIcon(row: Extract<Row, { kind: 'dropped' }>) {
-  if (row.action === 'describe') return <Sparkles aria-hidden="true" />
-  if (row.action === 'summarize') return <FileText aria-hidden="true" />
-  if (row.action === 'open') return <BookOpen aria-hidden="true" />
-  switch (row.item.kind) {
-    case 'file':
-      return row.item.isImage ? <ImageIcon aria-hidden="true" /> : <FileText aria-hidden="true" />
-    case 'url':
-      return <Link2 aria-hidden="true" />
-    case 'text':
-      return <Type aria-hidden="true" />
-  }
+/** A small button inside a row that must not move focus out of the composer. */
+function RowButton({ label, onPress, children, className }: { label: string; onPress(): void; children: ReactNode; className?: string }) {
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={label}
+      title={label}
+      className={cn('grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-accent-foreground', className)}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => {
+        e.stopPropagation()
+        onPress()
+      }}
+    >
+      {children}
+    </button>
+  )
 }
 
-function ActionRow({ action, row, handlers }: { action: ActionModel; row: Row; handlers: RowHandlers }) {
-  const pending = action.status === 'pending' || action.status === 'confirming' || action.status === 'cancelling'
+function attachmentIcon(kind: string): LucideIcon {
+  return kind === 'url' ? Globe : kind === 'image' ? ImageIcon : FileText
+}
+
+export function AttachmentPills({ items }: { items: TurnAttachment[] }) {
+  if (!items.length) return null
   return (
-    <Item row={row} handlers={handlers} className="items-start py-2">
-      <div className={cn('w-full rounded-lg border px-3 py-2', pending ? 'border-listen/60 bg-background/60' : 'border-border opacity-80')}>
-        <div className="flex items-center gap-2">
+    <span className="flex flex-wrap gap-1">
+      {items.map((a, i) => {
+        const Icon = attachmentIcon(a.kind)
+        return (
+          <span key={`${a.title}${i}`} className="badge-chip" data-kind={a.kind === 'url' ? 'url' : a.kind === 'text' ? 'text' : 'file'}>
+            <Icon aria-hidden="true" />
+            <span>{a.title}</span>
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
+// ------------------------------------------------------------------ confirmation card
+
+function ActionRow({ action, row, handlers }: { action: ActionModel; row: Row; handlers: RowHandlers }) {
+  const t = useT()
+  const open = action.status === 'pending'
+  const busy = action.status === 'confirming' || action.status === 'cancelling'
+  return (
+    <Item row={row} handlers={handlers} className="items-stretch p-1 data-[selected=true]:bg-transparent data-[selected=true]:ring-0">
+      <div
+        className={cn(
+          'w-full rounded-xl border px-3 py-2.5 transition-colors',
+          open ? 'border-primary/50 bg-card shadow-sm group-data-[selected=true]/item:border-primary' : 'border-border opacity-75',
+        )}
+      >
+        <div className="flex items-center gap-2.5">
           {action.status === 'confirmed' ? (
-            <Check aria-hidden="true" className="text-emerald-600 dark:text-emerald-400" />
+            <Check aria-hidden="true" className="text-success" />
           ) : action.status === 'cancelled' || action.status === 'failed' ? (
             <X aria-hidden="true" />
-          ) : action.status === 'pending' ? (
-            <ShieldQuestion aria-hidden="true" className="text-listen" />
-          ) : (
+          ) : busy ? (
             <Loader2 aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
+          ) : (
+            <ShieldQuestion aria-hidden="true" className="text-primary" />
           )}
-          <span className="font-medium">{action.summary}</span>
-          {action.status === 'pending' ? (
+          <span className="min-w-0 flex-1 font-medium">{action.summary}</span>
+          {open ? (
             <>
-              <SrHint>. Press Enter to confirm, or Escape to cancel.</SrHint>
-              <span className="ml-auto flex items-center gap-2">
-                <Hints items={[['↵', 'confirm']]} />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label="Cancel"
-                  className="rounded-sm p-0.5 text-muted-foreground hover:bg-muted"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handlers.onCancelAction(action)
-                  }}
-                >
-                  <span className="flex items-center gap-1 text-xs">
-                    <Kbd>esc</Kbd>
-                    <X className="size-3.5" aria-hidden="true" />
-                  </span>
-                </button>
-              </span>
+              <Sr>. {t('confirm_hint')}</Sr>
+              <RowButton label={t('row.cancel')} onPress={() => handlers.onCancelAction(action)}>
+                <X className="size-4" aria-hidden="true" />
+              </RowButton>
+              <RowButton
+                label={t('row.confirm')}
+                onPress={() => handlers.onSelect(row)}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+              >
+                <Check className="size-4 text-primary-foreground!" aria-hidden="true" />
+              </RowButton>
             </>
           ) : (
-            <span className="ml-auto text-xs text-muted-foreground">
-              {action.message ?? (action.status === 'confirming' ? 'Saving…' : action.status === 'cancelling' ? 'Cancelling…' : action.status)}
-            </span>
+            action.message && <span className="text-xs text-muted-foreground">{action.message}</span>
           )}
         </div>
         {action.preview && <SpeechDiffExcerpt diff={action.preview} />}
@@ -143,225 +177,290 @@ function ActionRow({ action, row, handlers }: { action: ActionModel; row: Row; h
   )
 }
 
-function CardHeader({ card }: { card: CardModel }) {
-  if (card.kind === 'usage') return <UsageCard title={card.title} data={card.data} rows={card.rows} />
+// ------------------------------------------------------------------ block cards
+
+function WhereCard({ data }: { data: Record<string, unknown> }) {
+  const t = useT()
+  const percent = typeof data.percent === 'number' ? data.percent : null
+  const page = typeof data.page === 'number' && typeof data.page_count === 'number' ? t('reader.page', { page: data.page, pages: data.page_count }) : null
+  if (percent === null) return null
   return (
-    <div className="flex w-full items-baseline justify-between gap-2 text-xs text-muted-foreground">
-      <span className="font-medium text-foreground">{card.title}</span>
-      {card.kind === 'voices' && <span>AI-generated</span>}
-      {card.kind === 'keys' && <span>Keys stay on this Mac.</span>}
+    <div className="flex w-full items-center gap-3 px-2 py-1.5 text-xs text-muted-foreground" data-testid="where-card">
+      <Progress value={percent} aria-label={`${percent}%`} className="h-1.5 flex-1" />
+      <span className="tabular-nums">{page ?? `${percent}%`}</span>
     </div>
   )
 }
 
-function fitVariant(fit: unknown): 'success' | 'warning' | 'destructive' | 'outline' {
-  if (fit === 'fits') return 'success'
-  if (fit === 'slow') return 'warning'
-  if (fit === 'unsupported') return 'destructive'
-  return 'outline'
+/** Auto-skip presets as chips: lit when that kind of content is being skipped. */
+function PresetChips({ card, handlers }: { card: CardModel; handlers: RowHandlers }) {
+  const t = useT()
+  const tMaybe = useTMaybe()
+  return (
+    <div className="flex w-full flex-wrap gap-1.5 px-2 py-1.5" role="group" aria-label={card.title} data-testid="preset-chips">
+      {card.rows.map((row) => {
+        const on = cardRowEnabled(row)
+        const name = tMaybe(`preset.${row.title}`, row.title)
+        const Icon = PRESET_ICONS[row.title] ?? FileText
+        return (
+          <button
+            key={row.id}
+            type="button"
+            aria-pressed={on}
+            aria-label={t(on ? 'preset.skipping' : 'preset.reading', { name })}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => handlers.onTogglePreset(card, row)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              on ? 'border-transparent bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-accent',
+            )}
+          >
+            <Icon aria-hidden="true" className={cn('size-3.5', on ? 'text-primary-foreground!' : '')} />
+            <span>{name}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------ list cards, one row per item
+
+type TMaybe = ReturnType<typeof useTMaybe>
+
+const SEGMENT_ICONS: Record<string, LucideIcon> = { system: Monitor, lavender: Sun, ember: Moon, classic: Zap, ai_enhanced: Sparkles }
+
+function optionLabel(tMaybe: TMaybe, key: string, value: unknown): string {
+  const v = String(value)
+  if (key === 'appearance.theme') return tMaybe(`theme.${v}`, v)
+  if (key === 'language') return tMaybe(`language.${v}`, v)
+  if (key === 'defaults.mode') return tMaybe(`mode.${v}`, v)
+  return v
+}
+
+function SettingRow({ card, row, handlers }: { card: CardModel; row: CardRow; handlers: RowHandlers }) {
+  const t = useT()
+  const tMaybe = useTMaybe()
+  const data = row.data ?? {}
+  const key = typeof data.key === 'string' ? data.key : row.id
+  const Icon = SETTING_ICONS[key] ?? Info
+  const options = Array.isArray(data.options) ? (data.options as unknown[]) : null
+  const step = typeof data.step === 'number' ? data.step : null
+  const value = data.value
+  const set = (v: unknown) => handlers.onSetSetting(card, row, v)
+  return (
+    <>
+      <Icon aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate">{row.title}</span>
+      {options ? (
+        <span role="radiogroup" aria-label={row.title} className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5">
+          {options.map((opt) => {
+            const SegIcon = SEGMENT_ICONS[String(opt)]
+            const label = optionLabel(tMaybe, key, opt)
+            const on = opt === value
+            return (
+              <button
+                key={String(opt)}
+                type="button"
+                role="radio"
+                tabIndex={-1}
+                aria-checked={on}
+                aria-label={label}
+                title={label}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  set(opt)
+                }}
+                className={cn(
+                  'grid h-6 min-w-7 place-items-center rounded-md px-1.5 text-[11px] font-medium uppercase',
+                  on ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {SegIcon ? <SegIcon aria-hidden="true" className={cn('size-3.5', on && 'text-primary!')} /> : String(opt) === 'auto' ? <Monitor aria-hidden="true" className="size-3.5" /> : String(opt)}
+              </button>
+            )
+          })}
+        </span>
+      ) : step !== null && typeof value === 'number' ? (
+        <span className="flex shrink-0 items-center gap-1">
+          <RowButton label={key === 'reader.font_size' ? t('text.smaller') : t('row.slower')} onPress={() => handlers.onSecondary({ kind: 'card-row', value: '', card, row })}>
+            <Minus className="size-3.5" aria-hidden="true" />
+          </RowButton>
+          <span className="min-w-9 text-center text-sm tabular-nums">{key === 'defaults.speed' ? `${value}x` : value}</span>
+          <RowButton label={key === 'reader.font_size' ? t('text.larger') : t('row.faster')} onPress={() => handlers.onSelect({ kind: 'card-row', value: '', card, row })}>
+            <Plus className="size-3.5" aria-hidden="true" />
+          </RowButton>
+        </span>
+      ) : (
+        <span className="shrink-0 text-sm text-muted-foreground">{row.value}</span>
+      )}
+    </>
+  )
 }
 
 function CardRowBody({ card, row, handlers, item }: { card: CardModel; row: CardRow; handlers: RowHandlers; item: Row }) {
-  const subtitle = row.subtitle ? <span className="truncate text-xs text-muted-foreground">{row.subtitle}</span> : null
+  const t = useT()
   switch (card.kind) {
     case 'voices': {
-      if (row.data?.group === true) {
-        // A provider without a key: one row; Enter opens the key field.
-        return (
-          <>
-            <KeyRound aria-hidden="true" className="text-muted-foreground" />
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate text-muted-foreground">{row.title}</span>
-              {subtitle}
-            </span>
-            <SrHint>. Enter adds a key.</SrHint>
-            <Hints items={[['↵', 'add key']]} />
-          </>
-        )
-      }
-      const unavailable = row.data?.available === false
-      const reason = typeof row.data?.unavailable_reason === 'string' ? row.data.unavailable_reason : null
+      const local = row.data?.local === true
+      const langs = Array.isArray(row.data?.languages) ? (row.data.languages as string[]) : []
+      const lang = [...new Set(langs.map((l) => l.split('-')[0]?.toUpperCase()))].filter(Boolean).slice(0, 2)
       return (
         <>
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={`Preview ${row.title}`}
-            className="rounded-full p-1 hover:bg-muted"
-            onClick={(e) => {
-              e.stopPropagation()
-              handlers.onTertiary(item)
-            }}
-          >
+          <RowButton label={t('row.preview', { name: row.title })} onPress={() => handlers.onTertiary(item)} className="bg-muted">
             <Play className="size-3.5" aria-hidden="true" />
-          </button>
-          <span className={cn('flex min-w-0 flex-col', unavailable && 'opacity-60')}>
-            <span className="truncate">{row.title}</span>
-            {subtitle}
-            {unavailable && reason && <span className="text-xs text-muted-foreground">{reason}</span>}
-          </span>
-          {row.selected && (
-            <>
-              <Check aria-hidden="true" className="ml-auto text-listen" />
-              <SrHint>, current voice</SrHint>
-            </>
+          </RowButton>
+          <span className="min-w-0 truncate">{row.title}</span>
+          {lang.map((l) => (
+            <span key={l} className="rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground">
+              {l}
+            </span>
+          ))}
+          {local ? (
+            <Laptop aria-label={t('row.local')} className="size-3.5!" />
+          ) : (
+            <Cloud aria-label={t('row.cloud')} className="size-3.5!" />
           )}
-          <SrHint>. Enter uses it for this document, Command-Enter makes it the default, Shift-Enter plays a sample.</SrHint>
-          <Hints items={[['↵', 'use'], ['⌘↵', 'default'], ['⇧↵', '▶']]} />
+          {row.selected ? (
+            <>
+              <Check aria-hidden="true" className="ml-auto text-primary" />
+              <Sr>{t('row.current_voice')}</Sr>
+            </>
+          ) : (
+            <Keys keys={['↵', '⇧↵']} />
+          )}
         </>
       )
     }
-    case 'rules':
-    case 'presets': {
+    case 'rules': {
       const enabled = cardRowEnabled(row)
+      const ai = row.data?.tier !== 'filter'
       return (
         <>
+          {ai ? <Sparkles aria-label={t('rules.needs_ai')} /> : <Zap aria-label={t('rules.filter')} />}
           <span className="flex min-w-0 flex-col">
             <span className="truncate">{row.title}</span>
-            {subtitle}
+            {row.subtitle && <span className="truncate text-xs text-muted-foreground">{row.subtitle}</span>}
           </span>
-          <SrHint>{enabled ? ', on' : ', off'}. Command-Enter toggles it.</SrHint>
-          <span className="ml-auto flex items-center gap-2">
-            <Switch
-              checked={enabled}
-              tabIndex={-1}
-              aria-hidden="true"
-              onClick={(e) => {
-                e.stopPropagation()
-                handlers.onSecondary(item)
-              }}
-            />
-            <Hints items={card.kind === 'rules' ? [['↵', 'edit'], ['⌘↵', 'toggle']] : [['⌘↵', 'toggle']]} />
+          <Sr>{enabled ? t('row.on') : t('row.off')}</Sr>
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            <RowButton label={t('row.edit')} onPress={() => handlers.onSecondary(item)}>
+              <Pencil className="size-3.5" aria-hidden="true" />
+            </RowButton>
+            <Switch checked={enabled} tabIndex={-1} aria-hidden="true" onClick={(e) => (e.stopPropagation(), handlers.onSelect(item))} />
           </span>
         </>
       )
     }
     case 'models': {
-      const fit = row.data?.fit
       const installed = row.data?.installed === true
       return (
         <>
+          {row.data?.kind === 'stt' ? <Mic aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
           <span className="flex min-w-0 flex-col">
             <span className="truncate">{row.title}</span>
-            {subtitle}
+            {row.subtitle && <span className="truncate text-xs text-muted-foreground">{row.subtitle}</span>}
           </span>
-          <span className="ml-auto flex items-center gap-2">
-            {typeof fit === 'string' && <Badge variant={fitVariant(fit)}>{fit}</Badge>}
-            {installed ? <Badge variant="outline">installed</Badge> : <Hints items={[['↵', 'install']]} />}
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            {installed ? <Check aria-label={t('row.installed')} className="text-success" /> : <Download aria-label={t('row.install')} />}
           </span>
         </>
       )
     }
-    case 'keys':
+    case 'recents':
+    case 'queue': {
+      const Icon = card.kind === 'queue' ? ListMusic : documentIcon(typeof row.data?.kind === 'string' ? row.data.kind : null)
       return (
         <>
-          <KeyRound aria-hidden="true" />
-          <span className="flex min-w-0 flex-col">
-            <span>{row.title}</span>
-            {subtitle}
-          </span>
-          {row.value && <Badge variant={row.value === 'configured' ? 'success' : row.value === 'invalid' ? 'destructive' : 'outline'}>{row.value}</Badge>}
+          <Icon aria-hidden="true" />
+          <span className="min-w-0 truncate">{row.title}</span>
+          {row.value && <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">{row.value}</span>}
         </>
       )
+    }
+    case 'settings':
+      return <SettingRow card={card} row={row} handlers={handlers} />
     default:
       return (
         <>
-          <span className="flex min-w-0 flex-col">
-            <span className="truncate">{row.title}</span>
-            {subtitle}
-          </span>
-          {row.value && <span className="ml-auto text-sm tabular-nums text-muted-foreground">{row.value}</span>}
+          <span className="min-w-0 truncate">{row.title}</span>
+          {row.value && <span className="ml-auto text-sm text-muted-foreground tabular-nums">{row.value}</span>}
         </>
       )
   }
 }
 
+// ------------------------------------------------------------------ every row
+
 export function RowView({ row, handlers }: { row: Row; handlers: RowHandlers }) {
+  const t = useT()
   switch (row.kind) {
     case 'local-confirm':
       return (
         <Item row={row} handlers={handlers}>
-          <ShieldQuestion aria-hidden="true" className="text-listen" />
-          <span className="flex flex-col">
-            <span className="font-medium">{row.confirm.title}</span>
-            <span className="text-xs text-muted-foreground">{row.confirm.detail}</span>
-          </span>
-          <SrHint>. Press Enter to confirm, or Escape to cancel.</SrHint>
-          <Hints items={[['↵', 'confirm'], ['esc', 'cancel']]} />
+          <Download aria-hidden="true" className="text-primary" />
+          <span className="min-w-0 flex-1 truncate font-medium">{row.confirm.title}</span>
+          <span className="text-xs text-muted-foreground">{row.confirm.detail}</span>
+          <Sr>. {t('confirm_hint')}</Sr>
+          <Keys keys={['↵']} className="ml-2" />
         </Item>
       )
-    case 'dropped':
-      return (
-        <Item row={row} handlers={handlers}>
-          {droppedIcon(row)}
-          <span>{row.label}</span>
-          <span className="truncate text-xs text-muted-foreground">{describeDropped(row.item)}</span>
-          {row.isDefault && <Hints items={[['↵', '']]} />}
-        </Item>
-      )
-    case 'submit': {
-      const link = URL_RE.test(row.text) && !/\s/.test(row.text)
-      return (
-        <Item row={row} handlers={handlers}>
-          {link ? <Link2 aria-hidden="true" /> : <CornerDownLeft aria-hidden="true" />}
-          <span className="truncate">{link ? `Read ${row.text}` : row.text}</span>
-          <Hints items={[['↵', link ? 'read' : 'ask']]} />
-        </Item>
-      )
-    }
     case 'pending':
       return (
         <Item row={row} handlers={handlers}>
           <Loader2 aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
-          <span className="truncate text-muted-foreground">{row.text}</span>
+          <span className="min-w-0 truncate text-muted-foreground">{row.text}</span>
+          <AttachmentPills items={row.attachments} />
+        </Item>
+      )
+    case 'history':
+      return (
+        <Item row={row} handlers={handlers} className="justify-center py-0.5 text-xs text-muted-foreground">
+          <ChevronUp aria-hidden="true" className="size-3.5!" />
+          <span className="tabular-nums" aria-label={t('tool.history')}>
+            {row.count}
+          </span>
         </Item>
       )
     case 'user': {
-      const t = row.turn
+      const turn = row.turn
+      const Icon = turn.source === 'spoken' ? Mic : Keyboard
       return (
-        <Item row={row} handlers={handlers}>
-          {t.recordingId ? <Play aria-hidden="true" /> : <User aria-hidden="true" />}
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">You</span>
-          <span className="truncate">{t.text}</span>
-          {t.recordingId && (
+        <Item row={row} handlers={handlers} className="text-muted-foreground">
+          <Icon aria-label={t('row.you')} />
+          <span className="min-w-0 truncate">{turn.text}</span>
+          <AttachmentPills items={turn.attachments} />
+          {turn.recordingId && (
             <>
-              <SrHint>. Press Enter to replay your recording.</SrHint>
-              <Hints items={[['↵', '▶']]} />
+              <Sr>. {t('row.replay')}</Sr>
+              <Keys keys={['↵']} />
             </>
           )}
         </Item>
       )
     }
     case 'reply': {
-      const t = row.turn
-      if (t.error && t.errorCode === 'missing_key') {
-        return (
-          <Item row={row} handlers={handlers} className="items-start">
-            <KeyRound aria-hidden="true" className="mt-0.5 text-muted-foreground" />
-            <span className="whitespace-pre-wrap">{t.error}</span>
-            <SrHint>. Press Enter to paste a key.</SrHint>
-            <Hints items={[['↵', 'paste a key']]} />
-          </Item>
-        )
-      }
+      const turn = row.turn
+      const unavailable = turn.errorCode === 'unavailable'
       return (
         <Item row={row} handlers={handlers} className="items-start">
-          {t.error ? (
+          {turn.error && !unavailable ? (
             <CircleAlert aria-hidden="true" className="mt-0.5 text-destructive" />
-          ) : t.replyRecordingId ? (
-            <Volume2 aria-hidden="true" className="mt-0.5" />
-          ) : !t.done ? (
+          ) : turn.replyRecordingId ? (
+            <Volume2 aria-hidden="true" className="mt-0.5 text-primary" />
+          ) : !turn.done ? (
             <Loader2 aria-hidden="true" className="mt-0.5 animate-spin motion-reduce:animate-none" />
           ) : (
             <Info aria-hidden="true" className="mt-0.5" />
           )}
-          <span className={cn('whitespace-pre-wrap', t.error && 'text-destructive')}>
-            {t.error ?? (t.reply || (t.done ? '' : 'Thinking…'))}
+          <span className={cn('min-w-0 flex-1 whitespace-pre-wrap', turn.error && !unavailable && 'text-destructive')}>
+            {turn.error ?? (turn.reply || (turn.done ? '' : t('row.thinking')))}
           </span>
-          {t.replyRecordingId && (
+          {turn.replyRecordingId && (
             <>
-              <SrHint>. Press Enter to replay.</SrHint>
-              <Hints items={[['↵', '▶']]} />
+              <Sr>. {t('row.replay')}</Sr>
+              <Keys keys={['↵']} />
             </>
           )}
         </Item>
@@ -369,87 +468,67 @@ export function RowView({ row, handlers }: { row: Row; handlers: RowHandlers }) 
     }
     case 'action':
       return <ActionRow action={row.action} row={row} handlers={handlers} />
-    case 'card':
+    case 'card': {
+      const card = row.card
+      // Blocks are not selectable rows: they hold their own controls (chips) or just show a figure.
       return (
-        <Item row={row} handlers={handlers} className="data-[selected=true]:ring-0">
-          <CardHeader card={row.card} />
-        </Item>
+        <div data-row-kind="card" data-card={card.kind}>
+          {card.kind === 'usage' ? (
+            <div className="px-2">
+              <UsageCard title={card.title} data={card.data} rows={card.rows} />
+            </div>
+          ) : card.kind === 'where' ? (
+            <WhereCard data={card.data} />
+          ) : (
+            <PresetChips card={card} handlers={handlers} />
+          )}
+        </div>
       )
+    }
     case 'card-row':
       return (
         <Item row={row} handlers={handlers}>
           <CardRowBody card={row.card} row={row.row} handlers={handlers} item={row} />
         </Item>
       )
-    case 'notice':
+    case 'notice': {
+      const level = row.notice.level
       return (
         <Item row={row} handlers={handlers}>
-          {row.notice.level === 'error' ? (
+          {level === 'error' ? (
             <CircleAlert aria-hidden="true" className="text-destructive" />
-          ) : row.notice.level === 'warn' ? (
-            <AlertTriangle aria-hidden="true" className="text-amber-600 dark:text-amber-400" />
+          ) : level === 'warn' ? (
+            <TriangleAlert aria-hidden="true" className="text-warning" />
           ) : (
-            <Check aria-hidden="true" />
+            <Check aria-hidden="true" className="text-success" />
           )}
-          <span className={cn(row.notice.level === 'error' && 'text-destructive')}>{row.notice.text}</span>
-          <Hints items={[['↵', 'dismiss']]} />
-        </Item>
-      )
-    case 'job':
-      return (
-        <Item row={row} handlers={handlers}>
-          <Loader2 aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
-          <span className="flex w-full flex-col gap-1">
-            <span className="text-sm">{row.label}</span>
-            <Progress value={row.pct} aria-label={`${row.label}: ${Math.round(row.pct)}%`} />
-          </span>
-        </Item>
-      )
-    case 'now-playing': {
-      const p = row.playback
-      const playing = p.state === 'playing' || p.state === 'loading'
-      const finished = !playing && (p.progress ?? 0) >= 0.999
-      return (
-        <Item row={row} handlers={handlers}>
-          {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">
-            {playing ? 'Now playing' : finished ? 'Finished' : 'Paused'}
-          </span>
-          <span className="truncate">{p.document_title ?? 'Untitled'}</span>
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-            {[formatSpeed(p.speed), finished ? null : formatTimeLeft(p.time_left_s)].filter(Boolean).join(' · ')}
-          </span>
-          <SrHint>. Enter {playing ? 'pauses' : 'plays'}, Command-Enter opens the reader.</SrHint>
-          <Hints items={[['↵', playing ? 'pause' : finished ? 'replay' : 'play']]} />
+          <span className={cn('min-w-0 flex-1', level === 'error' && 'text-destructive')}>{row.notice.text}</span>
+          <RowButton label={t('row.dismiss')} onPress={() => handlers.onSelect(row)}>
+            <X className="size-3.5" aria-hidden="true" />
+          </RowButton>
         </Item>
       )
     }
-    case 'recent':
+    case 'job':
       return (
         <Item row={row} handlers={handlers}>
-          <History aria-hidden="true" />
-          <span className="truncate">{row.doc.title}</span>
-          {row.doc.progress > 0 && (
-            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{formatPercent(row.doc.progress)}</span>
-          )}
-          <SrHint>. Enter resumes, Command-Enter opens the reader.</SrHint>
+          <Download aria-hidden="true" className="text-primary" />
+          <span className="flex w-full flex-col gap-1">
+            <span className="truncate text-sm">{row.label}</span>
+            <Progress value={row.pct} aria-label={`${row.label}: ${Math.round(row.pct)}%`} className="h-1.5" />
+          </span>
         </Item>
       )
-    case 'suggestion': {
-      const icon =
-        row.id === 'read-clipboard' ? (
-          <Clipboard aria-hidden="true" />
-        ) : row.id === 'open-file' ? (
-          <FolderOpen aria-hidden="true" />
-        ) : row.id === 'show-voices' ? (
-          <Volume2 aria-hidden="true" />
-        ) : (
-          <DollarSign aria-hidden="true" />
-        )
+    case 'recent': {
+      const Icon = documentIcon(row.doc.kind)
       return (
         <Item row={row} handlers={handlers}>
-          {icon}
-          <span>{row.label}</span>
+          <Icon aria-hidden="true" />
+          <span className="min-w-0 truncate">{row.doc.title}</span>
+          {row.doc.progress > 0 && (
+            <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">{formatPercent(row.doc.progress)}</span>
+          )}
+          <Sr>. {t('row.play')}</Sr>
         </Item>
       )
     }

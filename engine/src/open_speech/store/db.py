@@ -97,6 +97,23 @@ MIGRATIONS: list[str] = [
 
     CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
     """,
+    # 2 — the asset store index (store/assets.py) replaces the audio-only cache index; conversations
+    """
+    DROP TABLE IF EXISTS audio_cache;
+    CREATE TABLE assets (
+      kind TEXT NOT NULL,                            -- voice | transcript | page
+      key TEXT NOT NULL,                             -- sha256 of what defines the asset
+      ext TEXT NOT NULL,
+      bytes INTEGER NOT NULL,
+      text_hash TEXT,                                -- sha256 of the transcript alone
+      created_at TEXT NOT NULL,
+      last_access TEXT NOT NULL,
+      PRIMARY KEY (kind, key)
+    );
+    CREATE INDEX assets_lru ON assets(last_access);
+    CREATE INDEX assets_text ON assets(text_hash);
+    ALTER TABLE turns ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]';
+    """,
 ]
 
 

@@ -1,19 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { DocumentOut, PlaybackState } from '@shared/api/client'
+import type { DocumentOut } from '@shared/api/client'
 
-import { IDLE_PLAYBACK } from '@/playback'
-import {
-  buildRows,
-  cardRowEnabled,
-  defaultSelection,
-  droppedRows,
-  findRow,
-  SUGGESTIONS,
-  turnRows,
-  type RowGroup,
-  type RowInputs,
-} from './rows'
+import { buildRows, cardRowEnabled, defaultSelection, findRow, turnRows, type RowGroup, type RowInputs } from './rows'
 import { initialBarState, type ActionModel, type BarState, type CardModel, type TurnModel } from './store'
 
 const state = (patch: Partial<BarState> = {}): BarState => ({ ...initialBarState, open: true, ...patch })
@@ -29,15 +18,14 @@ const doc = (id: string): DocumentOut => ({
   has_source_file: true,
 })
 
-const PLAYING: PlaybackState = { ...IDLE_PLAYBACK, state: 'playing', document_id: 'd1', document_title: 'Doc d1' }
-
-const inputs = (patch: Partial<RowInputs> = {}): RowInputs => ({ playback: IDLE_PLAYBACK, recents: [], search: null, ...patch })
+const inputs = (patch: Partial<RowInputs> = {}): RowInputs => ({ recents: [], search: null, ...patch })
 
 const turnModel = (turnId: string, patch: Partial<TurnModel> = {}): TurnModel => ({
   turnId,
   sessionId: null,
   source: 'typed',
   text: `ask ${turnId}`,
+  attachments: [],
   recordingId: null,
   reply: `answer ${turnId}`,
   replyRecordingId: null,
@@ -60,204 +48,141 @@ const actionModel = (actionId: string, turnId: string, status: ActionModel['stat
   message: null,
 })
 
-const card = (id: string, kind: CardModel['kind'], rowIds: string[] = []): CardModel => ({
-  id,
+const card = (kind: CardModel['kind'], rows = 2): CardModel => ({
+  id: `t1:${kind}`,
   turnId: 't1',
   kind,
   title: kind,
-  rows: rowIds.map((r) => ({ id: r, title: r })),
+  rows: Array.from({ length: rows }, (_, i) => ({ id: `r${i}`, title: `Row ${i}` })),
   data: {},
 })
 
-const ids = (groups: RowGroup[]) => groups.map((g) => g.id)
-const values = (groups: RowGroup[], id: string) => groups.find((g) => g.id === id)?.rows.map((r) => r.value) ?? []
-
-const imageFile = { kind: 'file' as const, file: new File(['x'], 'cat.png', { type: 'image/png' }), name: 'cat.png', isImage: true }
-const pdfFile = { kind: 'file' as const, file: new File(['x'], 'a.pdf', { type: 'application/pdf' }), name: 'a.pdf', isImage: false }
+const kinds = (groups: RowGroup[]) => groups.map((g) => `${g.id}:${g.rows.map((r) => r.kind).join(',')}`)
 
 describe('buildRows', () => {
   it('is empty while listening with nothing to show', () => {
-    expect(buildRows(state({ mode: 'listening' }), inputs({ playback: PLAYING, recents: [doc('r1')] }))).toEqual([])
+    expect(buildRows(state({ mode: 'listening' }), inputs({ recents: [doc('a')] }))).toEqual([])
   })
 
-  it('orders groups: confirm, dropped, input, conversation, status, now playing, search', () => {
+  it('shows recent documents in an empty, quiet bar, and only then', () => {
+    const recents = [doc('a'), doc('b')]
+    expect(kinds(buildRows(state(), inputs({ recents })))).toEqual(['recents:recent,recent'])
+    expect(buildRows(state({ draft: 'x' }), inputs({ recents }))).toEqual([])
+    expect(buildRows(state({ turns: [turnModel('t1')] }), inputs({ recents })).some((g) => g.id === 'recents')).toBe(false)
+  })
+
+  it('orders groups: confirm, pending, conversation, status, search', () => {
     const s = state({
-      mode: 'typing',
-      text: '  find taxes ',
-      pendingText: 'previous',
-      localConfirm: { kind: 'install_model', modelId: 'm', title: 'Install?', detail: '300 MB' },
-      dropped: { kind: 'url', url: 'https://example.com/a' },
+      draft: 'doc',
+      localConfirm: { kind: 'install_model', modelId: 'm', title: 'Model', detail: '92 MB' },
+      pending: { text: 'read this', attachments: [] },
       turns: [turnModel('t1')],
       notices: [{ id: 'n1', level: 'warn', text: 'careful' }],
-      jobs: { j1: { pct: 40, label: 'Importing' }, j2: { pct: 100, label: 'Finished' } },
+      jobs: { j1: { pct: 40, label: 'Downloading' }, j2: { pct: 100, label: 'Done' } },
     })
-    const groups = buildRows(s, inputs({ playback: PLAYING, recents: [doc('r1')], search: [doc('s1')] }))
-
-    expect(ids(groups)).toEqual(['confirm', 'dropped', 'input', 'conversation', 'status', 'now', 'search'])
-    expect(values(groups, 'input')).toEqual(['submit', 'pending'])
-    expect(findRow(groups, 'submit')).toMatchObject({ kind: 'submit', text: 'find taxes' })
-    // Finished jobs are hidden.
-    expect(values(groups, 'status')).toEqual(['notice:n1', 'job:j1'])
-    expect(groups.find((g) => g.id === 'search')?.heading).toBe('Documents')
+    expect(kinds(buildRows(s, inputs({ search: [doc('a')] })))).toEqual([
+      'confirm:local-confirm',
+      'pending:pending',
+      'conversation:user,reply',
+      'status:notice,job',
+      'search:recent',
+    ])
   })
 
-  it('offers no submit row for the live transcript while listening', () => {
-    const groups = buildRows(state({ mode: 'listening', text: 'read this' }), inputs())
-    expect(findRow(groups, 'submit')).toBeUndefined()
+  it('searches documents by what is typed, but not while badges are attached or while listening', () => {
+    const search = [doc('a')]
+    expect(buildRows(state({ draft: 'doc' }), inputs({ search })).some((g) => g.id === 'search')).toBe(true)
+    const attached = state({ draft: 'doc', attachments: [{ kind: 'url', url: 'https://example.org' }] })
+    expect(buildRows(attached, inputs({ search })).some((g) => g.id === 'search')).toBe(false)
+    expect(buildRows(state({ draft: 'doc', mode: 'listening' }), inputs({ search })).some((g) => g.id === 'search')).toBe(false)
   })
 
-  it('keeps only the last 20 turns', () => {
+  it('shows the latest exchange, with earlier ones behind a "history" row', () => {
+    const turns = [turnModel('t1'), turnModel('t2'), turnModel('t3')]
+    const latest = buildRows(state({ turns }), inputs())
+    expect(kinds(latest)).toEqual(['conversation:history,user,reply'])
+    expect(findRow(latest, 'history')).toMatchObject({ count: 2 })
+    expect(findRow(latest, 'reply:t3')).toBeDefined()
+    expect(findRow(latest, 'reply:t1')).toBeUndefined()
+
+    const all = buildRows(state({ turns, showHistory: true }), inputs())
+    expect(kinds(all)).toEqual(['conversation:user,reply,user,reply,user,reply'])
+  })
+
+  it('keeps only the last 20 turns even with history shown', () => {
     const turns = Array.from({ length: 25 }, (_, i) => turnModel(`t${i}`))
-    const conv = values(buildRows(state({ turns }), inputs()), 'conversation')
-    expect(conv[0]).toBe('user:t5')
-    expect(conv.at(-1)).toBe('reply:t24')
-    expect(conv).toHaveLength(40)
-  })
-
-  describe('now playing', () => {
-    it('shows only when ambient (idle, typing, or with turns)', () => {
-      const x = inputs({ playback: PLAYING })
-      expect(ids(buildRows(state({ mode: 'listening' }), x))).not.toContain('now')
-      expect(ids(buildRows(state({ mode: 'listening', idle: true }), x))).toContain('now')
-      expect(ids(buildRows(state({ mode: 'typing' }), x))).toContain('now')
-      expect(ids(buildRows(state({ mode: 'waiting', turns: [turnModel('t1')] }), x))).toContain('now')
-    })
-
-    it('hides when playback is idle or has no document', () => {
-      expect(ids(buildRows(state({ mode: 'typing' }), inputs()))).not.toContain('now')
-      const noDoc = { ...PLAYING, document_id: null }
-      expect(ids(buildRows(state({ mode: 'typing' }), inputs({ playback: noDoc })))).not.toContain('now')
-    })
-  })
-
-  describe('recents vs search', () => {
-    it('shows up to 10 recents when ambient and not typing', () => {
-      const recents = Array.from({ length: 12 }, (_, i) => doc(`r${i}`))
-      const groups = buildRows(state({ mode: 'typing' }), inputs({ recents }))
-      expect(values(groups, 'recents')).toEqual(recents.slice(0, 10).map((d) => `recent:${d.id}`))
-      expect(groups.find((g) => g.id === 'recents')?.heading).toBe('Recent')
-    })
-
-    it('replaces recents with search results while typing', () => {
-      const groups = buildRows(state({ mode: 'typing', text: 'tax' }), inputs({ recents: [doc('r1')], search: [doc('s1'), doc('s2')] }))
-      expect(ids(groups)).not.toContain('recents')
-      expect(values(groups, 'search')).toEqual(['recent:s1', 'recent:s2'])
-    })
-
-    it('shows neither recents nor an empty Documents group when the search has no hits', () => {
-      const groups = buildRows(state({ mode: 'typing', text: 'tax' }), inputs({ recents: [doc('r1')], search: [] }))
-      expect(ids(groups)).toEqual(['input'])
-    })
-
-    it('shows no recents while typing before search results arrive', () => {
-      const groups = buildRows(state({ mode: 'typing', text: 'tax' }), inputs({ recents: [doc('r1')], search: null }))
-      expect(ids(groups)).toEqual(['input'])
-    })
-
-    it('ignores search results when the input is empty', () => {
-      const groups = buildRows(state({ mode: 'typing', text: '   ' }), inputs({ recents: [doc('r1')], search: [doc('s1')] }))
-      expect(ids(groups)).toEqual(['recents'])
-    })
-  })
-
-  describe('suggestions', () => {
-    it('show only when idle with no turns, no typed text and nothing dropped', () => {
-      const groups = buildRows(state({ mode: 'listening', idle: true }), inputs())
-      expect(values(groups, 'suggestions')).toEqual(SUGGESTIONS.map((s) => `suggest:${s.id}`))
-      expect(groups.find((g) => g.id === 'suggestions')?.heading).toBe('Try')
-    })
-
-    it('hide when not idle, with turns, with typed text, or with a dropped item', () => {
-      const has = (s: BarState) => ids(buildRows(s, inputs())).includes('suggestions')
-      expect(has(state({ mode: 'typing', idle: false }))).toBe(false)
-      expect(has(state({ idle: true, turns: [turnModel('t1')] }))).toBe(false)
-      expect(has(state({ idle: true, mode: 'typing', text: 'hi' }))).toBe(false)
-      expect(has(state({ idle: true, dropped: { kind: 'text', text: 'hello' } }))).toBe(false)
-    })
-  })
-})
-
-describe('defaultSelection', () => {
-  const sel = (s: BarState, x: RowInputs = inputs()) => defaultSelection(buildRows(s, x), s)
-
-  it('keeps an explicit selection that still exists, and drops a stale one', () => {
-    const turns = [turnModel('t1'), turnModel('t2')]
-    expect(sel(state({ turns, selected: 'user:t1' }))).toBe('user:t1')
-    expect(sel(state({ turns, selected: 'action:gone' }))).toBe('reply:t2')
-  })
-
-  it('prefers the local confirm over everything', () => {
-    const s = state({
-      localConfirm: { kind: 'estimate', title: 'Costs $0.40', detail: '', retryId: 'r' },
-      dropped: { kind: 'url', url: 'https://example.com' },
-      turns: [turnModel('t1', { actionIds: ['a1'] })],
-      actions: { a1: actionModel('a1', 't1') },
-      mode: 'typing',
-      text: 'hello',
-    })
-    expect(sel(s)).toBe('local-confirm')
-  })
-
-  it('then the latest pending action (not a resolved one)', () => {
-    const s = state({
-      dropped: { kind: 'url', url: 'https://example.com' },
-      turns: [turnModel('t1', { actionIds: ['a1'] }), turnModel('t2', { actionIds: ['a2', 'a3'] })],
-      actions: { a1: actionModel('a1', 't1'), a2: actionModel('a2', 't2'), a3: actionModel('a3', 't2', 'confirmed') },
-    })
-    expect(sel(s)).toBe('action:a2')
-  })
-
-  it('then the dropped item’s Read it, then submit, then the last reply', () => {
-    const turns = [turnModel('t1'), turnModel('t2')]
-    expect(sel(state({ mode: 'typing', text: 'go', dropped: { kind: 'text', text: 'abc' }, turns }))).toBe('dropped:read')
-    expect(sel(state({ mode: 'typing', text: 'go', turns }))).toBe('submit')
-    expect(sel(state({ turns }))).toBe('reply:t2')
-  })
-
-  it('never defaults to the pending placeholder row', () => {
-    expect(sel(state({ mode: 'waiting', pendingText: 'hello' }))).toBe('')
-    expect(sel(state({ mode: 'waiting', pendingText: 'hello', notices: [{ id: 'n1', level: 'info', text: 'hi' }] }))).toBe('notice:n1')
-  })
-})
-
-describe('droppedRows', () => {
-  it('offers Describe only for images', () => {
-    expect(droppedRows(imageFile).map((r) => r.value)).toEqual(['dropped:read', 'dropped:describe', 'dropped:summarize', 'dropped:open'])
-    expect(droppedRows(pdfFile).map((r) => r.value)).toEqual(['dropped:read', 'dropped:summarize', 'dropped:open'])
-    expect(droppedRows({ kind: 'url', url: 'https://example.com' }).map((r) => r.value)).not.toContain('dropped:describe')
-  })
-
-  it('marks Read it as the default', () => {
-    const rows = droppedRows(imageFile)
-    expect(rows.map((r) => (r.kind === 'dropped' ? r.isDefault : null))).toEqual([true, false, false, false])
+    const groups = buildRows(state({ turns, showHistory: true }), inputs())
+    expect(findRow(groups, 'reply:t4')).toBeUndefined()
+    expect(findRow(groups, 'reply:t5')).toBeDefined()
   })
 })
 
 describe('turnRows', () => {
-  it('lists user, reply, actions, then cards with their rows', () => {
-    const t = turnModel('t1', { actionIds: ['a1', 'missing'], cards: [card('c1', 'voices', ['v1', 'v2'])] })
-    const rows = turnRows(t, { a1: actionModel('a1', 't1') })
-    expect(rows.map((r) => r.value)).toEqual(['user:t1', 'reply:t1', 'action:a1', 'card:c1', 'card:c1:v1', 'card:c1:v2'])
+  it('lists user, reply, actions, then cards: lists as one row per item, figures as one block', () => {
+    const turn = turnModel('t1', { actionIds: ['a1'], cards: [card('voices'), card('usage'), card('presets', 13), card('where')] })
+    const rows = turnRows(turn, { a1: actionModel('a1', 't1') })
+    expect(rows.map((r) => r.kind)).toEqual(['user', 'reply', 'action', 'card-row', 'card-row', 'card', 'card', 'card'])
   })
 
-  it('does not expand usage cards into card rows', () => {
-    const t = turnModel('t1', { cards: [card('u1', 'usage', ['openai', 'gemini'])] })
-    expect(turnRows(t, {}).map((r) => r.value)).toEqual(['user:t1', 'reply:t1', 'card:u1'])
+  it('a toolbar press shows its card without a "you said" line or a repeated summary', () => {
+    const pressed = turnModel('t1', { source: 'button', text: 'show voices', reply: '3 voices are ready.', cards: [card('voices')] })
+    expect(turnRows(pressed, {}).map((r) => r.kind)).toEqual(['card-row', 'card-row'])
+    // …but an error from a press is still shown.
+    const failed = turnModel('t2', { source: 'button', text: 'read my clipboard', reply: '', error: 'Your clipboard is empty.' })
+    expect(turnRows(failed, {}).map((r) => r.kind)).toEqual(['reply'])
+  })
+
+  it('shows what was attached even when nothing was typed', () => {
+    const attached = turnModel('t1', { text: '', attachments: [{ kind: 'file', title: 'report.pdf' }] })
+    expect(turnRows(attached, {}).map((r) => r.kind)).toEqual(['user', 'reply'])
   })
 
   it('shows a reply row while streaming or on error, but not for a finished empty reply', () => {
-    expect(turnRows(turnModel('t1', { reply: '', done: false }), {}).map((r) => r.kind)).toEqual(['user', 'reply'])
-    expect(turnRows(turnModel('t1', { reply: '', error: 'Oops' }), {}).map((r) => r.kind)).toEqual(['user', 'reply'])
-    expect(turnRows(turnModel('t1', { reply: '', done: true }), {}).map((r) => r.kind)).toEqual(['user'])
-    expect(turnRows(turnModel('t1', { text: '' }), {}).map((r) => r.kind)).toEqual(['reply'])
+    expect(turnRows(turnModel('t1', { reply: '', done: false }), {}).some((r) => r.kind === 'reply')).toBe(true)
+    expect(turnRows(turnModel('t1', { reply: '', error: 'boom' }), {}).some((r) => r.kind === 'reply')).toBe(true)
+    expect(turnRows(turnModel('t1', { reply: '' }), {}).some((r) => r.kind === 'reply')).toBe(false)
+  })
+})
+
+describe('defaultSelection', () => {
+  const sel = (s: BarState, x = inputs()) => defaultSelection(buildRows(s, x), s)
+
+  it('keeps an explicit selection that still exists, and drops a stale one', () => {
+    const turns = [turnModel('t1')]
+    expect(sel(state({ turns, selected: 'user:t1' }))).toBe('user:t1')
+    expect(sel(state({ turns, selected: 'reply:gone' }))).toBe('reply:t1')
+  })
+
+  it('prefers the local confirm, then the latest pending action, then the last reply', () => {
+    const turns = [turnModel('t1', { actionIds: ['a1', 'a2'] })]
+    const actions = { a1: actionModel('a1', 't1', 'confirmed'), a2: actionModel('a2', 't1') }
+    const confirm = { kind: 'install_model' as const, modelId: 'm', title: 'Model', detail: '' }
+    expect(sel(state({ turns, actions, localConfirm: confirm }))).toBe('local-confirm')
+    expect(sel(state({ turns, actions }))).toBe('action:a2')
+    expect(sel(state({ turns }))).toBe('reply:t1')
+  })
+
+  it('with something typed or attached, nothing is selected: Enter sends the composer', () => {
+    const turns = [turnModel('t1')]
+    expect(sel(state({ turns, draft: 'faster' }))).toBe('')
+    expect(sel(state({ turns, attachments: [{ kind: 'url', url: 'https://example.org' }] }))).toBe('')
+    // …unless the user moved to a row themselves.
+    expect(sel(state({ draft: 'doc', selected: 'recent:a' }), inputs({ search: [doc('a')] }))).toBe('recent:a')
+  })
+
+  it('never defaults to the pending placeholder, a block card or the history row', () => {
+    expect(sel(state({ pending: { text: 'x', attachments: [] } }))).toBe('')
+    const pressed = turnModel('t2', { source: 'button', reply: '', cards: [card('presets')] })
+    expect(sel(state({ turns: [turnModel('t1'), pressed] }))).toBe('')
+    const listed = turnModel('t3', { source: 'button', reply: '', cards: [card('voices')] })
+    expect(sel(state({ turns: [turnModel('t1'), listed] }))).toBe('card:t1:voices:r0')
   })
 })
 
 describe('cardRowEnabled', () => {
   it('prefers data.enabled, else selected', () => {
-    expect(cardRowEnabled({ id: 'r', title: 'r', selected: true, data: { enabled: false } })).toBe(false)
-    expect(cardRowEnabled({ id: 'r', title: 'r', data: { enabled: true } })).toBe(true)
-    expect(cardRowEnabled({ id: 'r', title: 'r', selected: true })).toBe(true)
-    expect(cardRowEnabled({ id: 'r', title: 'r' })).toBe(false)
+    expect(cardRowEnabled({ id: 'a', title: 'A', selected: true })).toBe(true)
+    expect(cardRowEnabled({ id: 'a', title: 'A', selected: true, data: { enabled: false } })).toBe(false)
+    expect(cardRowEnabled({ id: 'a', title: 'A' })).toBe(false)
   })
 })

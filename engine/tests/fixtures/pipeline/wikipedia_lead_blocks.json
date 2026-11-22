@@ -1,0 +1,314 @@
+{
+  "url": "https://en.wikipedia.org/wiki/Ada_Lovelace",
+  "title": "Ada Lovelace - Wikipedia",
+  "blocks": [
+    {
+      "id": "blk_1",
+      "type": "table",
+      "text": "The Right HonourableThe Countess of Lovelace",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[1]/th[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_2",
+      "type": "caption",
+      "text": "Daguerreotype of Lovelace (c. 1843)[1]",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[2]/td[1]/div[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_3",
+      "type": "table",
+      "text": "Born",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[3]/th[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_4",
+      "type": "table",
+      "text": "Augusta Ada Byron(1815-12-10)10 December 1815London, England",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[3]/td[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_5",
+      "type": "table",
+      "text": "Died",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[4]/th[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_6",
+      "type": "table",
+      "text": "Marylebone, London, England",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[4]/td[1]/div[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_7",
+      "type": "table",
+      "text": "Known for",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[5]/th[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_8",
+      "type": "table",
+      "text": "Mathematics, computing",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[5]/td[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_9",
+      "type": "table",
+      "text": "Children",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[6]/th[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_10",
+      "type": "table",
+      "text": "Byron King-Noel, Viscount Ockham",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[6]/td[1]/div[1]/ul[1]/li[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_11",
+      "type": "table",
+      "text": "Anne Blunt, 15th Baroness Wentworth",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[6]/td[1]/div[1]/ul[1]/li[2]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_12",
+      "type": "table",
+      "text": "Ralph King-Milbanke, 2nd Earl of Lovelace",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[6]/td[1]/div[1]/ul[1]/li[3]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_13",
+      "type": "table",
+      "text": "Parents",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[7]/th[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_14",
+      "type": "table",
+      "text": "George Byron, 6th Baron Byron (father)",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[7]/td[1]/div[1]/ul[1]/li[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_15",
+      "type": "table",
+      "text": "Anne Isabella Milbanke (mother)",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[7]/td[1]/div[1]/ul[1]/li[2]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_16",
+      "type": "table",
+      "text": "Signature",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/table[1]/tbody[1]/tr[8]/th[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_17",
+      "type": "paragraph",
+      "text": "Augusta Ada King, Countess of Lovelace (née Byron; 10 December 1815 – 27 November 1852), also known as Ada Lovelace, was an English mathematician and writer chiefly known for work on Charles Babbage's proposed mechanical general-purpose computer, the analytical engine. She was the first to recognise the machine had applications beyond pure calculation. Lovelace is often considered the first computer programmer.",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/p[2]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_18",
+      "type": "paragraph",
+      "text": "Lovelace was the only legitimate child of poet Lord Byron and reformer Anne Isabella Milbanke.[2] Lord Byron separated from his wife a month after Ada was born, and died when she was eight. Although often ill in childhood, Lovelace pursued her studies assiduously. She married William King in 1835. King was a Baron, and was created Viscount Ockham and 1st Earl of Lovelace in 1838. The name Lovelace was chosen because Ada was descended from the extinct Baron Lovelaces.[3] The title given to her husband thus made Ada the Countess of Lovelace.",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/p[3]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_19",
+      "type": "paragraph",
+      "text": "She developed a vision of the capability of computers to go beyond mere calculating or number-crunching, while many others, including Babbage, focused only on those capabilities.[4] Lovelace was the first to point out the possibility of encoding information besides mere arithmetical figures, such as music, and manipulating it with such a machine. Ada is widely commemorated, including in the names of a programming language, roads, buildings and institutes, as well as programmes, lectures and courses. There are plaques, statues, paintings, literary and non-fiction works about her.",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/p[4]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_20",
+      "type": "heading",
+      "text": "Biography",
+      "level": 2,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/div[3]/h2[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_21",
+      "type": "heading",
+      "text": "Childhood",
+      "level": 3,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/div[4]/h3[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_22",
+      "type": "paragraph",
+      "text": "Lord Byron expected his child to be a \"glorious boy\" and was disappointed when Lady Byron gave birth to a girl.[5] The child was named after Byron's half-sister, Augusta Leigh, and was called \"Ada\" by Byron himself.[6] On 16 January 1816, at Lord Byron's command, Lady Byron left for her parents' home at Kirkby Mallory, taking their five-week-old daughter with her.[5] Although English law at the time granted full custody of children to the father in cases of separation, Lord Byron made no attempt to claim his parental rights, but did request that his sister keep him informed of Ada's welfare.",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/p[5]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_23",
+      "type": "caption",
+      "text": "Ada Byron, aged four",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/figure[1]/figcaption[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_24",
+      "type": "paragraph",
+      "text": "On 21 April, Lord Byron signed the deed of separation, although very reluctantly, and left England for good a few days later.[6] Aside from an acrimonious separation, Lady Byron continued throughout her life to make allegations about her husband's immoral behaviour. This set of events made Lovelace infamous in Victorian society. Ada did not have a relationship with her father. He died in 1824 when she was eight years old. Her mother was the only significant parental figure in her life. Lovelace was not shown the family portrait of her father until her 20th birthday.",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/p[6]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_25",
+      "type": "paragraph",
+      "text": "Lovelace did not have a close relationship with her mother. She was often left in the care of her maternal grandmother Judith, Hon. Lady Milbanke, who doted on her. However, because of societal attitudes of the time, which favoured the husband in any separation, with the welfare of any child acting as mitigation, Lady Byron had to present herself as a loving mother to the rest of society.[citation needed]",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/p[7]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_26",
+      "type": "heading",
+      "text": "References",
+      "level": 2,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/div[5]/h2[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_27",
+      "type": "list_item",
+      "text": "^ \"Only known photographs of Ada Lovelace in Bodleian Display\". Ada Lovelace. 14 October 2015.",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/div[6]/div[1]/ol[1]/li[1]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    },
+    {
+      "id": "blk_28",
+      "type": "list_item",
+      "text": "^ \"Ada Lovelace Biography\". Britannica.",
+      "level": null,
+      "dom_anchor": {
+        "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/main[1]/div[2]/div[3]/div[1]/div[6]/div[1]/ol[1]/li[2]",
+        "start_offset": 0,
+        "end_offset": null
+      }
+    }
+  ]
+}

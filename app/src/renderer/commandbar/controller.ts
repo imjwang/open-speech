@@ -2,13 +2,19 @@
  * The command bar's voice/typing state machine (09 § Command bar, 07 § Voice loop, FR-BAR-1..4).
  *
  * - Opens listening: `mic.start`, then 16 kHz PCM16 binary frames until `mic.stop`.
- * - Partials replace the input in place; `stt.final` replaces them.
- * - Any keystroke stops the mic (`mic.stop {submit: false}`) and leaves the transcript editable.
+ * - The transcript streams into the composer as it is heard; `stt.final` settles it.
+ * - Any keystroke stops the mic (`mic.stop {submit: false}`) and leaves the transcript as editable text.
  * - Tab toggles typing ↔ listening.
  * - End of utterance: 800 ms of silence (energy VAD, `voice_input.end_of_speech_ms`), releasing a held
  *   hotkey (push-to-talk), or Enter. Each path submits exactly once per utterance.
- * - Typed text is submitted as a WS `command`.
+ * - Two ways to listen. With nothing typed, speech is a **command**: it is sent when the utterance ends,
+ *   together with whatever is attached. With text already typed, speech is **dictation**: it is added to the
+ *   text and nothing is sent until Enter.
+ * - The composer is editable in every mode: what is typed while an utterance is still being processed is
+ *   kept for the next command, never dropped.
  */
+import type { Attachment } from '@shared/api/client'
+import { t } from '@shared/i18n'
 import type { BarOpenedEvent } from '@shared/ipc-channels'
 import type {
   AssistantAction,
@@ -28,17 +34,28 @@ import type {
 import type { MicSource } from '@/audio/mic'
 import type { SocketLike } from '@/engine'
 import { EnergyVad, toDb } from '@/audio/vad'
-import { latestPendingAction, type BarState, type BarStore, type TurnModel } from './store'
+import { labelOf, toWire, type AttachmentItem } from './composer/attachments'
+import { composerEmpty, latestPendingAction, type BarState, type BarStore, type TurnAttachment, type TurnModel } from './store'
 
 export const IDLE_SUGGESTIONS_MS = 5000
-/** Without any speech the mic turns itself off (privacy and STT cost); Tab turns it back on. */
+/** Without any speech the mic turns itself off (privacy); Tab or the orb turns it back on. */
 export const MIC_IDLE_OFF_MS = 15_000
+/** When the idle timeout lands on the first instant of speech, how long until the next look. */
+export const MIC_OFF_RECHECK_MS = 1_000
 /** Hotkey held at least this long before release = push-to-talk. */
 export const PTT_MIN_HOLD_MS = 350
 /** Give up waiting for the engine to start a turn. */
 export const TURN_START_TIMEOUT_MS = 20_000
 
 export type SubmitPath = 'enter' | 'vad' | 'ptt'
+
+/** What the controller may do to the composer (the Lexical editor); absent until it has mounted. */
+export interface ComposerPort {
+  clear(): void
+  insertAttachments(items: AttachmentItem[]): void
+  setDictation(text: string | null): void
+  dropDictation(): void
+}
 
 export interface BarDeps {
   send(message: ClientMessage): boolean
@@ -48,6 +65,8 @@ export interface BarDeps {
   setListening(listening: boolean): void
   endOfSpeechMs(): number
   newSessionId(): string
+  /** One id per time the bar is opened: everything said until it closes is one conversation. */
+  newConversationId(): string
   now(): number
 }
 
@@ -59,6 +78,10 @@ function meterLevel(level: number): number {
   return Math.max(0, Math.min(1, (toDb(level) + 60) / 48))
 }
 
+function describe(items: AttachmentItem[]): TurnAttachment[] {
+  return items.map((item) => ({ kind: item.kind === 'upload' ? 'file' : item.kind, title: labelOf(item) }))
+}
+
 let noticeSeq = 0
 let announceSeq = 0
 
@@ -68,11 +91,13 @@ export class BarController {
   private micOffTimer: ReturnType<typeof setTimeout> | null = null
   private turnTimer: ReturnType<typeof setTimeout> | null = null
   private submittedSession: string | null = null
-  private ownSessions = new Set<string>()
   private openedAt = 0
   private viaHotkey = false
   private hotkeyHandled = false
   private interceptor: VoiceInterceptor | null = null
+  private composer: ComposerPort | null = null
+  /** Badges sent with the utterance being processed: restored if nothing was heard after all. */
+  private sentWithSpeech: AttachmentItem[] = []
   /** The bar asked to listen before the engine socket was up: listen as soon as it connects. */
   private listenWhenConnected = false
 
@@ -89,29 +114,42 @@ export class BarController {
     this.store.setState(patch)
   }
 
+  attachComposer(composer: ComposerPort | null): void {
+    this.composer = composer
+  }
+
+  private turnContext() {
+    return { document_id: this.s.context.documentId ?? null, conversation_id: this.s.context.conversationId ?? null }
+  }
+
   // ---------------------------------------------------------------- open / close
 
   open(event: BarOpenedEvent): void {
-    const context = event.documentId ? { documentId: event.documentId } : {}
     this.viaHotkey = event.viaHotkey
     this.hotkeyHandled = false
     this.openedAt = this.deps.now()
     if (this.s.open) {
-      this.set({ context })
-      if (event.listen && this.s.mode === 'typing' && !this.s.text && this.s.canListen === true) this.startListening()
+      this.set((s) => ({ context: { ...s.context, ...(event.documentId ? { documentId: event.documentId } : {}) } }))
+      if (event.listen && this.s.mode === 'typing' && composerEmpty(this.s) && this.s.canListen === true) this.startListening()
       return
     }
+    // One conversation for as long as the bar stays open, so follow-ups ("a bit more") have context.
+    const context = { conversationId: this.deps.newConversationId(), ...(event.documentId ? { documentId: event.documentId } : {}) }
+    this.composer?.clear()
     this.set({
       open: true,
       context,
       idle: false,
       micError: null,
       hint: null,
-      dropped: null,
       localConfirm: null,
-      keyEntry: false,
-      text: '',
-      pendingText: null,
+      transcript: '',
+      draft: '',
+      attachments: [],
+      multiline: false,
+      dictating: false,
+      pending: null,
+      showHistory: false,
     })
     this.deps.send({ type: 'bar.state', open: true })
     if (event.listen && this.s.canListen === true) this.startListening()
@@ -131,17 +169,20 @@ export class BarController {
     this.clearTimers()
     this.deps.send({ type: 'bar.state', open: false })
     this.deps.setListening(false)
+    this.composer?.clear()
     this.set({
       open: false,
       mode: 'typing',
-      text: '',
-      pendingText: null,
+      transcript: '',
+      draft: '',
+      attachments: [],
+      multiline: false,
+      dictating: false,
+      pending: null,
       level: 0,
       speaking: false,
       idle: false,
-      dropped: null,
       localConfirm: null,
-      keyEntry: false,
       hint: null,
     })
   }
@@ -152,7 +193,8 @@ export class BarController {
     if (this.s.mode === 'listening') {
       // Whatever was half-heard before the prompt is noise, not an answer: drop it.
       this.stopMic(false)
-      this.set({ mode: 'typing', text: '', level: 0, speaking: false })
+      this.composer?.dropDictation()
+      this.set({ mode: 'typing', transcript: '', level: 0, speaking: false })
     }
     this.set({ prompting: true })
     try {
@@ -163,14 +205,14 @@ export class BarController {
       this.set({ prompting: false })
     }
     const s = this.s
-    if ((wasListening || this.listenWhenConnected) && s.open && s.mode === 'typing' && !s.text && s.canListen === true) {
+    if ((wasListening || this.listenWhenConnected) && s.open && s.mode === 'typing' && composerEmpty(s) && s.canListen === true) {
       this.listenWhenConnected = false
       this.set({ hint: null })
       this.startListening()
     }
   }
 
-  /** The engine told us whether speech input is set up (keys checked, or a key was just saved). */
+  /** The engine said whether the bar can listen (capabilities, or the speech model just finished installing). */
   setCanListen(canListen: boolean): void {
     this.set({ canListen })
     this.connected()
@@ -181,7 +223,7 @@ export class BarController {
     const s = this.s
     if (!this.listenWhenConnected || s.prompting || s.canListen === null) return // picked up later
     this.listenWhenConnected = false
-    if (s.open && s.mode === 'typing' && !s.text && s.canListen) {
+    if (s.open && s.mode === 'typing' && composerEmpty(s) && s.canListen) {
       this.set({ hint: null })
       this.startListening()
     }
@@ -189,6 +231,22 @@ export class BarController {
 
   setInterceptor(fn: VoiceInterceptor | null): void {
     this.interceptor = fn
+  }
+
+  // ---------------------------------------------------------------- the composer reports what it holds
+
+  /** The user changed the composer (typing or badges). Dictation updates don't come through here. */
+  setDraft(draft: string, attachments: AttachmentItem[], multiline = false): void {
+    const filled = draft.trim().length > 0 || attachments.length > 0
+    // With something to send, Enter sends it: no row stays selected unless the user moves to one.
+    this.set((s) => ({
+      draft,
+      attachments,
+      multiline,
+      idle: filled ? false : s.idle,
+      selected: filled ? '' : s.selected,
+      hint: filled ? null : s.hint,
+    }))
   }
 
   // ---------------------------------------------------------------- listening
@@ -200,26 +258,27 @@ export class BarController {
       return
     }
     const sessionId = this.deps.newSessionId()
+    // Text already typed: speech adds to it. Otherwise speech is the command (with any badges).
+    const dictating = this.interceptor === null && this.s.draft.trim().length > 0
     this.vad.reset()
     this.vad.endOfSpeechMs = this.deps.endOfSpeechMs()
     const ok = this.deps.send({
       type: 'mic.start',
       session_id: sessionId,
       mode: 'auto',
-      context: { document_id: this.s.context.documentId ?? null },
-      // Onboarding answers are matched locally: transcribe them, don't send them to the assistant.
-      transcribe_only: this.interceptor !== null,
+      context: this.turnContext(),
+      // Onboarding answers are matched locally and dictation stays in the composer: transcribe, don't send.
+      transcribe_only: this.interceptor !== null || dictating,
     })
     if (!ok) {
       this.listenWhenConnected = true
-      this.set({ mode: 'typing', hint: 'Connecting to the engine…' })
+      this.set({ mode: 'typing', hint: t('connecting') })
       return
     }
     this.listenWhenConnected = false
-    this.ownSessions.add(sessionId)
     // Listening again with the bar still open pauses reading again (07 § Ducking); idempotent on open.
     this.deps.send({ type: 'bar.state', open: true })
-    this.set({ mode: 'listening', sessionId, text: '', level: 0, speaking: false, micError: null, hint: null })
+    this.set({ mode: 'listening', sessionId, transcript: '', dictating, level: 0, speaking: false, micError: null, hint: null })
     this.deps.setListening(true)
     void this.deps.mic.start({
       onPcm: (pcm) => {
@@ -232,13 +291,13 @@ export class BarController {
     this.armMicOff()
   }
 
-  private stopMic(submit: boolean): void {
+  private stopMic(submit: boolean, attachments: Attachment[] = []): void {
     const sessionId = this.s.sessionId
     this.deps.mic.stop()
     this.deps.setListening(false)
     if (this.micOffTimer) clearTimeout(this.micOffTimer)
     this.micOffTimer = null
-    if (sessionId) this.deps.send({ type: 'mic.stop', session_id: sessionId, submit })
+    if (sessionId) this.deps.send({ type: 'mic.stop', session_id: sessionId, submit, attachments })
   }
 
   private onLevel(sessionId: string, level: number, durationMs: number): void {
@@ -259,6 +318,7 @@ export class BarController {
   private onMicError(sessionId: string, err: Error): void {
     if (this.s.sessionId !== sessionId || this.s.mode !== 'listening') return
     this.stopMic(false)
+    this.composer?.setDictation(null)
     this.set({ mode: 'typing', micError: err.message, level: 0, speaking: false })
   }
 
@@ -266,15 +326,17 @@ export class BarController {
   keystroke(): void {
     if (this.s.mode !== 'listening') return
     this.stopMic(false)
+    this.composer?.setDictation(null) // what was heard stays, as ordinary text
     this.set({ mode: 'typing', speaking: false, level: 0, idle: false })
   }
 
-  /** Tab (09 § Shortcuts). */
+  /** Tab, or the orb (09 § Shortcuts). */
   toggle(): void {
     const { mode } = this.s
-    if (mode === 'typing') this.startListening()
+    if (mode === 'typing' || mode === 'waiting') this.startListening()
     else if (mode === 'listening') {
       this.stopMic(false)
+      this.composer?.setDictation(null)
       this.set({ mode: 'typing', speaking: false, level: 0 })
     }
   }
@@ -292,56 +354,88 @@ export class BarController {
 
   // ---------------------------------------------------------------- submit
 
-  /** Returns true when this call submitted; every utterance submits at most once (FR-BAR-4). */
+  /** End the utterance. Returns true when this call ended it; every utterance ends at most once (FR-BAR-4). */
   submit(path: SubmitPath): boolean {
     const s = this.s
-    if (s.mode === 'listening') {
-      if (!s.sessionId || this.submittedSession === s.sessionId) return false
-      const heard = this.vad.hasSpeech || s.text.trim().length > 0
-      if (!heard) {
-        if (path === 'ptt') {
-          // Held and released without saying anything: cancel quietly.
-          this.stopMic(false)
-          this.set({ mode: 'typing', level: 0, speaking: false })
-        }
-        return false
+    if (s.mode !== 'listening') return false
+    if (!s.sessionId || this.submittedSession === s.sessionId) return false
+    const heard = this.vad.hasSpeech || s.transcript.trim().length > 0
+    if (!heard) {
+      if (path === 'ptt') {
+        // Held and released without saying anything: cancel quietly.
+        this.stopMic(false)
+        this.set({ mode: 'typing', level: 0, speaking: false })
       }
-      this.submittedSession = s.sessionId
+      return false
+    }
+    this.submittedSession = s.sessionId
+    if (s.dictating || this.interceptor) {
+      // The final transcript comes back and settles in the composer (or goes to the interceptor).
       this.stopMic(true)
       this.set({ mode: 'finalizing', level: 0, speaking: false, idle: false })
       this.armTurnTimeout()
       return true
     }
-    if (s.mode === 'typing' && path === 'enter') return this.submitText(s.text)
-    return false
-  }
-
-  /** Submit typed text (or a suggestion) as a `command`. */
-  submitText(raw: string): boolean {
-    const text = raw.trim()
-    if (!text || this.s.mode === 'waiting' || this.s.mode === 'finalizing') return false
-    if (this.s.mode === 'listening') this.stopMic(false)
-    const sessionId = this.deps.newSessionId()
-    const ok = this.deps.send({
-      type: 'command',
-      text,
-      source: 'typed',
-      session_id: sessionId,
-      context: { document_id: this.s.context.documentId ?? null },
+    // A spoken command: it goes with whatever is attached, and the composer is free for the next thing.
+    const attachments = s.attachments.filter((a) => a.kind !== 'upload')
+    this.sentWithSpeech = attachments
+    this.stopMic(true, toWire(attachments, new Map()))
+    this.composer?.clear()
+    this.set({
+      mode: 'finalizing',
+      level: 0,
+      speaking: false,
+      idle: false,
+      draft: '',
+      attachments: [],
+      pending: { text: s.transcript, attachments: describe(attachments) },
     })
-    if (!ok) {
-      this.notice('error', 'Not connected to the engine. Your command was not sent.')
-      return false
-    }
-    this.ownSessions.add(sessionId)
-    this.submittedSession = sessionId
-    this.set({ mode: 'waiting', sessionId, text: '', pendingText: text, idle: false, dropped: null })
     this.armTurnTimeout()
     return true
   }
 
-  setText(text: string): void {
-    if (this.s.mode === 'typing') this.set({ text, idle: text ? false : this.s.idle })
+  /**
+   * Send a command: typed text and/or attachments (already in wire form), or a toolbar press
+   * (`source: 'button'`, which shows its result without a "you said" line).
+   */
+  submitCommand(
+    raw: string,
+    attachments: Attachment[] = [],
+    opts: { source?: 'typed' | 'button'; shown?: TurnAttachment[]; label?: string } = {},
+  ): boolean {
+    const text = raw.trim()
+    if (!text && attachments.length === 0) return false
+    if (this.s.mode === 'listening') {
+      this.stopMic(false)
+      this.composer?.dropDictation()
+    }
+    const sessionId = this.deps.newSessionId()
+    const ok = this.deps.send({
+      type: 'command',
+      text,
+      source: opts.source ?? 'typed',
+      session_id: sessionId,
+      context: this.turnContext(),
+      attachments,
+    })
+    if (!ok) {
+      this.notice('error', t('no_engine'))
+      return false
+    }
+    this.submittedSession = sessionId
+    this.set({
+      mode: 'waiting',
+      sessionId,
+      transcript: '',
+      dictating: false,
+      pending: opts.source === 'button' ? null : { text: opts.label ?? text, attachments: opts.shown ?? [] },
+      hint: null,
+      idle: false,
+      level: 0,
+      speaking: false,
+    })
+    this.armTurnTimeout()
+    return true
   }
 
   // ---------------------------------------------------------------- engine events
@@ -349,7 +443,8 @@ export class BarController {
   onSttPartial(msg: SttPartial): void {
     const s = this.s
     if (msg.session_id !== s.sessionId || s.mode !== 'listening') return
-    this.set({ text: msg.text, idle: false })
+    this.set({ transcript: msg.text, idle: false })
+    this.composer?.setDictation(msg.text)
     if (this.idleTimer) clearTimeout(this.idleTimer)
     if (this.micOffTimer) clearTimeout(this.micOffTimer)
     this.idleTimer = this.micOffTimer = null
@@ -358,35 +453,57 @@ export class BarController {
   onSttFinal(msg: SttFinal): void {
     const s = this.s
     if (msg.session_id !== s.sessionId) return
-    if (this.interceptor && (s.mode === 'listening' || s.mode === 'finalizing')) {
+    const active = s.mode === 'listening' || s.mode === 'finalizing'
+    if (this.interceptor && active) {
       // An onboarding answer: the final transcript (not a lagging partial) goes to the interceptor.
       this.clearTurnTimeout()
       this.submittedSession = msg.session_id
       this.deps.mic.stop()
       this.deps.setListening(false)
-      this.set({ mode: 'typing', text: '', level: 0, speaking: false })
+      this.composer?.dropDictation()
+      this.set({ mode: 'typing', transcript: '', level: 0, speaking: false })
       const next = this.interceptor(msg.text)
       if (next === 'listen-again' && this.s.open && this.s.canListen === true) this.startListening()
       return
     }
+    if (!active) return
     if (s.mode === 'listening') {
-      // The engine ended the utterance itself: it submits, so we must not send mic.stop {submit: true}.
+      // The engine ended the utterance itself: we must not send mic.stop {submit: true} as well.
       this.submittedSession = msg.session_id
       this.deps.mic.stop()
       this.deps.setListening(false)
-      this.set({ mode: 'finalizing', text: msg.text, level: 0, speaking: false })
-      this.armTurnTimeout()
-    } else if (s.mode === 'finalizing') {
-      this.set({ text: msg.text })
-    } else {
+    }
+    if (s.dictating) {
+      // Dictation: the final wording settles in the composer as ordinary text; nothing is sent.
+      this.clearTurnTimeout()
+      this.composer?.setDictation(msg.text)
+      this.composer?.setDictation(null)
+      this.set({ mode: 'typing', transcript: '', dictating: false, level: 0, speaking: false })
       return
     }
-    if (msg.text.trim()) this.announce(`You said: ${msg.text}`)
     if (!msg.text.trim()) {
+      // Nothing was said after all: give back what was attached and say so.
       this.clearTurnTimeout()
-      this.set({ mode: 'typing', text: '', hint: "Didn't catch that. Press Tab to try again, or type." })
+      this.composer?.dropDictation()
+      if (this.sentWithSpeech.length) this.composer?.insertAttachments(this.sentWithSpeech)
+      this.sentWithSpeech = []
+      this.set({ mode: 'typing', transcript: '', pending: null, level: 0, speaking: false, hint: t('not_heard') })
       this.armIdle()
+      return
     }
+    if (s.mode === 'listening') {
+      this.composer?.clear()
+      this.set({ draft: '', attachments: [] })
+    }
+    this.set((prev) => ({
+      mode: 'finalizing',
+      transcript: '',
+      level: 0,
+      speaking: false,
+      pending: { text: msg.text, attachments: prev.pending?.attachments ?? [] },
+    }))
+    this.armTurnTimeout()
+    this.announce(t('heard', { text: msg.text }))
   }
 
   onTurn(msg: AssistantTurn): void {
@@ -395,6 +512,7 @@ export class BarController {
       sessionId: msg.session_id ?? null,
       source: msg.source,
       text: msg.text,
+      attachments: (msg.attachments ?? []).map((a) => ({ kind: a.kind, title: a.title })),
       recordingId: msg.recording_id ?? null,
       reply: '',
       replyRecordingId: null,
@@ -404,29 +522,31 @@ export class BarController {
       actionIds: [],
     }
     this.set((s) => {
-      const exists = s.turns.some((t) => t.turnId === msg.turn_id)
+      const exists = s.turns.some((x) => x.turnId === msg.turn_id)
       const turns = exists
-        ? s.turns.map((t) => (t.turnId === msg.turn_id ? { ...t, ...turn, cards: t.cards, actionIds: t.actionIds } : t))
+        ? s.turns.map((x) => (x.turnId === msg.turn_id ? { ...x, ...turn, cards: x.cards, actionIds: x.actionIds } : x))
         : [...s.turns, turn]
       return { turns, selected: `reply:${msg.turn_id}` }
     })
     const s = this.s
     if (msg.session_id && msg.session_id === s.sessionId && (s.mode === 'finalizing' || s.mode === 'waiting')) {
       this.clearTurnTimeout()
-      this.set({ mode: 'waiting', text: '', pendingText: null })
+      this.sentWithSpeech = []
+      this.set({ mode: 'waiting', transcript: '', pending: null })
     }
   }
 
   onDelta(msg: AssistantDelta): void {
-    this.updateTurn(msg.turn_id, (t) => ({ reply: t.reply + msg.text }))
+    this.updateTurn(msg.turn_id, (x) => ({ reply: x.reply + msg.text }))
   }
 
   onCard(msg: AssistantCard): void {
-    this.updateTurn(msg.turn_id, (t) => ({
+    this.updateTurn(msg.turn_id, (x) => ({
       cards: [
-        ...t.cards,
+        // A list shown again in the same turn replaces itself instead of piling up.
+        ...x.cards.filter((c) => c.kind !== msg.kind),
         {
-          id: `${msg.turn_id}:${t.cards.length}`,
+          id: `${msg.turn_id}:${msg.kind}`,
           turnId: msg.turn_id,
           kind: msg.kind,
           title: msg.title,
@@ -435,7 +555,6 @@ export class BarController {
         },
       ],
     }))
-    if (msg.kind === 'keys') this.set({ keyEntry: true })
   }
 
   onAction(msg: AssistantAction): void {
@@ -455,14 +574,12 @@ export class BarController {
           message: null,
         },
       },
-      turns: s.turns.map((t) =>
-        t.turnId === msg.turn_id && !t.actionIds.includes(msg.action_id)
-          ? { ...t, actionIds: [...t.actionIds, msg.action_id] }
-          : t,
+      turns: s.turns.map((x) =>
+        x.turnId === msg.turn_id && !x.actionIds.includes(msg.action_id) ? { ...x, actionIds: [...x.actionIds, msg.action_id] } : x,
       ),
       selected: `action:${msg.action_id}`,
     }))
-    this.announce(`${msg.summary}. Press Enter to confirm, or Escape to cancel.`)
+    this.announce(`${msg.summary}. ${t('confirm_hint')}`)
   }
 
   onActionResolved(msg: AssistantActionResolved): void {
@@ -470,33 +587,30 @@ export class BarController {
   }
 
   onDone(msg: AssistantDone): void {
-    const errorText =
-      msg.error && typeof msg.error === 'object'
-        ? String((msg.error as Record<string, unknown>).detail ?? (msg.error as Record<string, unknown>).title ?? 'Something went wrong.')
-        : null
-    const errorCode =
-      msg.error && typeof msg.error === 'object' ? String((msg.error as Record<string, unknown>).code ?? '') || null : null
-    this.updateTurn(msg.turn_id, (t) => ({
+    const problem = msg.error && typeof msg.error === 'object' ? (msg.error as Record<string, unknown>) : null
+    const errorText = problem ? String(problem.detail ?? problem.title ?? msg.text ?? '') : null
+    const errorCode = problem ? String(problem.code ?? '') || null : null
+    this.updateTurn(msg.turn_id, (x) => ({
       done: true,
-      reply: msg.text ? msg.text : t.reply,
+      reply: msg.text ? msg.text : x.reply,
       replyRecordingId: msg.reply_recording_id ?? null,
       error: errorText,
       errorCode,
     }))
     const s = this.s
-    const turn = s.turns.find((t) => t.turnId === msg.turn_id)
+    const turn = s.turns.find((x) => x.turnId === msg.turn_id)
     if (turn) this.announce(turn.error ?? turn.reply)
     const ours = !!turn?.sessionId && turn.sessionId === s.sessionId
     if (!ours || s.mode !== 'waiting') return
     const hasPending = !!turn && turn.actionIds.some((id) => s.actions[id]?.status === 'pending')
-    if (hasPending && turn?.source === 'spoken' && s.open) {
+    if (hasPending && turn?.source === 'spoken' && s.open && composerEmpty(s)) {
       // Wait for a spoken "yes" / "no" (the engine resolves it); Enter and Esc still work.
       this.startListening()
     } else {
       // The turn is over: reading resumes after the reply even if the bar stays open (07 § Ducking).
       // The engine still holds reading while the spoken reply itself plays.
       this.deps.send({ type: 'bar.state', open: false })
-      this.set({ mode: 'typing', text: '' })
+      this.set({ mode: 'typing' })
       this.armIdle()
     }
   }
@@ -508,17 +622,18 @@ export class BarController {
   onError(msg: ErrorMsg): void {
     const p = msg.problem
     const text = typeof p.detail === 'string' && p.detail ? p.detail : typeof p.title === 'string' ? p.title : 'Engine error.'
-    if (p.code === 'missing_key' && this.s.mode === 'listening') {
-      // No speech-to-text set up: not an error the user caused. Type instead; the placeholder says why.
+    if (p.code === 'unavailable' && this.s.mode === 'listening') {
+      // Listening isn't set up here: not an error the user caused. They can type; the orb says why.
       this.stopMic(false)
-      this.set({ mode: 'typing', canListen: false, level: 0, speaking: false })
+      this.composer?.dropDictation()
+      this.set({ mode: 'typing', canListen: false, level: 0, speaking: false, hint: text })
       this.announce(text)
       return
     }
     this.notice('error', text)
     if (this.s.mode === 'finalizing' || this.s.mode === 'waiting') {
       this.clearTurnTimeout()
-      this.set({ mode: 'typing', pendingText: null })
+      this.set({ mode: 'typing', pending: null })
     }
   }
 
@@ -557,7 +672,7 @@ export class BarController {
   // ---------------------------------------------------------------- internals
 
   private ensureTurn(turnId: string): void {
-    if (this.s.turns.some((t) => t.turnId === turnId)) return
+    if (this.s.turns.some((x) => x.turnId === turnId)) return
     this.set((s) => ({
       turns: [
         ...s.turns,
@@ -566,6 +681,7 @@ export class BarController {
           sessionId: null,
           source: 'typed',
           text: '',
+          attachments: [],
           recordingId: null,
           reply: '',
           replyRecordingId: null,
@@ -578,29 +694,31 @@ export class BarController {
     }))
   }
 
-  private updateTurn(turnId: string, fn: (t: TurnModel) => Partial<TurnModel>): void {
+  private updateTurn(turnId: string, fn: (x: TurnModel) => Partial<TurnModel>): void {
     this.ensureTurn(turnId)
-    this.set((s) => ({ turns: s.turns.map((t) => (t.turnId === turnId ? { ...t, ...fn(t) } : t)) }))
+    this.set((s) => ({ turns: s.turns.map((x) => (x.turnId === turnId ? { ...x, ...fn(x) } : x)) }))
   }
 
   private armIdle(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer)
     this.idleTimer = setTimeout(() => {
       this.idleTimer = null
-      if (this.s.open && !this.s.speaking && !this.s.text) this.set({ idle: true })
+      const s = this.s
+      if (s.open && !s.speaking && !s.transcript && composerEmpty(s)) this.set({ idle: true })
     }, IDLE_SUGGESTIONS_MS)
   }
 
-  private armMicOff(): void {
+  private armMicOff(delayMs = MIC_IDLE_OFF_MS): void {
     if (this.micOffTimer) clearTimeout(this.micOffTimer)
     this.micOffTimer = setTimeout(() => {
       this.micOffTimer = null
       const s = this.s
-      if (s.mode === 'listening' && !this.vad.hasSpeech && !s.text) {
-        this.stopMic(false)
-        this.set({ mode: 'typing', level: 0, hint: 'Microphone off. Press Tab to talk.' })
-      }
-    }, MIC_IDLE_OFF_MS)
+      if (s.mode !== 'listening' || this.vad.hasSpeech || s.transcript) return
+      // Someone starting to speak at this very moment is not idle: look again shortly.
+      if (this.vad.maybeSpeech) return this.armMicOff(MIC_OFF_RECHECK_MS)
+      this.stopMic(false)
+      this.set({ mode: 'typing', level: 0, hint: t('mic_off') })
+    }, delayMs)
   }
 
   private armTurnTimeout(): void {
@@ -609,8 +727,8 @@ export class BarController {
       this.turnTimer = null
       const s = this.s
       if (s.mode === 'finalizing' || s.mode === 'waiting') {
-        this.set({ mode: 'typing', pendingText: null })
-        this.notice('warn', 'The engine did not answer. Try again.')
+        this.set({ mode: 'typing', pending: null, dictating: false })
+        this.notice('warn', t('no_answer'))
       }
     }, TURN_START_TIMEOUT_MS)
   }

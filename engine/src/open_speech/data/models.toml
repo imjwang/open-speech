@@ -3,7 +3,7 @@
 # Every model ID the engine uses comes from here; nothing is hard-coded elsewhere. User overrides in
 # app data (`models.toml`) are deep-merged over this file: tables merge, scalars and lists replace.
 #
-# Layout: [tts.<provider>."<model>"], [stt.<provider>], [llm.<provider>].
+# Layout: [tts.<provider>."<model>"], [stt.<provider>], [stt.local."<model>"], [llm.<provider>].
 # Voice IDs are "provider:model:voice" (04 § Conventions).
 
 # ------------------------------------------------------------------------------------------- TTS
@@ -17,7 +17,7 @@ style = "instructions"
 stream = true
 max_input_chars = 4000          # (verify)
 timestamps = false
-languages = ["en"]
+languages = []                  # multilingual: the voice follows the language of the text
 
 [tts.gemini."gemini-3.8-flash-tts"]
 name = "Gemini Flash TTS"
@@ -31,7 +31,7 @@ style = "speech_metadata"
 stream = true
 max_input_chars = 4000          # (verify)
 timestamps = false
-languages = ["en"]
+languages = []                  # multilingual: the voice follows the language of the text
 
 [tts.gemini."gemini-3.8-flash-lite-tts"]
 inherit = "gemini-3.8-flash-tts"
@@ -44,16 +44,18 @@ local = true
 license = "Apache-2.0"
 ram_gb = 1.3
 speed = "~10x real time on CPU"
-languages = ["en-US", "en-GB"]  # more via optional phonemizer extras
+languages = ["en-US", "en-GB", "es"]  # one built-in phonemizer per language (providers/g2p*.py)
 timestamps = true
 max_input_chars = 4000
 sample_rate = 24000
 max_tokens = 510                # model context minus the two pad tokens
+# The first letter of a voice name is its language: a = American English, b = British English, e = Spanish.
 voices = [
   "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole", "af_nova",
   "af_river", "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam",
   "am_michael", "am_onyx", "am_puck", "bf_alice", "bf_emma", "bf_isabella", "bf_lily",
   "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
+  "ef_dora", "em_alex", "em_santa",
 ]
 
 [tts.kokoro."kokoro-82m-v1.0".weights]
@@ -135,6 +137,49 @@ api_version = "v1beta"
 [stt.fixture]
 test_only = true
 batch = ["fixture-stt"]
+
+# On-device speech-to-text, run by sherpa-onnx (providers/local_stt.py). No key, offline, free; the default
+# for the command bar when its weights are present. Weights are pinned by commit + sha256 per file and live
+# in `models/stt/<model>/` (app data, or read-only inside the packaged app).
+[stt.local]
+default = "parakeet-tdt-0.6b-v3-int8"
+
+# NVIDIA Parakeet TDT 0.6B v3 (int8 ONNX export for sherpa-onnx). Chosen by measurement on an Apple M4
+# (2026-11-21) over Canary 180M Flash and Whisper base: the best exact-match rate for spoken commands and
+# dictated sentences in English and Spanish, and it needs no language hint.
+[stt.local."parakeet-tdt-0.6b-v3-int8"]
+name = "Parakeet speech recognition"
+family = "nemo_transducer"
+license = "CC-BY-4.0"            # the recognizer; the Silero VAD that ships with it is MIT
+ram_gb = 2.0                     # measured: the engine grows by ~1.9 GB while it is loaded (2.5 GB decoding 30 s)
+speed = "~25x real time on CPU"  # 2 threads: a 3 s command in ~0.14 s, 6 s in ~0.2 s
+num_threads = 2                  # 1 thread doubles those times, 4 threads take off a third
+languages = [                    # detected automatically; the model takes no language hint
+  "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el", "hu", "it", "lv", "lt", "mt", "pl",
+  "pt", "ro", "sk", "sl", "es", "sv", "ru", "uk",
+]
+encoder = "encoder.int8.onnx"
+decoder = "decoder.int8.onnx"
+joiner = "joiner.int8.onnx"
+tokens = "tokens.txt"
+vad = "silero_vad.onnx"          # keeps non-speech (hiss, clicks, coughs) from being transcribed as words
+
+[stt.local."parakeet-tdt-0.6b-v3-int8".weights]
+url = "hf://csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
+revision = "ed5d745623472f97cfc2e6c2916ee248798fc5a8"  # pinned; same commit the app bundles
+quant = "int8"
+size_mb = 642
+model_file = "encoder.int8.onnx"
+tokenizer_file = "tokens.txt"
+# sha256 of every file at the pinned commits (Hugging Face LFS hashes; tokens.txt hashed after download,
+# 2026-11-21). Silero VAD v5 comes from the sherpa-onnx author's VAD repository, pinned the same way.
+files = [
+  { path = "encoder.int8.onnx", sha256 = "1afbe69c1ffdabee94755f42e4daf1d93549131a3da11356bda84fcef0f2c479", size_mb = 622.1 },
+  { path = "decoder.int8.onnx", sha256 = "0222a86147299d4dee90edf95b6d13827edb42ad8b7c9cf0b2582f030937c0b5", size_mb = 11.3 },
+  { path = "joiner.int8.onnx", sha256 = "cbd02f3696e9944970111fb439d9c3fd365a80374565f13f2b9c7007d253fc98", size_mb = 6.1 },
+  { path = "tokens.txt", sha256 = "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d", size_mb = 0.1 },
+  { path = "silero_vad.onnx", sha256 = "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396", size_mb = 2.2, url = "https://huggingface.co/csukuangfj/vad/resolve/fba88cd2e921609e7675c3aaf51e0b9b295da4bc/silero_vad_v5.onnx" },
+]
 
 # ------------------------------------------------------------------------------------------- LLM
 

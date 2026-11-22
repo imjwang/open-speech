@@ -9,13 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import functools
 import logging
-import os
 import re
-import subprocess
-import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -24,7 +20,9 @@ import soundfile as sf
 
 from open_speech.api import schemas as s
 from open_speech.api.ws_schema import ErrorMsg, SttFinal, SttPartial
-from open_speech.errors import MissingKey
+from open_speech.errors import Unavailable
+from open_speech.i18n import resolve_language
+from open_speech.ids import sha256_hex
 from open_speech.providers.base import Units
 
 if TYPE_CHECKING:
@@ -48,6 +46,7 @@ class MicSession:
     provider_id: str = ""
     model: str = ""
     transcribe_only: bool = False
+    attachments: list[s.Attachment] = field(default_factory=list)
 
 
 class VoiceInputService:
@@ -62,11 +61,8 @@ class VoiceInputService:
                 await self._finish(self._active, submit=False)
             stt = self.e.registry.stt()
             if stt is None:
-                err = MissingKey("openai", "Speech input")
-                err.detail = (
-                    "Speech input needs an OpenAI or Gemini key. You can type instead, or paste a key into the bar."
-                )
-                self.e.events.publish(ErrorMsg(problem=err.problem()))
+                reason, _ = self.e.registry.stt_unavailable()
+                self.e.events.publish(ErrorMsg(problem=Unavailable("speech_input", detail=reason).problem()))
                 self._active = None
                 return
             sess = MicSession(
@@ -87,11 +83,14 @@ class VoiceInputService:
         sess.pcm.extend(data)
         sess.queue.put_nowait(data)
 
-    async def stop(self, session_id: str, *, submit: bool = True) -> None:
+    async def stop(
+        self, session_id: str, *, submit: bool = True, attachments: Sequence[s.Attachment] = ()
+    ) -> None:
         async with self._lock:
             sess = self._active
             if sess is None or sess.id != session_id or sess.finished:
                 return
+            sess.attachments = list(attachments)
             await self._finish(sess, submit=submit)
 
     async def _pcm_iter(self, sess: MicSession) -> AsyncIterator[bytes]:
@@ -103,7 +102,7 @@ class VoiceInputService:
 
     async def _run_stt(self, sess: MicSession, stt: object) -> None:
         try:
-            lang = stt_language(self.e.settings.get().voice_input.language)
+            lang = resolve_language(self.e.settings.get().language)
             async for ev in stt.stream(self._pcm_iter(sess), lang=lang):  # type: ignore[attr-defined]
                 if ev.kind == "partial":
                     sess.partial = ev.text
@@ -130,7 +129,7 @@ class VoiceInputService:
         if not submit:
             return
         text = (sess.final if sess.final is not None else sess.partial).strip()
-        if is_noise_transcript(text, lang=stt_language(self.e.settings.get().voice_input.language)):
+        if is_noise_transcript(text, lang=resolve_language(self.e.settings.get().language)):
             # Speech-to-text turns coughs, hums and room noise into "um", "음" or "Thank you." Treat it as
             # nothing heard instead of sending it to the assistant (and paying for a turn).
             text = ""
@@ -147,10 +146,44 @@ class VoiceInputService:
         self.e.events.publish(
             SttFinal(session_id=sess.id, text=text, recording_id=rec_id, duration_s=round(duration, 2))
         )
+        if text:
+            self._remember_transcript(sess, text, rec_id, duration)
         if text and not sess.transcribe_only:
             await self.e.assistant.submit(
-                s.TurnRequest(text=text, source="spoken", session_id=sess.id, recording_id=rec_id, context=sess.context)
+                s.TurnRequest(
+                    text=text,
+                    source="spoken",
+                    session_id=sess.id,
+                    recording_id=rec_id,
+                    context=sess.context,
+                    attachments=sess.attachments,
+                )
             )
+
+    def _remember_transcript(self, sess: MicSession, text: str, rec_id: str | None, duration: float) -> None:
+        """Keep what a recording says under the hash of its audio (the asset store's "transcript" kind), so
+        a recording never has to be transcribed twice. Follows the recording-retention setting."""
+        if rec_id is None:
+            return
+        lang = resolve_language(self.e.settings.get().language)
+        key = transcript_key(bytes(sess.pcm), sess.provider_id, sess.model, lang)
+        try:
+            self.e.assets.put(
+                "transcript",
+                key,
+                text.encode("utf-8"),
+                ext=".txt",
+                text=text,
+                meta={
+                    "provider": sess.provider_id,
+                    "model": sess.model,
+                    "language": lang,
+                    "duration_s": round(duration, 2),
+                    "recording_id": rec_id,
+                },
+            )
+        except OSError as e:
+            log.warning("could not store transcript: %s", e)
 
     def _save_recording(self, sess: MicSession, duration: float) -> str | None:
         if duration <= 0.05 or not self.e.recordings.keep_recordings():
@@ -166,30 +199,9 @@ class VoiceInputService:
             return None
 
 
-@functools.cache
-def _system_language() -> str | None:
-    """ISO 639-1 code of the Mac's first preferred language ("en" from "en-US"), or the POSIX locale."""
-    if sys.platform == "darwin":
-        try:
-            out = subprocess.run(
-                ["defaults", "read", "-g", "AppleLanguages"], capture_output=True, text=True, timeout=2
-            ).stdout
-            m = re.search(r'"?([a-z]{2,3})(?:[-_][A-Za-z]+)*"?', out.replace("(", " "))
-            if m:
-                return m.group(1)
-        except (OSError, subprocess.SubprocessError):
-            pass
-    loc = os.environ.get("LC_ALL") or os.environ.get("LANG") or ""
-    m = re.match(r"([a-z]{2,3})[_.-]", loc)
-    return m.group(1) if m else None
-
-
-def stt_language(setting: str) -> str | None:
-    """The language hint to send with speech input: an explicit setting wins, "auto" uses the system's."""
-    s = (setting or "auto").strip().lower()
-    if s and s != "auto":
-        return s.split("-")[0].split("_")[0]
-    return _system_language()
+def transcript_key(pcm: bytes, provider: str, model: str, language: str | None) -> str:
+    """What a transcript is filed under: the audio itself plus what transcribed it."""
+    return sha256_hex("transcript", pcm, provider, model, language or "")
 
 
 _FILLERS = {

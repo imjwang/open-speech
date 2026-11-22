@@ -80,8 +80,7 @@ def map_provider_error(provider: str, exc: BaseException, *, feature: str = "spe
     if status in (401, 403):
         return ProviderError(
             "provider_error",
-            f"Your {name} key was rejected. Paste a new one into the bar, or I can keep reading with the "
-            "local voice.",
+            f"{name} turned the request down, so I'll keep reading with the local voice.",
             provider=provider,
             status=status,
             key_invalid=True,

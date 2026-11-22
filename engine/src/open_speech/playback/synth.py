@@ -28,9 +28,10 @@ from typing import Any
 import numpy as np
 from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_random_exponential
 
-from open_speech.cache.audio import AudioCache, CachedAudio
+from open_speech.cache.audio import AudioCache, CachedAudio, VoiceRef
 from open_speech.config import UserSettings
 from open_speech.errors import BudgetExceeded, EngineError
+from open_speech.i18n import t
 from open_speech.playback.timing import estimate_word_timings, voiced_bounds
 from open_speech.providers.base import TtsProvider, TtsRequest, WordTiming
 from open_speech.providers.errors import is_retryable, map_provider_error, provider_name
@@ -41,6 +42,9 @@ from open_speech.usage.budget import BudgetGuard
 from open_speech.usage.ledger import Ledger
 
 log = logging.getLogger(__name__)
+
+# (pcm float32 mono, sample rate, word timings, voice actually used). See `Synthesizer.synth(on_audio=…)`.
+AudioReady = Callable[[np.ndarray, int, list[WordTiming], str], None]
 
 
 @dataclass
@@ -99,26 +103,30 @@ class Synthesizer:
         document_id: str | None = None,
         turn_id: str | None = None,
         op: str = "tts",
+        on_audio: AudioReady | None = None,
     ) -> SynthResult:
+        """`on_audio` is called on the loop as soon as freshly synthesized audio exists, before it is encoded
+        and stored, so a player can start without waiting for the Opus encode and a decode of the file just
+        written (NFR-1, time to first audio). It is not called on a cache hit."""
         notices: list[str] = []
         try:
             res = self._resolve(voice_id)
         except EngineError as exc:
             res = await self._fallback_resolve(voice_id, exc, notices)
         try:
-            return await self._synth_with(res, text, style, document_id, turn_id, op, notices)
+            return await self._synth_with(res, text, style, document_id, turn_id, op, notices, on_audio)
         except BudgetExceeded as exc:
             if res.local:
                 raise
             res = await self._fallback_resolve(res.voice_id, exc, notices, reason="budget")
-            return await self._synth_with(res, text, style, document_id, turn_id, op, notices)
+            return await self._synth_with(res, text, style, document_id, turn_id, op, notices, on_audio)
         except EngineError as exc:
             if res.local:
                 raise
             if getattr(exc, "key_invalid", False):
                 self.registry.keys.mark_invalid(res.provider.id)
             res = await self._fallback_resolve(res.voice_id, exc, notices, reason="failure")
-            return await self._synth_with(res, text, style, document_id, turn_id, op, notices)
+            return await self._synth_with(res, text, style, document_id, turn_id, op, notices, on_audio)
 
     def cached(self, text: str, voice_id: str, *, style: str | None = None) -> CachedAudio | None:
         """Cache lookup without side effects on the ledger (used for prefetch decisions and estimates)."""
@@ -169,18 +177,15 @@ class Synthesizer:
 
     @staticmethod
     def _notice(reason: str, failed_voice: str, exc: EngineError, local: bool) -> str:
-        target = "the local voice" if local else "another voice"
+        target = t("notice.local_voice") if local else t("notice.another_voice")
         name = provider_name(failed_voice.split(":", 1)[0])
         if reason == "budget":
-            return f"Budget reached; reading with {target}."
+            return t("notice.budget", target=target)
         if exc.code == "offline":
-            return f"I couldn't reach {name}; reading with {target}."
-        if exc.code == "missing_key":
-            article = "an" if name[:1] in "AEIOU" else "a"
-            return f"That voice needs {article} {name} key; reading with {target}."
-        if reason == "unavailable":
-            return f"That voice isn't available right now; reading with {target}."
-        return f"{name} isn't responding; reading with {target}."
+            return t("notice.offline", name=name, target=target)
+        if exc.code == "unavailable" or reason == "unavailable":
+            return t("notice.unavailable", target=target)
+        return t("notice.not_responding", name=name, target=target)
 
     # ------------------------------------------------------------------ synthesis
 
@@ -193,11 +198,13 @@ class Synthesizer:
         turn_id: str | None,
         op: str,
         notices: list[str],
+        on_audio: AudioReady | None = None,
     ) -> SynthResult:
         prov, model, voice = res.provider, res.req.model, res.req.voice
         style_ok = bool(style) and prov.limits(model).style
-        if style and not style_ok and not any("style" in n for n in notices):
-            notices.append("This voice doesn't take style instructions, so I'm reading without them.")
+        no_style = t("notice.no_style")
+        if style and not style_ok and no_style not in notices:
+            notices.append(no_style)
         eff_style = style if style_ok else None
         key = AudioCache.key(text, prov.id, model, voice, eff_style)
         req = TtsRequest(text=text, model=model, voice=voice, style=eff_style, language=res.req.language)
@@ -227,7 +234,9 @@ class Synthesizer:
         fut = loop.create_future()
         self._inflight[key] = fut
         try:
-            audio, usd = await self._call(prov, req, key, res.local, op, document_id, turn_id)
+            audio, usd = await self._call(
+                prov, req, key, res.local, op, document_id, turn_id, on_audio=on_audio, voice_id=res.voice_id
+            )
             fut.set_result(audio)
         except BaseException as exc:
             fut.set_exception(exc)
@@ -246,6 +255,9 @@ class Synthesizer:
         op: str,
         document_id: str | None,
         turn_id: str | None,
+        *,
+        on_audio: AudioReady | None = None,
+        voice_id: str = "",
     ) -> tuple[CachedAudio, Decimal]:
         pcm_parts: list[bytes] = []
         encoded: list[bytes] = []
@@ -291,10 +303,16 @@ class Synthesizer:
             start, end = voiced_bounds(pcm, sr)
             words = estimate_word_timings(req.text, duration, speech_start_s=start, speech_end_s=end)
         words.sort(key=lambda w: w.start)
+        if on_audio is not None:
+            try:
+                on_audio(pcm, sr, list(words), voice_id)
+            except Exception:
+                log.exception("on_audio hook failed")
+        ref = VoiceRef(prov.id, req.model, req.voice, req.style)
         if enc is not None and enc[:4] == b"OggS":
-            audio = await asyncio.to_thread(self.cache.put_encoded, key, enc, words)
+            audio = await asyncio.to_thread(self.cache.put_encoded, key, enc, words, text=req.text, voice=ref)
         else:
-            audio = await asyncio.to_thread(self.cache.put, key, pcm, sr, words)
+            audio = await asyncio.to_thread(self.cache.put, key, pcm, sr, words, text=req.text, voice=ref)
         usd = self.ledger.record(
             provider=prov.id, model=req.model, op=op, units=prov.price_units(req, duration),
             document_id=document_id, turn_id=turn_id, local=local,

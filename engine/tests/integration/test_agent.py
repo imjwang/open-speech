@@ -7,7 +7,6 @@ from typing import Any
 
 import httpx2
 import pytest
-from fastapi.testclient import TestClient
 
 from open_speech.api import schemas as s
 from open_speech.config import UserSettings
@@ -24,7 +23,9 @@ class ScriptedRunner:
         self.results: list[str] = []
         self.users: list[str] = []
 
-    async def run(self, *, system: str, history: Any, user: str, tools: Any, model: str, effort: str, on_delta: Any) -> Any:
+    async def run(
+        self, *, system: str, history: Any, user: str, tools: Any, model: str, effort: str, on_delta: Any
+    ) -> Any:
         from open_speech.providers.anthropic_agent import AgentResult
         from open_speech.providers.base import Units
 
@@ -33,7 +34,9 @@ class ScriptedRunner:
         for name, args in self.script:
             self.results.append(await by_name[name](**args))
         on_delta(self.reply)
-        return AgentResult(text=self.reply, units=Units(in_tok=1200, out_tok=40), model=model, tool_calls=[n for n, _ in self.script])
+        return AgentResult(
+            text=self.reply, units=Units(in_tok=1200, out_tok=40), model=model, tool_calls=[n for n, _ in self.script]
+        )
 
 
 def test_agent_set_default_voice_needs_confirmation(engine_factory: Any) -> None:
@@ -43,8 +46,12 @@ def test_agent_set_default_voice_needs_confirmation(engine_factory: Any) -> None
         return holder["r"]
 
     engine, client = engine_factory(agent_runner_factory=factory)
-    voice = next(v for v in engine.registry.voices() if v.available)
-    holder["r"] = ScriptedRunner([("list_voices", {}), ("set_voice", {"voice_id": voice.id, "scope": "default"})], f"Make {voice.name} the default voice?")
+    current = engine.settings.get().defaults.voice
+    voice = next(v for v in engine.registry.voices() if v.available and v.id != current)
+    holder["r"] = ScriptedRunner(
+        [("list_voices", {}), ("set_voice", {"voice_id": voice.id, "scope": "default"})],
+        f"Make {voice.name} the default voice?",
+    )
     with ws_connect(client) as ws:
         reader = WsReader(ws)
         r = turn(client, reader, "use a calmer voice for everything")
@@ -52,7 +59,7 @@ def test_agent_set_default_voice_needs_confirmation(engine_factory: Any) -> None
         assert r["deltas"], "reply text streams"
         assert r["actions"] and r["actions"][0]["kind"] == "set_voice"
         assert "pending_confirmation" in holder["r"].results[-1]
-        assert engine.settings.get().defaults.voice != voice.id or True  # unchanged until confirmed
+        assert engine.settings.get().defaults.voice == current, "nothing changes until the user confirms"
         turn(client, reader, "yes")
     assert engine.settings.get().defaults.voice == voice.id
     chat = [x for x in client.get("/api/v1/usage/ledger").json()["items"] if x["op"] == "chat"]
@@ -78,17 +85,21 @@ def test_document_text_is_tagged_data(engine_factory: Any) -> None:
 @pytest.mark.asyncio
 async def test_every_setting_is_readable_and_writable_via_tools(engine_factory: Any) -> None:
     """FR-ASST-3 parity: every key in the settings schema is reachable through a tool."""
-    from open_speech.agent.tools import build_tools
+    from open_speech.agent.tools import INSTANT_SETTINGS, TurnGuard, build_tools
+    from open_speech.service.commands import Turn
 
     engine, client = engine_factory()
-    tools = {t.__name__: t for t in build_tools(engine, turn_id="turn_test", context=s.TurnContext())}
+    turn_ = Turn(id="turn_test", request=s.TurnRequest(text="settings"))
+    tools = {t.__name__: t for t in build_tools(engine, turn=turn_, guard=TurnGuard())}
     listed = json.loads(await tools["get_settings"]())
     assert set(listed["keys"]) == set(UserSettings.keys())
+    assert {"appearance.theme", "language"} <= INSTANT_SETTINGS <= set(UserSettings.keys())
     current = engine.settings.get()
     for key in UserSettings.keys():
         value = current.get(key)
         res = json.loads(await tools["update_setting"](key=key, value=json.dumps(value)))
-        assert res.get("status") == "pending_confirmation", (key, res)
+        # What is visible at once and undone by saying so applies directly; everything else waits on a card.
+        assert res.get("status") == ("done" if key in INSTANT_SETTINGS else "pending_confirmation"), (key, res)
     pending = engine.assistant.latest_pending()
     assert pending is not None
     res = await engine.assistant.confirm(pending.action_id)
@@ -99,14 +110,20 @@ def test_mutating_tools_never_mutate_directly(engine_factory: Any) -> None:
     holder: dict[str, ScriptedRunner] = {}
     engine, client = engine_factory(agent_runner_factory=lambda: holder["r"])
     holder["r"] = ScriptedRunner(
-        [("set_budget", {"monthly_usd": "999"}), ("set_preset", {"preset": "Footnotes", "enabled": True})],
+        [("set_budget", {"monthly_usd": "999"}), ("set_preset", {"preset": "Tables", "enabled": True})],
         "Want me to change those?",
     )
+
+    def tables_skipped() -> bool:
+        presets = client.get("/api/v1/rules/presets").json()["presets"]
+        return bool({p["name"]: p["enabled"] for p in presets}["Tables"])
+
+    assert not tables_skipped(), "tables are read by default"
     with ws_connect(client) as ws:
         reader = WsReader(ws)
-        turn(client, reader, "raise my budget and skip footnotes")
+        turn(client, reader, "raise my budget and skip tables")
     assert client.get("/api/v1/usage/budget").json()["monthly_usd"] == "10"
-    assert not {p["name"]: p["enabled"] for p in client.get("/api/v1/rules/presets").json()["presets"]}.get("Footnotes") or True
+    assert not tables_skipped(), "the preset waits for a yes, like the budget"
 
 
 # ------------------------------------------------------------------ the real Tool Runner adapter over HTTP
@@ -114,9 +131,19 @@ def test_mutating_tools_never_mutate_directly(engine_factory: Any) -> None:
 
 def _msg(content: list[dict[str, Any]], stop: str, mid: str) -> dict[str, Any]:
     return {
-        "id": mid, "type": "message", "role": "assistant", "model": "claude-sonnet-5-5", "content": content,
-        "stop_reason": stop, "stop_sequence": None,
-        "usage": {"input_tokens": 900, "output_tokens": 30, "cache_read_input_tokens": 800, "cache_creation_input_tokens": 0},
+        "id": mid,
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-sonnet-5-5",
+        "content": content,
+        "stop_reason": stop,
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": 900,
+            "output_tokens": 30,
+            "cache_read_input_tokens": 800,
+            "cache_creation_input_tokens": 0,
+        },
     }
 
 
@@ -150,11 +177,18 @@ async def test_anthropic_runner_executes_tools_and_counts_usage() -> None:
 
     # The vendor SDKs use httpx2 (not httpx), so respx can't intercept them: mock the transport instead.
     http = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
-    client = AsyncAnthropic(api_key="sk-ant-test", base_url="https://api.anthropic.com", http_client=http, max_retries=0)
+    client = AsyncAnthropic(
+        api_key="sk-ant-test", base_url="https://api.anthropic.com", http_client=http, max_retries=0
+    )
     runner = AnthropicAgentRunner(client=client, stream=False)
     deltas: list[str] = []
     res = await runner.run(
-        system="sys", history=[], user="read at 1.8", tools=[set_speed], model="claude-sonnet-5-5", effort="low",
+        system="sys",
+        history=[],
+        user="read at 1.8",
+        tools=[set_speed],
+        model="claude-sonnet-5-5",
+        effort="low",
         on_delta=deltas.append,
     )
     assert calls == [1.8]

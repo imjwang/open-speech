@@ -33,7 +33,7 @@ from typing import Literal
 
 import numpy as np
 
-from open_speech.api.schemas import PlaybackState, PlaybackStatus
+from open_speech.api.schemas import PlaybackState, PlaybackStatus, QueueItem
 from open_speech.api.ws_schema import ErrorMsg, PlaybackStateMsg, PlaybackWord
 from open_speech.cache.audio import CachedAudio
 from open_speech.config import UserSettings
@@ -114,6 +114,8 @@ class Transport:
         settings: Callable[[], UserSettings],
         on_position: PositionCallback,
         anchor_resolver: AnchorResolver | None = None,
+        on_finished: Callable[[str], None] | None = None,
+        queue: Callable[[], list[QueueItem]] | None = None,
         sample_rate: int = SAMPLE_RATE,
         tick_s: float = 0.02,
         progress_interval_s: float = 1.0,
@@ -127,6 +129,8 @@ class Transport:
         self._settings = settings
         self._on_position = on_position
         self._resolve_anchor = anchor_resolver
+        self._on_finished = on_finished  # the last utterance of a document finished playing
+        self._queue = queue  # what reads next (owned by the playback service; shown in every snapshot)
         self.sample_rate = sample_rate
         self._tick_s = tick_s
         self._progress_s = progress_interval_s
@@ -386,6 +390,7 @@ class Transport:
             progress=round(self._progress(), 4) if utts else 0.0,
             fallback_notice=self._notice,
             error=self._error,
+            queue=self._queue() if self._queue else [],
         )
 
     def position(self) -> tuple[str | None, int, int]:
@@ -590,6 +595,11 @@ class Transport:
         n = len(self._script.utterances)
         ahead = 0.0
         running = sum(1 for t in self._tasks.values() if not t.done())
+        # A local voice is synthesized on this machine's CPU, so a second synthesis running next to the one
+        # the listener is waiting for only delays it. Until the playhead has audio it runs alone (NFR-1);
+        # cloud voices wait on the network instead and keep prefetching in parallel.
+        head = self._key(self._index) if self._index < n else None
+        head_alone = head is not None and head not in self._prepared and self._local_voice(head[1])
         for j in range(self._index, n):
             key = self._key(j)
             est = self._duration_est(j)
@@ -600,7 +610,10 @@ class Transport:
             else:
                 if not must and (ahead >= target or ahead + est > s.max_ahead_seconds):
                     break
-                if running >= self._max_parallel:
+                if j != self._index and head_alone:
+                    break
+                # After a skip the playhead may run next to prefetch that is still finishing, one over the cap.
+                if running >= self._max_parallel + (1 if j == self._index else 0):
                     break
                 self._start_task(j, key)
                 running += 1
@@ -629,22 +642,21 @@ class Transport:
 
     async def _prepare(self, index: int, key: tuple[str, str, str | None]) -> None:
         text, voice, style = key
+
+        def fresh(pcm: np.ndarray, sr: int, words: list[WordTiming], voice_id: str) -> None:
+            # Newly synthesized audio, before it is encoded and cached: play it now rather than after the
+            # Opus encode and a decode of the file just written (NFR-1, time to first audio).
+            if sr == self.sample_rate:
+                self._adopt(index, key, voice_id, np.asarray(pcm, dtype=np.float32), words)
+
         try:
-            res = await self.synth.synth(text, voice, style=style, document_id=self._doc_id, op="tts")
-            pcm = await asyncio.to_thread(self._load_cached, res.audio)
-            words = list(res.audio.words)
-            self._prepared[key] = _Prepared(res.voice_id, pcm, words, pcm.size / self.sample_rate)
+            res = await self.synth.synth(text, voice, style=style, document_id=self._doc_id, op="tts", on_audio=fresh)
+            if key not in self._prepared:  # a cache hit, or audio at another sample rate: read the stored file
+                pcm = await asyncio.to_thread(self._load_cached, res.audio)
+                self._adopt(index, key, res.voice_id, pcm, list(res.audio.words))
             if res.notice and res.notice != self._notice:
                 self._notice = res.notice
                 self._publish_state(force=True)
-            utts = self._script.utterances if self._script is not None else []
-            if res.voice_id != voice and 0 <= index < len(utts) and not utts[index].voice_ref:
-                # Fell back (budget, outage, missing key): keep using the fallback voice for the rest of the
-                # session so later utterances don't each retry the failing provider. The audio just made is
-                # also filed under the new key so the playhead finds it.
-                self._voice_override = res.voice_id
-                if utts[index].text == text:
-                    self._prepared.setdefault(self._key(index), self._prepared[key])
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -662,6 +674,29 @@ class Transport:
         finally:
             self._tasks.pop(key, None)
         self._feed()
+
+    def _adopt(
+        self, index: int, key: tuple[str, str, str | None], voice_id: str, pcm: np.ndarray, words: list[WordTiming]
+    ) -> None:
+        """Audio for `key` is ready: remember it, hand it to the renderer, and let prefetch continue."""
+        text, voice, _style = key
+        self._prepared[key] = _Prepared(voice_id, pcm, words, pcm.size / self.sample_rate)
+        utts = self._script.utterances if self._script is not None else []
+        if voice_id != voice and 0 <= index < len(utts) and not utts[index].voice_ref:
+            # Fell back (budget, outage, missing key): keep using the fallback voice for the rest of the
+            # session so later utterances don't each retry the failing provider. The audio just made is
+            # also filed under the new key so the playhead finds it.
+            self._voice_override = voice_id
+            if utts[index].text == text:
+                self._prepared.setdefault(self._key(index), self._prepared[key])
+        self._feed()
+        self._schedule()
+
+    def _local_voice(self, voice_id: str) -> bool:
+        try:
+            return bool(self.synth.registry.is_local(voice_id))
+        except Exception:  # noqa: BLE001 — unknown voice: synthesis reports it; treat it as remote here
+            return False
 
     def _feed(self) -> None:
         """Hand prepared utterances to the renderer, in order, a few ahead of the playhead."""
@@ -757,6 +792,12 @@ class Transport:
         self._persist()
         if not self.renderer.has_clips():
             self._stop_output()
+        self._publish_state(force=True)
+        if self._on_finished is not None and self._doc_id is not None:
+            self._on_finished(self._doc_id)
+
+    def publish_state(self) -> None:
+        """Tell clients the snapshot changed for a reason the transport can't see (e.g. the queue)."""
         self._publish_state(force=True)
 
     # ================================================================== word events

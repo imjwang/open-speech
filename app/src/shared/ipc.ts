@@ -9,6 +9,9 @@ export { IPC, type IpcChannel } from './ipc-channels'
 export type {
   BarOpenedEvent,
   ClipboardContent,
+  FileHit,
+  FileKind,
+  FileSearchResult,
   WebViewState,
 } from './ipc-channels'
 
@@ -56,7 +59,10 @@ export const OpenExternalSchema = z.object({
     }, 'http(s)/mailto only'),
 })
 
-export const RuleFileSchema = z.object({ ruleId: id })
+export const RulesOpenSchema = z.object({ item: id.optional() })
+export type RulesOpenRequest = z.infer<typeof RulesOpenSchema>
+/** What was typed after `@`: a name to search for, or a path to browse ("~/Documents/pa"). */
+export const FileSearchSchema = z.object({ query: z.string().max(1024) })
 export const WebModeSchema = z.object({
   /** page: show the live site; text: hide it (reader shows extracted text); off: not a web document. */
   mode: z.enum(['page', 'text', 'off']),

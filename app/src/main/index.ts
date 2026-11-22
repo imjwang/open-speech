@@ -3,19 +3,22 @@
  * shortcuts and windows, and relays OS features (clipboard, file dialog, external links) to the
  * renderers. It holds no business logic: every action is an engine API call.
  */
-import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { execFile, spawn } from 'node:child_process'
+import { readdir, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import path from 'node:path'
 
-import { app, dialog, ipcMain, Notification, shell } from 'electron'
+import { app, dialog, ipcMain, nativeTheme, Notification, shell } from 'electron'
 
 import { isEngineError, unwrap, type UserSettings } from '../shared/api/client'
 import type { PlaybackState } from '../shared/api/ws.gen'
-import type { EngineInfo, HtmlBlocksMessage, ReaderTarget } from '../shared/ipc'
+import { setLanguage } from '../shared/i18n'
+import type { EngineInfo, FileHit, HtmlBlocksMessage, ReaderTarget } from '../shared/ipc'
 import { postClipboard, readClipboard } from './clipboard'
 import { EngineLink } from './engine-link'
 import { resolveSpawnSpec } from './engine/spawn-spec'
 import { EngineSupervisor, type ChildLike } from './engine/supervisor'
+import { fileKind, searchFiles, type FileSearchDeps } from './file-search'
 import { registerIpc } from './ipc'
 import { rulesDir } from './paths'
 import { appPageUrl, installAppProtocol, registerAppSchemePrivileges } from './protocol'
@@ -121,7 +124,8 @@ async function main(): Promise<void> {
 
   installSecurity({
     devServerUrl,
-    micAllowed: (contents) => windows.isBar(contents),
+    // The command bar listens for commands; the rules editor takes dictation. Nothing else gets the microphone.
+    micAllowed: (contents) => windows.isBar(contents) || windows.isRules(contents),
     isWebView: (contents) => windows.isWebPage(contents),
   })
 
@@ -144,7 +148,7 @@ async function main(): Promise<void> {
     try {
       if (playback?.state === 'playing' || playback?.state === 'loading') await unwrap(c.POST('/api/v1/playback/pause'))
       else if (playback?.state === 'paused') await unwrap(c.POST('/api/v1/playback/resume'))
-      else await unwrap(c.POST('/api/v1/playback/play', { body: {} }))
+      else await unwrap(c.POST('/api/v1/playback/play', { body: { confirm_estimate: false } }))
     } catch (err) {
       reportError('Play/pause failed', err)
     }
@@ -176,29 +180,13 @@ async function main(): Promise<void> {
     }
   }
 
-  const ruleList = async () => {
-    const c = client()
-    return c ? (await unwrap(c.GET('/api/v1/rules', { params: { query: {} } }))).items : []
-  }
-
-  const openRuleFile = async (ruleId: string) => {
-    try {
-      const rule = (await ruleList()).find((r) => r.id === ruleId)
-      // Only paths the engine reports for its own rule files are opened.
-      if (rule?.path && path.isAbsolute(rule.path) && /\.(md|csv)$/i.test(rule.path) && existsSync(rule.path)) {
-        const err = await shell.openPath(rule.path)
-        if (err) log('warn', `open rule file: ${err}`)
-      }
-    } catch (err) {
-      reportError('Could not open the rule file', err)
-    }
-  }
-
   const openRulesFolder = async () => {
     let dir = rulesDir(process.env, process.platform)
     try {
-      const first = (await ruleList()).find((r) => r.path && path.isAbsolute(r.path))
-      if (first?.path) dir = path.dirname(first.path)
+      const c = client()
+      const files = c ? (await unwrap(c.GET('/api/v1/rules/files'))).items : []
+      const first = files.find((f) => f.path && path.isAbsolute(f.path))
+      if (first) dir = path.dirname(first.path)
     } catch {
       // fall back to the default location
     }
@@ -206,22 +194,33 @@ async function main(): Promise<void> {
     if (err) log('warn', `open rules folder: ${err}`)
   }
 
-  const openFileDialog = async () => {
+  const home = homedir()
+  const fileSearch: FileSearchDeps = {
+    home,
+    run: (command, args, timeoutMs) =>
+      new Promise((resolve, reject) => {
+        execFile(command, args, { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => (err ? reject(err) : resolve(stdout)))
+      }),
+    readdir: (dir) => readdir(dir, { withFileTypes: true }),
+    stat,
+  }
+
+  /** The paperclip: the native open panel, any number of files. */
+  const pickFiles = async (): Promise<FileHit[]> => {
     const parent = windows.barWindow()
-    const result = await windows.withBlurSuppressed(() =>
-      parent
-        ? dialog.showOpenDialog(parent, {
-            properties: ['openFile'],
-            filters: [
-              { name: 'Documents', extensions: ['pdf', 'docx', 'txt', 'md', 'markdown', 'html', 'htm'] },
-              { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] },
-              { name: 'All files', extensions: ['*'] },
-            ],
-          })
-        : dialog.showOpenDialog({ properties: ['openFile'] }),
-    )
-    const file = result.canceled ? undefined : result.filePaths[0]
-    return file ? { path: file } : null
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Documents', extensions: ['pdf', 'docx', 'txt', 'md', 'markdown', 'html', 'htm'] },
+        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] },
+      ],
+    }
+    const result = await windows.withBlurSuppressed(() => (parent ? dialog.showOpenDialog(parent, options) : dialog.showOpenDialog(options)))
+    if (result.canceled) return []
+    return result.filePaths.map((file) => {
+      const short = file === home ? '~' : file.startsWith(home + path.sep) ? `~${file.slice(home.length)}` : file
+      return { path: file, name: path.basename(file), kind: fileKind(path.basename(file), false) ?? 'other', where: path.dirname(short), short }
+    })
   }
 
   const openReader = (target: ReaderTarget) => {
@@ -250,7 +249,7 @@ async function main(): Promise<void> {
       playPause: () => void playPause(),
       playDocument: (documentId) => {
         const c = client()
-        if (c) unwrap(c.POST('/api/v1/playback/play', { body: { document_id: documentId } })).catch((e: unknown) => reportError('Play failed', e))
+        if (c) unwrap(c.POST('/api/v1/playback/play', { body: { document_id: documentId, confirm_estimate: false } })).catch((e: unknown) => reportError('Play failed', e))
       },
       loadRecents: async () => {
         const c = client()
@@ -258,7 +257,7 @@ async function main(): Promise<void> {
         const list = await unwrap(c.GET('/api/v1/documents', { params: { query: { limit: 10 } } }))
         return list.items.map((d) => ({ id: d.id, title: d.title, progress: d.progress }))
       },
-      openRulesFolder: () => void openRulesFolder(),
+      openRules: () => windows.openRules(),
       quit: () => app.quit(),
     },
   )
@@ -311,24 +310,50 @@ async function main(): Promise<void> {
     }
   })
 
-  // ---------------------------------------------------------------- settings → shortcuts
+  // The assistant asks for a window ("open the rules editor", "show it in the reader").
+  link.on('ui.open', (msg) => {
+    if (msg.target === 'rules') windows.openRules(msg.item ?? undefined)
+    else if (msg.target === 'reader' && msg.item) openReader({ documentId: msg.item })
+    else if (msg.target === 'bar') openBar()
+  })
+
+  // ---------------------------------------------------------------- settings → shortcuts, theme, language
+
+  let themePref: 'system' | 'lavender' | 'ember' = 'system'
+  const applyTheme = () => {
+    // Native chrome (menus, vibrancy, the web reader's scrollbars) follows the same choice as the pages.
+    nativeTheme.themeSource = themePref === 'system' ? 'system' : themePref === 'ember' ? 'dark' : 'light'
+    windows.setTheme(themePref === 'system' ? (nativeTheme.shouldUseDarkColors ? 'ember' : 'lavender') : themePref)
+  }
+  nativeTheme.on('updated', applyTheme)
+
+  const useSettings = (settings: UserSettings, language?: string) => {
+    const result = shortcuts.apply(settings.shortcuts ?? null, {
+      openBar: () => openBar(undefined, true),
+      playPause: () => void playPause(),
+      readClipboard: () => void readClipboardHotkey(),
+      skip: (n) => void skip(n),
+    })
+    if (result?.failed.length) log('warn', `shortcuts not registered: ${result.failed.join(', ')}`)
+    themePref = settings.appearance?.theme ?? 'system'
+    applyTheme()
+    if (language) setLanguage(language) // the tray menu is built in this language when it opens
+  }
+
+  // A voice command, the settings card or a hand edit changed settings: apply at once, no restart.
+  link.on('settings.changed', (msg) => useSettings(msg.settings as UserSettings, msg.language))
 
   const applySettings = async () => {
     const c = client()
     if (!c) return
     try {
-      const settings: UserSettings = await unwrap(c.GET('/api/v1/settings'))
-      const result = shortcuts.apply(settings.shortcuts ?? null, {
-        openBar: () => openBar(undefined, true),
-        playPause: () => void playPause(),
-        readClipboard: () => void readClipboardHotkey(),
-        skip: (n) => void skip(n),
-      })
-      if (result?.failed.length) log('warn', `shortcuts not registered: ${result.failed.join(', ')}`)
+      const [settings, capabilities] = await Promise.all([unwrap(c.GET('/api/v1/settings')), unwrap(c.GET('/api/v1/capabilities'))])
+      useSettings(settings, capabilities.language)
     } catch (err) {
       log('warn', `loading settings failed: ${(err as Error).message}`)
     }
   }
+  // Reading the settings is also what makes the engine notice a hand edit of settings.toml.
   const settingsTimer = setInterval(() => void applySettings(), 30_000)
 
   // Until the engine answers, the defaults still open the bar.
@@ -353,7 +378,7 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------- IPC
 
   registerIpc(ipcMain, {
-    isShell: (s) => windows.isBar(s) || windows.isReader(s),
+    isShell: (s) => windows.isBar(s) || windows.isReader(s) || windows.isRules(s),
     isBar: (s) => windows.isBar(s),
     isWebPage: (s) => windows.isWebPage(s),
     getEngine: () => link.endpoint,
@@ -367,8 +392,9 @@ async function main(): Promise<void> {
     openReader,
     openExternal: openExternalSafely,
     readClipboard,
-    openFileDialog,
-    openRuleFile: (id) => void openRuleFile(id),
+    pickFiles,
+    searchFiles: (query) => searchFiles(query, fileSearch),
+    openRules: (item) => windows.openRules(item),
     openRulesFolder: () => void openRulesFolder(),
     setWebMode: (req) => {
       if (req.documentId) windows.noteReaderDocument(req.documentId)

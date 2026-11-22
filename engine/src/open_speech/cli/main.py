@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import getpass
 import json
 import os
 import secrets
@@ -25,13 +24,11 @@ import typer
 from open_speech import __version__
 from open_speech.config import EngineEnv, Paths
 
-app = typer.Typer(add_completion=False, no_args_is_help=True, help="Open Speech: read anything aloud, with your keys.")
+app = typer.Typer(add_completion=False, no_args_is_help=True, help="Open Speech: read anything aloud.")
 rules_app = typer.Typer(help="Speech rules.", no_args_is_help=True)
 models_app = typer.Typer(help="Local models.", no_args_is_help=True)
-keys_app = typer.Typer(help="Provider keys.", no_args_is_help=True)
 app.add_typer(rules_app, name="rules")
 app.add_typer(models_app, name="models")
-app.add_typer(keys_app, name="keys")
 
 JsonOpt = Annotated[bool, typer.Option("--json", help="Machine-readable output.")]
 
@@ -166,7 +163,7 @@ def serve(
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", port))
     actual = sock.getsockname()[1]
-    engine = Engine(env, use_keychain=sys.platform == "darwin")
+    engine = Engine(env)
     fastapi_app = create_app(engine, token=token, allowed_origins=set(env.open_speech_allowed_origins))
 
     info = {"port": actual, "token": token, "version": __version__, "pid": os.getpid()}
@@ -206,7 +203,8 @@ def _wait_playback(client: EngineClient) -> None:
         last = ""
         while not stop.is_set():
             st = client.call("GET", "/playback")
-            line = f"{st['state']:8} {st.get('utterance_index', 0) + 1}/{st.get('utterance_count', 0)} {st.get('speed', 1):g}x"
+            position = f"{st.get('utterance_index', 0) + 1}/{st.get('utterance_count', 0)}"
+            line = f"{st['state']:8} {position} {st.get('speed', 1):g}x"
             if line != last and sys.stderr.isatty():
                 sys.stderr.write("\r" + line.ljust(40))
                 sys.stderr.flush()
@@ -237,9 +235,8 @@ def read(
     with engine_client() as (client, ephemeral):
         if voice is None and not any(v.get("available") for v in client.call("GET", "/voices")["items"]):
             typer.secho(
-                "No voice is ready yet. Install the free local voice (106 MB, works offline):\n"
-                "  open-speech models install kokoro-82m-v1.0\n"
-                "or add an OpenAI or Gemini key:  open-speech keys set auto",
+                "No voice is ready yet. Install the local voice (106 MB, works offline):\n"
+                "  open-speech models install kokoro-82m-v1.0",
                 fg=typer.colors.YELLOW,
                 err=True,
             )
@@ -473,17 +470,6 @@ def models_rm(model_id: str) -> None:
     """Remove a local model."""
     with engine_client() as (client, _):
         client.call("DELETE", f"/models/local/{model_id}")
-
-
-@keys_app.command("set")
-def keys_set(provider: Annotated[str, typer.Argument(help="anthropic | openai | gemini | auto")]) -> None:
-    """Store a key (prompted without echo, tested before saving)."""
-    key = getpass.getpass(f"{provider} key: ")
-    with engine_client() as (client, _):
-        res = client.call("PUT", f"/keys/{provider}", json={"key": key})
-    typer.echo(res["detail"])
-    if not res["ok"]:
-        raise typer.Exit(1)
 
 
 @app.command()

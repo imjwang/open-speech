@@ -56,7 +56,13 @@ def build_server() -> Any:
     ) -> str:
         k = kind
         if k == "auto":
-            k = "url" if source.startswith(("http://", "https://")) else "path" if source.startswith(("/", "~")) else "text"
+            k = (
+                "url"
+                if source.startswith(("http://", "https://"))
+                else "path"
+                if source.startswith(("/", "~"))
+                else "text"
+            )
         body: dict[str, Any] = {"voice_id": voice, "mode": mode, "play": True}
         if k == "url":
             body.update(kind="url", url=source)
@@ -69,7 +75,10 @@ def build_server() -> Any:
             await call("PUT", "/playback/speed", json={"speed": speed})
         est = res.get("estimate")
         if est and est.get("requires_confirmation") and not res.get("playing"):
-            return f"That would cost about ${est['usd_estimate']} (estimated). Ask the user, then retry with mode='classic' or confirm in the app."
+            return (
+                f"That would cost about ${est['usd_estimate']} (estimated). "
+                "Ask the user, then retry with mode='classic' or confirm in the app."
+            )
         return f"Reading “{res['document']['title']}”."
 
     @server.tool(description="Control playback: pause, resume, stop, or skip by sentence/paragraph/heading/seconds.")
@@ -87,17 +96,38 @@ def build_server() -> Any:
     @server.tool(description="Current document, position and time left.")
     async def where_am_i() -> str:
         st = await call("GET", "/playback")
-        return json.dumps({k: st.get(k) for k in ("state", "document_title", "heading", "page", "page_count", "progress", "time_left_s", "speed")})
+        return json.dumps(
+            {
+                k: st.get(k)
+                for k in (
+                    "state",
+                    "document_title",
+                    "heading",
+                    "page",
+                    "page_count",
+                    "progress",
+                    "time_left_s",
+                    "speed",
+                )
+            }
+        )
 
     @server.tool(description="Estimated spending from the local ledger.")
-    async def get_usage(period: Literal["today", "week", "month"] = "month", group_by: Literal["provider", "op", "document"] = "provider") -> str:
+    async def get_usage(
+        period: Literal["today", "week", "month"] = "month",
+        group_by: Literal["provider", "op", "document"] = "provider",
+    ) -> str:
         res = await call("GET", "/usage/summary", params={"period": period, "group_by": group_by})
         return json.dumps(res)
 
     @server.tool(description="Estimate what reading a file or URL would cost.")
     async def estimate_cost(source: str) -> str:
         kind = "url" if source.startswith(("http://", "https://")) else "file_path"
-        doc = (await call("POST", "/documents", json={"kind": kind, **({"url": source} if kind == "url" else {"path": source})}))["document"]
+        doc = (
+            await call(
+                "POST", "/documents", json={"kind": kind, **({"url": source} if kind == "url" else {"path": source})}
+            )
+        )["document"]
         return json.dumps(await call("POST", "/usage/estimate", json={"document_id": doc["id"]}))
 
     @server.tool(description="List voices (AI-generated). Ids look like provider:model:voice.")
@@ -106,8 +136,12 @@ def build_server() -> Any:
         res = await call("GET", "/voices", params=params)
         return json.dumps([{"id": v["id"], "name": v["name"], "available": v["available"]} for v in res["items"]])
 
-    @server.tool(description="Propose a speech rule in plain language; returns a preview. Saves only with confirm=true.")
-    async def add_rule(instruction: str, site: str | None = None, confirm: bool = False, proposal_id: str | None = None) -> str:
+    @server.tool(
+        description="Propose a speech rule in plain language; returns a preview. Saves only with confirm=true."
+    )
+    async def add_rule(
+        instruction: str, site: str | None = None, confirm: bool = False, proposal_id: str | None = None
+    ) -> str:
         if confirm and proposal_id:
             saved = await call("POST", "/rules", json={"proposal_id": proposal_id})
             return f"Saved rule {saved['name']}."
@@ -115,8 +149,14 @@ def build_server() -> Any:
         if site:
             body["scope"] = {"sites": [site]}
         prop = await call("POST", "/rules/proposals", json=body)
-        return json.dumps({"summary": prop["summary"], "proposal_id": prop["proposal_id"], "tier": prop["rule"]["tier"],
-                           "next": "Ask the user; if they agree call add_rule again with confirm=true and this proposal_id."})
+        return json.dumps(
+            {
+                "summary": prop["summary"],
+                "proposal_id": prop["proposal_id"],
+                "tier": prop["rule"]["tier"],
+                "next": "Ask the user; if they agree call add_rule again with confirm=true and this proposal_id.",
+            }
+        )
 
     state["server"] = server
     return server

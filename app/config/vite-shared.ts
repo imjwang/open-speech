@@ -33,6 +33,7 @@ export const assetsInlineLimit = (file: string): boolean | undefined => (file.en
 export const rendererPages = {
   commandbar: resolve(rendererRoot, 'commandbar/index.html'),
   reader: resolve(rendererRoot, 'reader/index.html'),
+  rules: resolve(rendererRoot, 'rules/index.html'),
 }
 
 /** Injects the CSP <meta> tag: strict for builds, HMR-friendly in dev. */

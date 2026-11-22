@@ -31,6 +31,7 @@ class WeightFile(BaseModel):
     path: str
     sha256: str = ""
     size_mb: float = 0.0
+    url: str | None = None  # full download URL, for a file that isn't under the weights' base URL
 
 
 class Weights(BaseModel):
@@ -119,6 +120,48 @@ class SttCatalog(BaseModel):
     test_only: bool = False
 
 
+LOCAL_STT = "local"  # provider id of on-device speech-to-text (`[stt.local."<model>"]`)
+LOCAL_STT_DIR = "stt"  # weights live in `<models>/stt/<model>/` (app data and the packaged runtime alike)
+
+
+class LocalSttModel(BaseModel):
+    """An on-device speech-to-text model: a sherpa-onnx offline transducer (07 § STT routing, 08 § Local
+    models). File names are relative to the model directory."""
+
+    provider: str = LOCAL_STT
+    model: str
+    name: str = ""
+    family: str = "nemo_transducer"  # sherpa-onnx transducer `model_type`
+    encoder: str = "encoder.int8.onnx"
+    decoder: str = "decoder.int8.onnx"
+    joiner: str = "joiner.int8.onnx"
+    tokens: str = "tokens.txt"
+    vad: str | None = None  # Silero VAD model that keeps non-speech away from the recognizer
+    languages: list[str] = Field(default_factory=list)
+    num_threads: int = 2
+    weights: Weights | None = None
+    ram_gb: float = 0.0
+    license: str | None = None
+    speed: str | None = None
+    status: str | None = None  # e.g. "later"
+    requires: str | None = None
+    test_only: bool = False
+
+    @property
+    def key(self) -> str:
+        return f"{self.provider}:{self.model}"
+
+    @property
+    def size_mb(self) -> float:
+        return self.weights.size_mb if self.weights is not None else 0.0
+
+    def required_files(self) -> list[str]:
+        """Every file the recognizer opens; the model is installed when all of them exist."""
+        if self.weights is not None:
+            return [f.path for f in self.weights.all_files()]
+        return [f for f in (self.encoder, self.decoder, self.joiner, self.tokens, self.vad) if f]
+
+
 class LlmCatalog(BaseModel):
     provider: str
     default: str
@@ -140,6 +183,8 @@ class ModelCatalog:
         self.raw = data
         self.tts: dict[str, TtsModel] = {}  # "provider:model" → entry
         self.stt: dict[str, SttCatalog] = {}
+        self.local_stt: dict[str, LocalSttModel] = {}  # model id → entry, from `[stt.local."<model>"]`
+        self.local_stt_default: str | None = None  # `[stt.local] default`
         self.llm: dict[str, LlmCatalog] = {}
         self._parse()
 
@@ -174,11 +219,23 @@ class ModelCatalog:
                 resolved.pop("inherit", None)
                 self.tts[f"{provider}:{model_id}"] = self._tts_entry(provider, model_id, resolved)
         for provider, entry in (self.raw.get("stt") or {}).items():
-            if isinstance(entry, dict):
-                self.stt[provider] = SttCatalog(provider=provider, **_known(entry, SttCatalog))
+            if not isinstance(entry, dict):
+                continue
+            if provider == LOCAL_STT:
+                self._parse_local_stt(entry)
+                continue
+            self.stt[provider] = SttCatalog(provider=provider, **_known(entry, SttCatalog))
         for provider, entry in (self.raw.get("llm") or {}).items():
             if isinstance(entry, dict) and "default" in entry:
                 self.llm[provider] = LlmCatalog(provider=provider, **_known(entry, LlmCatalog))
+
+    def _parse_local_stt(self, table: dict[str, Any]) -> None:
+        """`[stt.local]`: `default = "<model>"` plus one sub-table per model."""
+        for model_id, entry in table.items():
+            if isinstance(entry, dict):
+                self.local_stt[model_id] = LocalSttModel(model=model_id, **_known(entry, LocalSttModel, "model"))
+        default = table.get("default")
+        self.local_stt_default = default if isinstance(default, str) else None
 
     @staticmethod
     def _tts_entry(provider: str, model_id: str, d: dict[str, Any]) -> TtsModel:
@@ -222,9 +279,25 @@ class ModelCatalog:
     def stt_for(self, provider: str) -> SttCatalog | None:
         return self.stt.get(provider)
 
+    def local_stt_models(self) -> list[LocalSttModel]:
+        """On-device speech-to-text models, the default first."""
+        models = [m for m in self.local_stt.values() if not m.test_only]
+        return sorted(models, key=lambda m: m.model != self.local_stt_default)
+
+    def local_stt_model(self, model_id: str) -> LocalSttModel | None:
+        """Look up a local speech-to-text model by "model" or "local:model"."""
+        for m in self.local_stt_models():
+            if model_id in (m.model, m.key):
+                return m
+        return None
+
+    def default_local_stt_model(self) -> LocalSttModel | None:
+        """`[stt.local] default`; when that names no entry, the first one."""
+        return next(iter(self.local_stt_models()), None)
+
     def llm_for(self, provider: str) -> LlmCatalog | None:
         return self.llm.get(provider)
 
 
-def _known(entry: dict[str, Any], model: type[BaseModel]) -> dict[str, Any]:
-    return {k: v for k, v in entry.items() if k in model.model_fields and k != "provider"}
+def _known(entry: dict[str, Any], model: type[BaseModel], *skip: str) -> dict[str, Any]:
+    return {k: v for k, v in entry.items() if k in model.model_fields and k != "provider" and k not in skip}

@@ -32,7 +32,10 @@ def _assert_spans_valid(text: str) -> None:
             "We use e.g. apples and i.e. oranges. Dr. Lee agreed with Prof. Kim.",
             ["We use e.g. apples and i.e. oranges.", "Dr. Lee agreed with Prof. Kim."],
         ),
-        ("Prices rose 2.5% in Q3. They fell 0.75 points later.", ["Prices rose 2.5% in Q3.", "They fell 0.75 points later."]),
+        (
+            "Prices rose 2.5% in Q3. They fell 0.75 points later.",
+            ["Prices rose 2.5% in Q3.", "They fell 0.75 points later."],
+        ),
         ("No terminal punctuation", ["No terminal punctuation"]),
         (
             "Results improved [12]. Others disagree (Smith et al., 2020). Done.",
@@ -78,8 +81,21 @@ def test_empty_text() -> None:
 def test_words_unicode_boundaries() -> None:
     text = "Don't stop: state-of-the-art costs $3.14 or 1,000 Kč — naïve café_au_lait."
     got = [text[s:e] for s, e in words(text)]
-    assert got == ["Don't", "stop", "state", "of", "the", "art", "costs", "3.14", "or", "1,000", "Kč", "naïve",
-                   "café_au_lait"]
+    assert got == [
+        "Don't",
+        "stop",
+        "state",
+        "of",
+        "the",
+        "art",
+        "costs",
+        "3.14",
+        "or",
+        "1,000",
+        "Kč",
+        "naïve",
+        "café_au_lait",
+    ]
 
 
 def test_words_offsets_slice_back() -> None:
@@ -91,8 +107,20 @@ def test_words_offsets_slice_back() -> None:
 
 @pytest.mark.parametrize(
     ("word", "n"),
-    [("the", 1), ("make", 1), ("table", 2), ("coffee", 2), ("played", 1), ("wanted", 2), ("SQL", 3),
-     ("2020", 5), ("", 0), ("—", 0), ("internationalization", 8), ("café", 2)],
+    [
+        ("the", 1),
+        ("make", 1),
+        ("table", 2),
+        ("coffee", 2),
+        ("played", 1),
+        ("wanted", 2),
+        ("SQL", 3),
+        ("2020", 5),
+        ("", 0),
+        ("—", 0),
+        ("internationalization", 8),
+        ("café", 2),
+    ],
 )
 def test_syllables(word: str, n: int) -> None:
     assert syllables(word) == n

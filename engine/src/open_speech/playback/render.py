@@ -44,7 +44,7 @@ class _Block:
     eos: bool = False
 
 
-@dataclass
+@dataclass(eq=False)  # compared by identity: `list.remove` must not compare the sample arrays of two clips
 class _Clip:
     pcm: np.ndarray
     pos: int = 0

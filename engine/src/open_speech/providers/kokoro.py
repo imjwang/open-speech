@@ -4,7 +4,9 @@
   is applied later in the transport, so it never enters the cache key).
 - Output: waveform (24 kHz float32) + per-token durations. Each word's time span is the sum of its own
   phoneme tokens' durations, so word timings are exact (FR-READ-6), not estimated.
-- G2P: `providers/g2p.LexiconPhonemizer` (misaki dictionaries + rules, no espeak). Injectable.
+- G2P: chosen by the voice's language, which is the first letter of a Kokoro voice name (`a`/`b` English,
+  `e` Spanish): `providers/g2p.LexiconPhonemizer` (misaki dictionaries + rules) for English,
+  `providers/g2p_es.SpanishPhonemizer` (rules) for Spanish. No espeak. Injectable.
 - Weights live in `paths.models/kokoro/<model>/` and are installed by `local/manager.py` (sha256-verified,
   resumable, with job progress). Packaged builds also ship a read-only copy (`local/bundled.py`), used when
   app data has no complete copy. Without either the voices are listed with `available=False` and a reason.
@@ -16,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import logging
 import threading
 import time
 from collections.abc import AsyncIterator, Callable
@@ -30,14 +33,17 @@ from open_speech.local.bundled import bundled_models_dir
 from open_speech.local.catalog import ModelCatalog, TtsModel
 from open_speech.playback.timing import estimate_word_timings
 from open_speech.providers.base import AudioChunk, TtsLimits, TtsRequest, Units, Voice, WordTiming
-from open_speech.providers.g2p import LexiconPhonemizer, PhonemeToken, Phonemizer
+from open_speech.providers.g2p import PhonemeToken, Phonemizer, g2p_language, phonemizer_for
 from open_speech.providers.pcm import f32_to_bytes
+
+log = logging.getLogger(__name__)
 
 SAMPLE_RATE = 24000
 STYLE_DIM = 256
 SessionFactory = Callable[[Path], Any]
 
-_ACCENTS = {"a": ("American English", "en-US"), "b": ("British English", "en-GB")}
+# First letter of a Kokoro voice name → (label, language tag).
+_ACCENTS = {"a": ("American English", "en-US"), "b": ("British English", "en-GB"), "e": ("Spanish", "es")}
 
 
 def _default_session_factory(path: Path) -> Any:
@@ -49,10 +55,15 @@ def _default_session_factory(path: Path) -> Any:
 
 
 def voice_display(voice: str) -> tuple[str, str]:
-    """af_heart → ("Heart (Kokoro, American English)", "en-US")."""
+    """af_heart → ("Heart (Kokoro, American English)", "en-US"); ef_dora → ("Dora (Kokoro, Spanish)", "es")."""
     accent, lang = _ACCENTS.get(voice[:1], ("English", "en"))
     nice = voice.split("_", 1)[-1].replace("_", " ").title()
     return f"{nice} (Kokoro, {accent})", lang
+
+
+def voice_language(voice: str) -> str:
+    """Language tag a Kokoro voice speaks, from its name or full id: "ef_dora" → "es", "bm_george" → "en-GB"."""
+    return voice_display(voice.rsplit(":", 1)[-1])[1]
 
 
 class KokoroTts:
@@ -112,8 +123,16 @@ class KokoroTts:
         return d / mfile, (d / tok) if tok else None, pattern
 
     def voice_path(self, model: str, voice: str) -> Path:
+        """The voice's style file. A voice added to the catalog after the app-data copy was installed is
+        taken from the bundled copy when that one has it."""
         _, _, pattern = self._layout(model)
-        return self.model_dir(model) / pattern.format(voice=voice)
+        rel = pattern.format(voice=voice)
+        path = self.model_dir(model) / rel
+        if not path.exists() and self._bundled is not None:
+            bundled = self._bundled / self.id / model / rel
+            if bundled.exists():
+                return bundled
+        return path
 
     def installed(self, model: str | None = None) -> bool:
         model = model or self.default_model()
@@ -161,13 +180,23 @@ class KokoroTts:
                 )
         return out
 
+    def voices_for_language(self, lang: str | None, *, available_only: bool = False) -> list[Voice]:
+        """The voices that speak `lang`, matched on the base code: "es" and "es-MX" → the Spanish voices,
+        "en" → American and British ones. Catalog order (the first is the default choice)."""
+        base = g2p_language(lang)
+        return [
+            v
+            for v in self.voices()
+            if any(g2p_language(tag) == base for tag in v.languages) and (v.available or not available_only)
+        ]
+
     def limits(self, model: str) -> TtsLimits:
         m = self._models.get(model)
         return TtsLimits(
             max_input_chars=m.max_input_chars if m else 4000,
             formats=["pcm"],
             style=False,
-            languages=list(m.languages) if m else ["en-US", "en-GB"],
+            languages=list(m.languages) if m else ["en-US", "en-GB", "es"],
         )
 
     async def synthesize(self, req: TtsRequest) -> AsyncIterator[AudioChunk]:
@@ -183,10 +212,33 @@ class KokoroTts:
 
     # ------------------------------------------------------------------ model state
 
-    def _phon(self) -> Phonemizer:
-        if self._phonemizer is None:
-            self._phonemizer = LexiconPhonemizer("us")
-        return self._phonemizer
+    def _phon(self, voice: str) -> Phonemizer:
+        """The injected phonemizer when there is one, else the built-in one for the voice's language."""
+        if self._phonemizer is not None:
+            return self._phonemizer
+        return phonemizer_for(voice_language(voice))
+
+    def warm(self, model: str | None = None, voice: str | None = None) -> None:
+        """Load what the first sentence would otherwise wait for: the ONNX session, the vocabulary, the voice
+        and the phonemizer for the voice's language. Blocking (a few hundred ms); a no-op once loaded or when
+        the voice is unavailable."""
+        model = model or self.default_model()
+        entry = self._models.get(model)
+        voice = voice or (entry.voices[0] if entry and entry.voices else None)
+        if voice is None or self.unavailable_reason(model, voice) is not None:
+            return
+        self._load(model, voice)
+        self._phon(voice)
+
+    async def prewarm(self, model: str | None = None, voice: str | None = None) -> None:
+        """`warm` off the event loop, for callers that know speech is about to be needed (a document was just
+        opened). Never raises: synthesis reports real problems when it runs."""
+        try:
+            await asyncio.to_thread(self.warm, model, voice)
+        except Exception:  # noqa: BLE001
+            log.exception("warming the local voice failed")
+            return
+        self._schedule_unload()
 
     def _load(self, model: str, voice: str) -> tuple[Any, dict[str, int], np.ndarray]:
         with self._lock:
@@ -244,7 +296,7 @@ class KokoroTts:
     def synthesize_sync(self, text: str, model: str, voice: str) -> tuple[np.ndarray, list[WordTiming]]:
         sess, vocab, style = self._load(model, voice)
         max_tokens = self._models[model].max_tokens or 510
-        tokens = self._phon().phonemize(text)
+        tokens = self._phon(voice).phonemize(text)
         seq, spans = self._encode(tokens, vocab)
         if not seq:
             return np.zeros(int(0.1 * SAMPLE_RATE), dtype=np.float32), []

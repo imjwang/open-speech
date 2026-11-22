@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
 
 import pytest
 
 from open_speech.config import Paths
 from open_speech.local.catalog import ModelCatalog
-from open_speech.providers.keys import KEYCHAIN_SERVICE, KeyStore
+from open_speech.providers.keys import ProviderKeys
 
 from .helpers import make_env
 
@@ -59,118 +59,40 @@ def test_user_override_deep_merges(paths: Paths) -> None:
     assert compat is not None and compat.base_url == "http://127.0.0.1:8880/v1"
 
 
-# ------------------------------------------------------------------ keys
+# ------------------------------------------------------------------ keys (build configuration)
 
 
-class FakeKeyring:
-    def __init__(self, data: dict[str, str] | None = None, broken: bool = False) -> None:
-        self.data = dict(data or {})
-        self.broken = broken
-
-    def get_password(self, service: str, user: str) -> str | None:
-        if self.broken:
-            raise RuntimeError("no backend")
-        assert service == KEYCHAIN_SERVICE
-        return self.data.get(user)
-
-    def set_password(self, service: str, user: str, value: str) -> None:
-        if self.broken:
-            raise RuntimeError("no backend")
-        self.data[user] = value
-
-    def delete_password(self, service: str, user: str) -> None:
-        self.data.pop(user, None)
+def test_keys_come_from_the_build_environment_only() -> None:
+    keys = ProviderKeys(make_env(openai_api_key="sk-from-env", gemini_api_key="   "))
+    assert keys.get("openai") == "sk-from-env" and keys.configured("openai")
+    assert keys.get("gemini") is None and keys.status("gemini") == "missing"  # blank is not a key
+    assert keys.status("anthropic") == "missing"
+    # Nothing in the app can add, change or remove a key.
+    assert not any(hasattr(keys, name) for name in ("set", "delete", "detect"))
 
 
-def test_detect_prefixes() -> None:
-    assert KeyStore.detect("sk-ant-api03-xyz") == "anthropic"
-    assert KeyStore.detect("sk-proj-abc") == "openai"
-    assert KeyStore.detect("  AIzaSyD  ") == "gemini"
-    assert KeyStore.detect("hello") is None
+def test_packaged_builds_read_the_bundled_provider_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`bundle-engine.sh` writes provider.env into the runtime; the process environment still wins."""
+    from open_speech import config
 
-
-def test_env_overrides_keychain() -> None:
-    kr = FakeKeyring({"openai": "sk-from-keychain", "gemini": "AIza-keychain"})
-    ks = KeyStore(make_env(openai_api_key="sk-from-env"), use_keychain=True, keyring_backend=kr)
-    assert ks.get("openai") == "sk-from-env"
-    assert ks.source("openai") == "env"
-    assert ks.get("gemini") == "AIza-keychain"
-    assert ks.source("gemini") == "keychain"
-    assert ks.status("anthropic") == "missing"
-    # keychain ignored when disabled
-    ks2 = KeyStore(make_env(), use_keychain=False, keyring_backend=kr)
-    assert ks2.get("gemini") is None
-
-
-def test_broken_keychain_is_missing_not_crash() -> None:
-    ks = KeyStore(make_env(), use_keychain=True, keyring_backend=FakeKeyring(broken=True))
-    assert ks.status("openai") == "missing"
-
-
-async def test_set_runs_test_call_and_stores_only_on_success() -> None:
-    calls: list[tuple[str, str]] = []
-
-    async def tester(provider: str, key: str) -> tuple[bool, str]:
-        calls.append((provider, key))
-        return (key.endswith("good"), "ok" if key.endswith("good") else "That key was rejected.")
-
-    kr = FakeKeyring()
-    ks = KeyStore(make_env(), use_keychain=True, tester=tester, keyring_backend=kr)
-    changed: list[str] = []
-    ks.add_listener(changed.append)
-
-    ok, detail = await ks.set("openai", "sk-bad")
-    assert not ok and "rejected" in detail
-    assert ks.status("openai") == "missing" and "openai" not in kr.data
-
-    ok, detail = await ks.set("openai", "sk-good")
-    assert ok and "keychain" in detail
-    assert ks.get("openai") == "sk-good" and kr.data["openai"] == "sk-good"
-    assert changed == ["openai"]
-    assert calls == [("openai", "sk-bad"), ("openai", "sk-good")]
-
-
-async def test_set_rejects_prefix_mismatch_without_test_call() -> None:
-    async def tester(provider: str, key: str) -> tuple[bool, str]:  # pragma: no cover - must not run
-        raise AssertionError("no test call for a mismatched key")
-
-    ks = KeyStore(make_env(), use_keychain=False, tester=tester)
-    ok, detail = await ks.set("openai", "sk-ant-abc")
-    assert not ok and "Anthropic" in detail
-
-
-async def test_tester_exception_is_mapped_and_key_never_logged(caplog: pytest.LogCaptureFixture) -> None:
-    class Boom(Exception):
-        status_code = 401
-
-    async def tester(provider: str, key: str) -> tuple[bool, str]:
-        raise Boom(f"bad key {key}")
-
-    ks = KeyStore(make_env(), use_keychain=False, tester=tester)
-    ok, detail = await ks.set("anthropic", "sk-ant-SECRET123")
-    assert not ok
-    assert "SECRET123" not in detail
-    assert "SECRET123" not in caplog.text
-    assert "SECRET123" not in repr(ks)
+    (tmp_path / config.PROVIDER_ENV_FILE).write_text("ANTHROPIC_API_KEY=sk-ant-built-in\nOPENAI_API_KEY=sk-built-in\n")
+    monkeypatch.setenv(config.BUNDLED_RUNTIME_ENV, str(tmp_path))
+    files = config.env_files()
+    assert files[-1] == tmp_path / config.PROVIDER_ENV_FILE
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-from-process")
+    env = config.EngineEnv(_env_file=files[-1:])  # type: ignore[call-arg]
+    keys = ProviderKeys(env)
+    assert keys.get("anthropic") == "sk-ant-built-in"
+    assert keys.get("openai") == "sk-from-process"
 
 
 def test_mark_invalid_and_repr() -> None:
-    ks = KeyStore(make_env(gemini_api_key="AIzaSECRET"), use_keychain=False)
-    assert ks.status("gemini") == "configured"
-    ks.mark_invalid("gemini")
-    assert ks.status("gemini") == "invalid"
-    assert "AIzaSECRET" not in repr(ks)
-    assert ks.all_status() == {"anthropic": "missing", "openai": "missing", "gemini": "invalid"}
-
-
-async def test_default_tester_maps_auth_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The default tester uses the SDK; with the network guard it must come back as 'couldn't reach'."""
-    from open_speech.providers import keys as keys_mod
-
-    ok, detail = await keys_mod.default_key_tester("openai", "sk-test")
-    assert not ok
-    assert "OpenAI" in detail
-
-
-def _unused(_: Any) -> None:  # keep imports honest for type checkers
-    return None
+    keys = ProviderKeys(make_env(gemini_api_key="AIzaSECRET"))
+    changed: list[str] = []
+    keys.add_listener(changed.append)
+    assert keys.status("gemini") == "configured"
+    keys.mark_invalid("gemini")
+    keys.mark_invalid("gemini")  # reported once
+    assert keys.status("gemini") == "invalid" and not keys.configured("gemini")
+    assert changed == ["gemini"]
+    assert "AIzaSECRET" not in repr(keys)

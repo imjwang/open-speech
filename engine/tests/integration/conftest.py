@@ -121,7 +121,9 @@ def wait_state(client: TestClient, states: set[str], timeout: float = 15.0) -> d
     raise AssertionError(f"playback never reached {states}; last={last}")
 
 
-def turn(client: TestClient, reader: WsReader, text: str, *, source: str = "typed", timeout: float = 15.0) -> dict[str, Any]:
+def turn(
+    client: TestClient, reader: WsReader, text: str, *, source: str = "typed", timeout: float = 15.0
+) -> dict[str, Any]:
     """Submit a command and wait for its `assistant.done`. Returns {done, cards, actions, deltas}."""
     turn_id = client.post("/api/v1/assistant/turns", json={"text": text, "source": source}).json()["turn_id"]
     done = reader.of_type("assistant.done", timeout=timeout, turn_id=turn_id)

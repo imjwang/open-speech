@@ -43,14 +43,14 @@ Status: Draft v0.1 · 2026-11-21 · Research snapshot; claims cite Speechify's h
 | EPUB | **Later (P2)** | — | FR-READ-16 |
 | Podcasts, meetings, workspace, Studio, audiobooks, ChatGPT app | **Drop** | Out of scope by principle | — |
 | Celebrity voices, premium badges, upsells | **Drop** | — | — |
-| Accounts, sign-in, trials, subscriptions | **Drop** | BYOK; costs shown in dollars | — |
+| Accounts, sign-in, trials, subscriptions | **Drop** | No account; provider keys are part of the build; costs shown in dollars | — |
 | Tracking SDKs, cloud library | **Drop** | Local-only, no telemetry | — |
 
 ## Where we are structurally better
 
 1. **A user pronunciation dictionary** and free-form rules, identical on every surface, stored as files you can share.
 2. **Voice control of playback and navigation**: "back a paragraph", "skip this table", "where am I?", "how much is left?"
-3. **No billing disputes**: BYOK, no subscription, a local ledger in dollars, budgets you set.
+3. **No billing disputes**: no subscription, a local ledger in dollars, budgets you set.
 4. **Paywalled and logged-in pages** read through your own session in the in-app browser (Speechify's URL import cannot).
 5. **Pinned voices** can't drift into another language after a vendor update.
 6. **Multimodal sources**: images now, audio files next. Claude turns them into a script worth listening to.
@@ -62,7 +62,7 @@ Status: Draft v0.1 · 2026-11-21 · Research snapshot; claims cite Speechify's h
 | Speechify | Open Speech |
 |---|---|
 | Settings → Auto Skip content → Headers / Footers / … | Say "skip headers" or toggle the preset in the bar (`Skip: Headers`) |
-| Classic / AI Enhanced | Same names; AI Enhanced uses your Anthropic key |
+| Classic / AI Enhanced | Same names; AI Enhanced uses Claude, in builds that include it |
 | ⌥A play selection (Mac) | ⌥⇧R reads the clipboard (P0); ⌥A reads the selection (P1) |
 | ⌥X screenshot to listen | ⌥X (P1) |
 | ⌥Q pause / resume | ⌥⇧Space (global), media keys, or say "pause" |

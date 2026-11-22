@@ -1,7 +1,8 @@
 /**
  * The shell's windows (03 § App windows): the command bar (frameless, transparent, vibrancy on macOS,
- * created hidden at startup so it appears ≤ 150 ms after the hotkey) and the reader (on demand, thin
- * title strip). The live web page inside the reader is managed by `WebPageView`.
+ * created hidden at startup so it appears ≤ 150 ms after the hotkey), the reader (on demand, thin title
+ * strip) and the rules editor (on demand). The live web page inside the reader is managed by `WebPageView`.
+ * Window chrome follows the app's theme (lavender or ember), like the pages inside.
  */
 import { BrowserWindow, nativeTheme, screen, type WebContents } from 'electron'
 
@@ -14,7 +15,14 @@ const BAR_MIN_HEIGHT = 72
 const BAR_INITIAL_HEIGHT = 96
 export const READER_STRIP_HEIGHT = 40
 
-export type PageName = 'commandbar' | 'reader'
+export type PageName = 'commandbar' | 'reader' | 'rules'
+export type ThemeName = 'lavender' | 'ember'
+
+/** What the window shows before its page has painted, per theme (matches --background in globals.css). */
+const SURFACE: Record<ThemeName, { window: string; page: string }> = {
+  lavender: { window: '#f8f5ff', page: '#ffffff' },
+  ember: { window: '#15110e', page: '#15110e' },
+}
 
 export interface WindowManagerOptions {
   preloadPath: string
@@ -35,6 +43,8 @@ function clamp(n: number, lo: number, hi: number): number {
 export class WindowManager {
   private bar: BrowserWindow | null = null
   private reader: BrowserWindow | null = null
+  private rules: BrowserWindow | null = null
+  private theme: ThemeName = nativeTheme.shouldUseDarkColors ? 'ember' : 'lavender'
   private readonly webPage: WebPageView
   private barOpenedAt = 0
   private suppressBlur = 0
@@ -57,8 +67,22 @@ export class WindowManager {
     return !!contents && !!this.reader && !this.reader.isDestroyed() && contents.id === this.reader.webContents.id
   }
 
+  isRules(contents: { id: number } | null | undefined): boolean {
+    return !!contents && !!this.rules && !this.rules.isDestroyed() && contents.id === this.rules.webContents.id
+  }
+
   isWebPage(contents: { id: number } | null | undefined): boolean {
     return this.webPage.owns(contents)
+  }
+
+  /** The theme changed (settings, or the Mac's appearance while following it): recolour the window chrome. */
+  setTheme(theme: ThemeName): void {
+    if (theme === this.theme) return
+    this.theme = theme
+    const bar = this.barWindow()
+    if (bar && this.opts.isMac) bar.setVibrancy(theme === 'ember' ? 'hud' : 'popover')
+    this.readerWindow()?.setBackgroundColor(SURFACE[theme].page)
+    this.rulesWindow()?.setBackgroundColor(SURFACE[theme].window)
   }
 
   get barVisible(): boolean {
@@ -96,7 +120,7 @@ export class WindowManager {
       title: 'Open Speech',
       ...(isMac
         ? {
-            vibrancy: 'hud' as const,
+            vibrancy: this.theme === 'ember' ? ('hud' as const) : ('popover' as const),
             visualEffectState: 'active' as const,
             roundedCorners: true,
             ...(this.opts.macPanel ? { type: 'panel' } : {}),
@@ -206,7 +230,7 @@ export class WindowManager {
       minHeight: 360,
       show: false,
       title: 'Open Speech Reader',
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0b0d' : '#ffffff',
+      backgroundColor: SURFACE[this.theme].page,
       ...(isMac ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 13 } } : {}),
       webPreferences: {
         preload: this.opts.preloadPath,
@@ -246,6 +270,52 @@ export class WindowManager {
     this.lastReaderDoc = documentId
   }
 
+  // ---------------------------------------------------------------- rules editor
+
+  /** Open (or bring forward) the rules editor, optionally on one file. */
+  openRules(item?: string): void {
+    if (this.rules && !this.rules.isDestroyed()) {
+      if (item) this.rules.webContents.send(IPC.rulesShow, item)
+      if (this.rules.isMinimized()) this.rules.restore()
+      this.rules.show()
+      this.rules.focus()
+      return
+    }
+    const { isMac } = this.opts
+    const rules = new BrowserWindow({
+      width: 880,
+      height: 620,
+      minWidth: 640,
+      minHeight: 400,
+      show: false,
+      title: 'Open Speech Rules',
+      backgroundColor: SURFACE[this.theme].window,
+      ...(isMac ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 13 } } : {}),
+      webPreferences: {
+        preload: this.opts.preloadPath,
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        webSecurity: true,
+        spellcheck: true,
+      },
+    })
+    rules.once('ready-to-show', () => rules.show())
+    rules.on('closed', () => {
+      this.rules = null
+    })
+    rules.webContents.on('did-finish-load', () => {
+      this.sendEngine(rules.webContents)
+      if (item) rules.webContents.send(IPC.rulesShow, item)
+    })
+    void rules.loadURL(this.opts.pageUrl('rules', item ? { item } : {}))
+    this.rules = rules
+  }
+
+  rulesWindow(): BrowserWindow | null {
+    return this.rules && !this.rules.isDestroyed() ? this.rules : null
+  }
+
   setWebMode(request: WebModeRequest): void {
     const reader = this.readerWindow()
     if (!reader) return
@@ -256,7 +326,7 @@ export class WindowManager {
 
   setEngine(info: EngineInfo | null): void {
     this.engine = info
-    for (const win of [this.barWindow(), this.readerWindow()]) {
+    for (const win of [this.barWindow(), this.readerWindow(), this.rulesWindow()]) {
       if (win) this.sendEngine(win.webContents)
     }
   }

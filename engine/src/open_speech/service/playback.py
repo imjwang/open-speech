@@ -5,10 +5,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from open_speech.api import schemas as s
-from open_speech.errors import EngineError, NotFound
+from open_speech.errors import EngineError, EstimateRequired, NotFound
+from open_speech.i18n import say, t
 from open_speech.plan.script import SpeechScript
 
 if TYPE_CHECKING:
@@ -16,22 +19,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("open_speech.playback")
 
-
-def _fmt_duration(seconds: float) -> str:
-    seconds = max(0, int(round(seconds)))
-    h, rem = divmod(seconds, 3600)
-    m = rem // 60
-    if h and m:
-        return f"{h} hour{'s' if h != 1 else ''} {m} minute{'s' if m != 1 else ''}"
-    if h:
-        return f"{h} hour{'s' if h != 1 else ''}"
-    if m:
-        return f"{m} minute{'s' if m != 1 else ''}"
-    return "less than a minute"
-
-
-def _fmt_speed(speed: float) -> str:
-    return f"{speed:g}x"
+COST_ASK_AGAIN_S = 120.0  # asking to play again this soon after hearing the cost means "go ahead"
 
 
 class PlaybackService:
@@ -40,6 +28,10 @@ class PlaybackService:
         self._doc_id: str | None = None
         self._lookahead: asyncio.Task[None] | None = None
         self._bar_open = False
+        self._queue: list[s.QueueItem] = []  # read next, in order, when the current document ends
+        self._advancing: asyncio.Task[None] | None = None
+        self._cost_ok: set[str] = set()  # documents the user agreed to pay for
+        self._cost_asked: dict[str, float] = {}  # document → when we last said what it would cost
 
     # ------------------------------------------------------------------ state
 
@@ -54,7 +46,7 @@ class PlaybackService:
     def _resolve_start(self, script: SpeechScript, frm: s.PlayFrom | None, document_id: str) -> tuple[int, int]:
         utts = script.utterances
         if not utts:
-            raise EngineError("invalid_request", "There's nothing to read in that document with the current rules.")
+            raise EngineError("invalid_request", t("error.nothing_to_read"))
         if frm is None:
             idx, off = self.e.documents.position(document_id)
             if idx >= len(utts) - 1 and idx > 0:  # finished last time → start over
@@ -71,7 +63,7 @@ class PlaybackService:
             for u in utts:
                 if u.page is not None and u.page >= frm.page:
                     return u.index, 0
-            raise EngineError("invalid_request", f"There's no page {frm.page} in this document.")
+            raise EngineError("invalid_request", t("error.no_page", page=frm.page))
         if frm.block_id is not None:
             doc = self.e.documents.load(document_id)
             order = {b.id: b.order for b in doc.blocks}
@@ -103,13 +95,70 @@ class PlaybackService:
         return 0, 0
 
     async def play(self, req: s.PlayRequest) -> s.PlaybackState:
+        """Play a document. Choosing a different one by hand ends whatever was queued behind the old one."""
+        if req.document_id and req.document_id != self._doc_id:
+            self._queue = []
+        return await self._play(req)
+
+    # ------------------------------------------------------------------ asking before a costly read (FR-COST-3)
+
+    def confirm_cost(self, document_ids: list[str]) -> None:
+        """The user said yes to what these documents are estimated to cost."""
+        self._cost_ok.update(document_ids)
+
+    async def cost_to_confirm(self, document_id: str) -> s.Estimate | None:
+        """The estimate for reading `document_id`, when it is over the threshold and not yet agreed to. Free
+        reading (a local voice with Classic cleanup) is never estimated."""
+        if document_id in self._cost_ok:
+            return None
+        doc = self.e.documents.load(document_id)
+        try:
+            free_voice = self.e.registry.is_local(self.e.documents.voice_for(document_id))
+        except EngineError:
+            free_voice = True  # an unavailable voice falls back to the local one
+        if free_voice and self.e.documents.mode_for(doc) != "ai_enhanced":
+            return None
+        try:
+            estimate = await self.e.usage.estimate(s.EstimateRequest(document_id=document_id))
+        except EngineError:
+            return None
+        return estimate if estimate.requires_confirmation else None
+
+    async def _check_cost(self, document_ids: list[str], *, confirmed: bool) -> None:
+        """Every way of starting a read comes through here, so the question is asked once, in one place. The
+        answer is `confirm_estimate`, a confirmation card, or simply asking again within two minutes. Several
+        documents (a queue) are agreed to as a whole."""
+        if confirmed:
+            self._cost_ok.update(document_ids)
+            return
+        costly: dict[str, Decimal] = {}
+        total = Decimal(0)
+        for document_id in document_ids:
+            estimate = await self.cost_to_confirm(document_id)
+            if estimate is not None:
+                costly[document_id] = Decimal(estimate.usd_estimate)
+            if document_id not in self._cost_ok:
+                total += Decimal(estimate.usd_estimate) if estimate is not None else Decimal(0)
+        if not costly:
+            return
+        now = time.monotonic()
+        if all(now - self._cost_asked.get(d, float("-inf")) <= COST_ASK_AGAIN_S for d in costly):
+            self._cost_ok.update(costly)
+            return
+        for document_id in costly:
+            self._cost_asked[document_id] = now
+        raise EstimateRequired(str(total), "read")
+
+    def cost_was_asked(self, document_id: str) -> None:
+        """Whoever opened the document has shown its estimate: the next "play" is the go-ahead."""
+        self._cost_asked[document_id] = time.monotonic()
+
+    async def _play(self, req: s.PlayRequest) -> s.PlaybackState:
         document_id = req.document_id or self._doc_id
         if document_id is None:
             recent = self.e.db.one("SELECT id FROM documents ORDER BY last_opened_at DESC LIMIT 1")
             if recent is None:
-                raise EngineError(
-                    "invalid_request", "Nothing to play yet. Tell me what to read, or drop a file on the bar."
-                )
+                raise EngineError("invalid_request", t("error.nothing_to_play"))
             document_id = recent["id"]
         assert document_id is not None
         if req.document_id is None and req.from_ is None and self._doc_id == document_id:
@@ -118,6 +167,7 @@ class PlaybackService:
                 return await self.resume()
             if st == "playing":
                 return self.state()
+        await self._check_cost([document_id], confirmed=req.confirm_estimate)
         doc = self.e.documents.load(document_id)
         script = await self.e.documents.script_for(doc)
         start, offset = self._resolve_start(script, req.from_, document_id)
@@ -191,12 +241,66 @@ class PlaybackService:
         return self.state()
 
     async def stop(self) -> s.PlaybackState:
+        self._queue = []
         await self.e.transport.stop()
         return self.state()
 
+    # ------------------------------------------------------------------ queue: several documents in a row
+
+    def queue(self) -> list[s.QueueItem]:
+        return list(self._queue)
+
+    async def enqueue(self, req: s.QueueRequest) -> s.PlaybackState:
+        """Read `document_ids` one after another: `now` starts the first at once, `next` slots them in after
+        the current document, `last` appends. With nothing playing, any of them starts the first."""
+        seen: set[str] = set()
+        items: list[s.QueueItem] = []
+        for did in req.document_ids:
+            if did in seen:
+                continue
+            seen.add(did)
+            items.append(s.QueueItem(document_id=did, title=self.e.documents.title(did)))
+        # A queue is agreed to before it is queued, so reading never stops halfway to ask about money.
+        await self._check_cost([q.document_id for q in items], confirmed=req.confirm_estimate)
+        rest = [q for q in self._queue if q.document_id not in seen]
+        busy = self._doc_id is not None and self.e.transport.snapshot().state in ("playing", "loading", "paused")
+        if req.when == "now" or not busy:
+            self._queue = items[1:] + (rest if req.when != "now" else [])
+            return await self._play(s.PlayRequest(document_id=items[0].document_id))
+        self._queue = [*items, *rest] if req.when == "next" else [*rest, *items]
+        self.e.transport.publish_state()
+        return self.state()
+
+    async def next_document(self) -> s.PlaybackState:
+        """Skip the rest of this document and start the next one in the queue."""
+        if not self._queue:
+            raise EngineError("invalid_request", t("queue.empty"))
+        nxt = self._queue.pop(0)
+        return await self._play(s.PlayRequest(document_id=nxt.document_id))
+
+    async def clear_queue(self) -> s.PlaybackState:
+        self._queue = []
+        self.e.transport.publish_state()
+        return self.state()
+
+    def document_finished(self, document_id: str) -> None:
+        """The transport played the last sentence of `document_id` (called from its tick, so only schedule)."""
+        if document_id != self._doc_id or not self._queue:
+            return
+
+        async def advance() -> None:
+            try:
+                await self.next_document()
+            except EngineError as e:
+                log.warning("could not start the next queued document: %s", e.detail)
+                if self._queue:  # skip the one that failed and keep going
+                    self.document_finished(document_id)
+
+        self._advancing = asyncio.create_task(advance())
+
     async def skip(self, req: s.SkipRequest) -> s.PlaybackState:
         if self._doc_id is None:
-            raise EngineError("invalid_request", "Nothing is playing.")
+            raise EngineError("invalid_request", t("error.nothing_playing"))
         await self.e.transport.skip(req.unit, req.count)
         return self.state()
 
@@ -210,7 +314,7 @@ class PlaybackService:
 
     async def go_to_page(self, page: int) -> s.PlaybackState:
         if self._doc_id is None:
-            raise EngineError("invalid_request", "Nothing is open. Tell me what to read first.")
+            raise EngineError("invalid_request", t("error.nothing_open"))
         return await self.play(s.PlayRequest(document_id=self._doc_id, from_=s.PlayFrom(page=page)))
 
     async def set_voice(self, req: s.VoiceRequest) -> s.PlaybackState:
@@ -219,18 +323,15 @@ class PlaybackService:
         if v is None:
             raise NotFound(f"the voice {req.voice_id}")
         if not v.available:
-            raise EngineError("missing_key", v.unavailable_reason or f"{v.name} isn't available right now.")
-        if req.scope == "default":
-            await self.e.settings.set_key("defaults.voice", req.voice_id)
-            if self._doc_id and not self.e.documents._settings(self._doc_id).get("voice_id"):
-                await self.e.transport.set_voice(req.voice_id)
-        elif req.scope == "assistant":
+            raise EngineError("unavailable", v.unavailable_reason or f"{v.name} isn't available right now.")
+        if req.scope == "assistant":
             await self.e.settings.set_key("defaults.assistant_voice", req.voice_id)
+        elif req.scope == "default" or self._doc_id is None:
+            await self.e.voices.set_default(req.voice_id)
+            if self._doc_id and not self.e.documents._settings(self._doc_id).get("voice_id"):
+                await self.e.transport.set_voice(self.e.documents.voice_for(self._doc_id))
         else:
-            if self._doc_id is None:
-                await self.e.settings.set_key("defaults.voice", req.voice_id)
-            else:
-                await self.e.documents.update_settings(self._doc_id, s.DocumentSettingsUpdate(voice_id=req.voice_id))
+            await self.e.documents.update_settings(self._doc_id, s.DocumentSettingsUpdate(voice_id=req.voice_id))
         return self.state()
 
     # ------------------------------------------------------------------ ducking (07 § Ducking)
@@ -244,23 +345,20 @@ class PlaybackService:
     def where_am_i(self) -> tuple[str, dict[str, object]]:
         snap = self.state()
         if snap.document_id is None or snap.state in ("idle",):
-            return "Nothing is playing right now.", {}
-        parts: list[str] = []
-        title = snap.document_title or "this document"
-        if snap.heading:
-            parts.append(f"{snap.heading}.")
-        else:
-            parts.append(f"{title}.")
+            return t("where.nothing"), {}
+        title = snap.document_title or t("where.this_document")
+        parts: list[str] = [f"{snap.heading or title}."]
         if snap.page and snap.page_count:
-            parts.append(f"Page {snap.page} of {snap.page_count},")
+            parts.append(t("where.page", page=snap.page, pages=snap.page_count))
         else:
-            parts.append(f"{int(round(snap.progress * 100))} percent through,")
+            parts.append(t("where.percent", n=int(round(snap.progress * 100))))
         if snap.time_left_s is not None:
-            parts.append(f"about {_fmt_duration(snap.time_left_s)} left at {_fmt_speed(snap.speed)}.")
+            key = "where.left" if snap.time_left_s >= 60 else "where.left_soon"  # not "about less than a minute"
+            parts.append(t(key, time=say.duration(snap.time_left_s), speed=say.speed(snap.speed)))
         sentence = " ".join(parts).rstrip(",") if parts else title
         if not sentence.endswith("."):
             sentence += "."
-        data = {
+        data: dict[str, object] = {
             "document": title,
             "heading": snap.heading,
             "page": snap.page,
@@ -272,7 +370,8 @@ class PlaybackService:
         return sentence, data
 
     async def close(self) -> None:
-        if self._lookahead is not None:
-            self._lookahead.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await self._lookahead
+        for task in (self._lookahead, self._advancing):
+            if task is not None:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task

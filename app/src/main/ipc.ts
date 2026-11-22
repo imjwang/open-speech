@@ -8,19 +8,23 @@ import {
   BarListeningSchema,
   BarOpenSchema,
   BarResizeSchema,
+  FileSearchSchema,
   HtmlBlocksPayloadSchema,
   IPC,
   OpenExternalSchema,
   parseIpc,
   ReaderOpenSchema,
-  RuleFileSchema,
+  RulesOpenSchema,
   WebFollowSchema,
   WebModeSchema,
   type BarOpenRequest,
   type ClipboardContent,
   type EngineInfo,
+  type FileHit,
+  type FileSearchResult,
   type HtmlBlocksMessage,
   type ReaderTarget,
+  type RulesOpenRequest,
   type WebModeRequest,
 } from '../shared/ipc'
 
@@ -50,8 +54,9 @@ export interface IpcDeps {
   openReader(target: ReaderTarget): void
   openExternal(url: string): void
   readClipboard(): Promise<ClipboardContent>
-  openFileDialog(): Promise<{ path: string } | null>
-  openRuleFile(ruleId: string): void
+  pickFiles(): Promise<FileHit[]>
+  searchFiles(query: string): Promise<FileSearchResult>
+  openRules(item: string | undefined): void
   openRulesFolder(): void
   setWebMode(request: WebModeRequest): void
   setWebFollow(follow: boolean): void
@@ -75,7 +80,12 @@ export function registerIpc(ipc: IpcMainLike, deps: IpcDeps): void {
   ipc.handle(IPC.clipboardRead, (event) =>
     deps.isShell(event.sender) ? deps.readClipboard() : Promise.resolve<ClipboardContent>({ kind: 'empty' }),
   )
-  ipc.handle(IPC.dialogOpenFile, (event) => (deps.isShell(event.sender) ? deps.openFileDialog() : null))
+  ipc.handle(IPC.dialogOpenFiles, (event) => (deps.isBar(event.sender) ? deps.pickFiles() : []))
+  // The file menu is the command bar's alone: no other page (and no web content) can list the disk.
+  ipc.handle(IPC.fsSearch, (event, payload): Promise<FileSearchResult> | FileSearchResult => {
+    const parsed = deps.isBar(event.sender) ? parseIpc(FileSearchSchema, payload) : null
+    return parsed ? deps.searchFiles(parsed.query) : { folder: null, hits: [] }
+  })
 
   // ---- command bar only
   ipc.on(IPC.barHide, (event) => {
@@ -100,7 +110,7 @@ export function registerIpc(ipc: IpcMainLike, deps: IpcDeps): void {
     IPC.shellOpenExternal,
     shellOnly<{ url: string }>(IPC.shellOpenExternal, OpenExternalSchema, (p) => deps.openExternal(p.url)),
   )
-  ipc.on(IPC.rulesOpenFile, shellOnly<{ ruleId: string }>(IPC.rulesOpenFile, RuleFileSchema, (p) => deps.openRuleFile(p.ruleId)))
+  ipc.on(IPC.rulesOpen, shellOnly<RulesOpenRequest>(IPC.rulesOpen, RulesOpenSchema, (p) => deps.openRules(p.item)))
   ipc.on(IPC.rulesOpenFolder, (event) => {
     if (deps.isShell(event.sender)) deps.openRulesFolder()
   })

@@ -51,11 +51,14 @@ def chunk_text(
     target_max: int = TARGET_MAX,
     max_sentences: int = MAX_SENTENCES,
     hard_max: int = HARD_MAX,
+    language: str | None = None,
 ) -> list[tuple[int, int]]:
-    """Return chunk spans `(start, end)` into `text` (whitespace between chunks excluded)."""
+    """Return chunk spans `(start, end)` into `text` (whitespace between chunks excluded).
+
+    `language` is the text's language tag; it selects the sentence rules (see `segment.sentences`)."""
     ok = boundary_ok or (lambda _pos: True)
     spans: list[tuple[int, int]] = []
-    for s, e in sentences(text):
+    for s, e in sentences(text, language):
         spans.extend(_split_long(text, s, e, hard_max, ok) if e - s > hard_max else [(s, e)])
     if not spans:
         return []

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
@@ -225,3 +226,36 @@ class LexiconPhonemizer:
             else:
                 out.append(PhonemeToken(s, e, self.word(tok), is_word=True, whitespace=ws))
         return out
+
+
+# -------------------------------------------------------------------------------- by language
+
+G2P_LANGUAGES = ("en", "es")  # base language codes with a built-in, espeak-free phonemizer
+_PHONEMIZERS: dict[str, Phonemizer] = {}
+_PHONEMIZERS_LOCK = threading.Lock()
+
+
+def g2p_language(lang: str | None) -> str:
+    """Base code of the built-in phonemizer that reads `lang` ("es-MX" → "es"); English when unknown."""
+    base = (lang or "").replace("_", "-").split("-")[0].lower()
+    return base if base in G2P_LANGUAGES else "en"
+
+
+def phonemizer_for(lang: str | None) -> Phonemizer:
+    """The phonemizer for a language tag: Spanish rules for "es"/"es-*", the English lexicon otherwise.
+    Instances are shared; they hold no state besides caches."""
+    key = g2p_language(lang)
+    found = _PHONEMIZERS.get(key)
+    if found is None:
+        # Loading the English lexicon takes a moment; a warm-up and the first sentence must not both pay for it.
+        with _PHONEMIZERS_LOCK:
+            found = _PHONEMIZERS.get(key)
+            if found is None:
+                if key == "es":
+                    from open_speech.providers.g2p_es import SpanishPhonemizer
+
+                    found = SpanishPhonemizer()
+                else:
+                    found = LexiconPhonemizer("us")
+                _PHONEMIZERS[key] = found
+    return found

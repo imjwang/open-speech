@@ -63,7 +63,7 @@ export function resolveAppPath(rendererDir: string, requestUrl: string): string 
   return isInside(rendererDir, file) ? file : null
 }
 
-export function appPageUrl(page: 'commandbar' | 'reader', query?: Record<string, string>): string {
+export function appPageUrl(page: 'commandbar' | 'reader' | 'rules', query?: Record<string, string>): string {
   const qs = query && Object.keys(query).length ? `?${new URLSearchParams(query).toString()}` : ''
   return `${APP_ORIGIN}/${page}/index.html${qs}`
 }

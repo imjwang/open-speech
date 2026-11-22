@@ -77,6 +77,7 @@ class DocumentOut(BaseModel):
     position: Position = Field(default_factory=Position)
     settings: DocumentSettings = Field(default_factory=DocumentSettings)
     flags: list[str] = Field(default_factory=list)
+    language: str | None = None  # detected ("en", "es"); decides which voice can read it
     has_source_file: bool = False  # GET /documents/{id}/source serves the original (PDF/image) for the reader
 
 
@@ -128,6 +129,11 @@ class DocumentSettingsUpdate(BaseModel):
 PlaybackStatus = Literal["idle", "loading", "playing", "paused", "stopped", "error"]
 
 
+class QueueItem(BaseModel):
+    document_id: str
+    title: str
+
+
 class PlaybackState(BaseModel):
     state: PlaybackStatus = "idle"
     document_id: str | None = None
@@ -145,6 +151,7 @@ class PlaybackState(BaseModel):
     progress: float = 0.0
     fallback_notice: str | None = None  # e.g. "Budget reached; reading with the local voice."
     error: str | None = None
+    queue: list[QueueItem] = Field(default_factory=list)  # read next, in order, when this one ends
 
 
 class PlayFrom(BaseModel):
@@ -160,6 +167,17 @@ class PlayRequest(BaseModel):
 
     document_id: str | None = None
     from_: PlayFrom | None = Field(default=None, alias="from")
+    # The user has seen what this read is estimated to cost and wants it anyway (see `estimate_required`).
+    confirm_estimate: bool = False
+
+
+class QueueRequest(BaseModel):
+    """Read several documents one after another. `now` replaces what is playing and starts the first;
+    `next` goes right after the current document; `last` appends."""
+
+    document_ids: list[str] = Field(min_length=1, max_length=50)
+    when: Literal["now", "next", "last"] = "now"
+    confirm_estimate: bool = False  # as on `PlayRequest`
 
 
 class SkipRequest(BaseModel):
@@ -304,6 +322,41 @@ class PresetsUpdate(BaseModel):
     scope: RuleScope | None = None  # mode override scope; None = global
 
 
+class RuleFile(BaseModel):
+    """One text file under rules/: the standing preferences, the pronunciation list, or a rule."""
+
+    id: str  # "preferences" | "lexicon" | a rule id
+    kind: Literal["preferences", "lexicon", "rule", "preset"]
+    name: str
+    path: str
+    description: str = ""
+    enabled: bool = True
+    scope: RuleScope | None = None
+    tier: Tier | None = None
+    updated_at: str | None = None
+
+
+class RuleFileList(BaseModel):
+    items: list[RuleFile]
+    errors: list[str] = Field(default_factory=list)  # files that could not be read, with the reason
+
+
+class RuleFileContent(RuleFile):
+    text: str  # the whole file as it is on disk
+    body: str  # what a person edits: the instruction (rules) or the whole text (preferences, lexicon)
+
+
+class RuleFileWrite(BaseModel):
+    """Save a rule file. Send `body` to change what a rule says (the engine works out how to apply it again),
+    or `text` to replace the whole file including its header. `name` creates or renames a rule."""
+
+    body: str | None = None
+    text: str | None = None
+    name: str | None = Field(default=None, max_length=64)
+    enabled: bool | None = None
+    scope: RuleScope | None = None
+
+
 class LexiconEntry(BaseModel):
     term: str
     spoken: str
@@ -320,14 +373,38 @@ class LexiconList(BaseModel):
 class TurnContext(BaseModel):
     document_id: str | None = None
     selection: str | None = None
+    # One id for everything said while the bar stays open, so "a bit faster" → "more" has context.
+    conversation_id: str | None = None
+
+
+class Attachment(BaseModel):
+    """Something attached to a command in the composer: a file, a link, pasted text, or a document that was
+    already imported (uploads)."""
+
+    kind: Literal["file", "url", "text", "document"]
+    path: str | None = None
+    url: str | None = None
+    text: str | None = None
+    document_id: str | None = None
+    name: str | None = None
+
+
+class AttachmentOut(BaseModel):
+    kind: str
+    title: str
+    document_id: str | None = None
+    error: str | None = None
 
 
 class TurnRequest(BaseModel):
-    text: str
-    source: Literal["typed", "spoken"] = "typed"
+    text: str = ""  # may be empty when the attachments are the request ("read these")
+    # "button": a control in the interface asked (e.g. the Voices button). Handled like typed text, but a
+    # client shows only the result, not a "you said" line.
+    source: Literal["typed", "spoken", "button"] = "typed"
     session_id: str | None = None
     recording_id: str | None = None
     context: TurnContext = Field(default_factory=TurnContext)
+    attachments: list[Attachment] = Field(default_factory=list, max_length=50)
 
 
 class SayRequest(BaseModel):
@@ -418,25 +495,32 @@ class BudgetUpdate(BaseModel):
     hard_stop: bool | None = None
 
 
-# ------------------------------------------------------------------ keys, models, health, jobs
-
-KeyStatus = Literal["configured", "missing", "invalid"]
+# ------------------------------------------------------------------ capabilities, models, health, jobs
 
 
-class KeyIn(BaseModel):
-    key: str
+class SpeechInput(BaseModel):
+    """Whether the bar can listen, and with what."""
+
+    available: bool
+    provider: str | None = None  # "local" | "openai" | "gemini" | "fixture"
+    local: bool = False  # audio never leaves this Mac
+    model: str | None = None
+    # When unavailable: the one-sentence reason, and the local model that would fix it (if downloadable).
+    reason: str | None = None
+    install_model: str | None = None
 
 
-class KeyTestResult(BaseModel):
-    ok: bool
-    provider: str
-    detail: str
+class Capabilities(BaseModel):
+    """What this build can do (GET /capabilities). Cloud features depend on the providers configured at
+    build time; nothing here can be changed from inside the app."""
 
-
-class KeysState(BaseModel):
-    anthropic: KeyStatus
-    openai: KeyStatus
-    gemini: KeyStatus
+    speech_input: SpeechInput
+    assistant: bool  # open-ended requests (Claude)
+    ai_cleanup: bool  # AI Enhanced
+    vision: bool  # image descriptions
+    cloud_voices: list[str] = Field(default_factory=list)  # provider ids with cloud voices
+    languages: list[str] = Field(default_factory=list)  # interface and speech languages
+    language: str = "en"  # the one in use now ("auto" resolved)
 
 
 class LocalModel(BaseModel):
@@ -449,6 +533,7 @@ class LocalModel(BaseModel):
     installed: bool
     fit: Literal["fits", "slow", "unsupported"]
     status: str = ""
+    kind: Literal["tts", "stt"] = "tts"  # a voice, or a speech-to-text model
 
 
 class LocalModelList(BaseModel):

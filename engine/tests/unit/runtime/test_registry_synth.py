@@ -9,14 +9,15 @@ import pytest
 
 from open_speech.cache.audio import AudioCache
 from open_speech.config import Paths
-from open_speech.errors import EngineError, MissingKey, NotFound
+from open_speech.errors import EngineError, NotFound, Unavailable
 from open_speech.local.catalog import ModelCatalog
 from open_speech.playback.synth import Synthesizer
 from open_speech.providers.base import TtsRequest
 from open_speech.providers.fixture import FixtureLlm, FixtureStt, FixtureTts, FixtureVision
-from open_speech.providers.keys import KeyStore
+from open_speech.providers.keys import ProviderKeys
 from open_speech.providers.registry import ProviderFactories, ProviderRegistry
 from open_speech.service.events import EventBus
+from open_speech.store.assets import AssetStore
 from open_speech.store.db import Database
 from open_speech.usage.budget import BudgetGuard
 from open_speech.usage.ledger import Ledger
@@ -36,16 +37,16 @@ class Runtime:
     ledger: Ledger
     budget: BudgetGuard
     synth: Synthesizer
-    keys: KeyStore
+    keys: ProviderKeys
 
 
 def build(paths: Paths, db: Database, settings: SettingsBox, events: EventBus, *, fixture: bool = True,
           factories: ProviderFactories | None = None, **env: Any) -> Runtime:
     e = make_env(open_speech_fixture_providers=fixture, **env)
-    keys = KeyStore(e, use_keychain=False)
+    keys = ProviderKeys(e)
     catalog = ModelCatalog.load(paths)
     registry = ProviderRegistry(e, paths, catalog, keys, settings=settings, factories=factories)
-    cache = AudioCache(paths, db)
+    cache = AudioCache(AssetStore(paths.cache, db))
     ledger = Ledger(db, Pricing.load(paths))
     budget = BudgetGuard(ledger, settings, events)
     synth = Synthesizer(registry, cache, ledger, budget, settings, events, retry_base_s=0.001, retry_max_s=0.005)
@@ -60,19 +61,19 @@ def rt(paths: Paths, db: Database, settings: SettingsBox, events: EventBus) -> R
 # ------------------------------------------------------------------ registry
 
 
-def test_voices_without_keys_are_listed_unavailable(paths: Paths, db: Database, settings: SettingsBox,
-                                                    events: EventBus) -> None:
+def test_providers_the_build_has_no_key_for_are_absent(paths: Paths, db: Database, settings: SettingsBox,
+                                                       events: EventBus) -> None:
     r = build(paths, db, settings, events, fixture=False).registry
     vs = r.voices()
     by = {v.id: v for v in vs}
-    oa = by["openai:gpt-4o-mini-tts:coral"]
-    assert not oa.available and oa.unavailable_reason == "Add an OpenAI key to use these voices."
-    assert by["gemini:gemini-3.8-flash-tts:Kore"].unavailable_reason == "Add a Gemini key to use these voices."
+    # No "add a key" placeholders: a provider the build doesn't include contributes nothing to choose from.
+    assert not any(v.provider in ("openai", "gemini") for v in vs)
     assert not by["kokoro:kokoro-82m-v1.0:af_heart"].available  # weights absent here
     assert not any(v.provider == "fixture" for v in vs)  # test voices only in fixture mode
     assert not any(v.provider == "qwen3" for v in vs)  # P2: listed by the model manager only
-    with pytest.raises(MissingKey):
+    with pytest.raises(Unavailable) as missing:
         r.tts_for("openai:gpt-4o-mini-tts:coral")
+    assert "key" not in missing.value.detail.lower()
     with pytest.raises(NotFound):
         r.tts_for("openai:gpt-4o-mini-tts:nobody")
     with pytest.raises(NotFound):
@@ -101,10 +102,9 @@ def test_keys_enable_providers_and_refresh(paths: Paths, db: Database, settings:
     prov, tmpl = r.tts_for("openai:gpt-4o-mini-tts:coral")
     assert tmpl == TtsRequest(text="", model="gpt-4o-mini-tts", voice="coral")
     assert r.tts_for("openai:gpt-4o-mini-tts:ash")[0] is prov and made == ["sk-one"]  # cached adapter
-    rt.keys.mark_invalid("openai")  # → refresh via listener
-    by = {v.id: v for v in r.voices()}
-    assert "rejected" in (by["openai:gpt-4o-mini-tts:coral"].unavailable_reason or "")
-    with pytest.raises(EngineError, match="rejected"):
+    rt.keys.mark_invalid("openai")  # the provider rejected the build's key → refresh via listener
+    assert "openai:gpt-4o-mini-tts:coral" not in {v.id for v in r.voices()}
+    with pytest.raises(Unavailable):
         r.tts_for("openai:gpt-4o-mini-tts:coral")
 
 
@@ -209,7 +209,7 @@ async def test_unavailable_voice_falls_back(paths: Paths, db: Database, settings
     rt = build(paths, db, settings, events)  # fixture mode, no OpenAI key
     res = await rt.synth.synth("Needs a key.", "openai:gpt-4o-mini-tts:coral")
     assert res.voice_id == LOCAL
-    assert res.notice == "That voice needs an OpenAI key; reading with the local voice."
+    assert res.notice == "That voice isn't available right now; reading with the local voice."
 
 
 async def test_style_is_part_of_the_key_and_ignored_with_notice_when_unsupported(

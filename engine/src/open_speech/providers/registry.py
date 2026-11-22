@@ -1,9 +1,9 @@
 """Provider registry: one voice list across providers (FR-VOICE-1), adapter construction from keys and the
 catalog, STT routing (07), and the local/fixture defaults.
 
-Adapters are created lazily and cached; `refresh()` drops them (called automatically when a key changes).
-Providers without a key still list their voices, with `available=False` and a reason, so the UI can hide
-them with an explanation (FR-SETUP-7).
+Adapters are created lazily and cached; `refresh()` drops them (called when a key is rejected or a local
+model is installed). A provider this build has no key for contributes no voices at all: users never see
+something they'd need a key to use.
 """
 
 from __future__ import annotations
@@ -14,14 +14,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from open_speech.config import DEFAULT_VOICE, EngineEnv, Paths, UserSettings
-from open_speech.errors import EngineError, MissingKey, NotFound
+from open_speech.errors import EngineError, NotFound, Unavailable
+from open_speech.i18n import t
 from open_speech.ids import split_voice_id
 from open_speech.local.catalog import ModelCatalog
 from open_speech.providers import gemini_tts as gemini_tts_mod
 from open_speech.providers import openai_tts as openai_tts_mod
 from open_speech.providers.base import LlmProvider, SttProvider, TtsProvider, TtsRequest, VisionProvider, Voice
-from open_speech.providers.errors import provider_name
-from open_speech.providers.keys import KeyStore
+from open_speech.providers.keys import ProviderKeys
 from open_speech.providers.stt_common import UsageSink
 
 log = logging.getLogger(__name__)
@@ -79,6 +79,12 @@ def _gemini_stt(catalog: ModelCatalog, key: str) -> SttProvider:
     return GeminiStt(catalog, key, partial_interval_s=INTERIM_PARTIALS_S)
 
 
+def _local_stt(catalog: ModelCatalog, paths: Paths) -> Any:
+    from open_speech.providers.local_stt import LocalStt
+
+    return LocalStt(catalog, paths)
+
+
 def _compat(catalog: ModelCatalog) -> TtsProvider:
     from open_speech.providers.openai_compatible import OpenAICompatibleTts
 
@@ -95,6 +101,7 @@ class ProviderFactories:
     anthropic: Callable[[ModelCatalog, str, Callable[[], UserSettings] | None], Any] = _anthropic
     openai_stt: Callable[[ModelCatalog, str], SttProvider] = _openai_stt
     gemini_stt: Callable[[ModelCatalog, str], SttProvider] = _gemini_stt
+    local_stt: Callable[[ModelCatalog, Paths], Any] = _local_stt
     openai_compatible: Callable[[ModelCatalog], TtsProvider] = _compat
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -105,7 +112,7 @@ class ProviderRegistry:
         env: EngineEnv,
         paths: Paths,
         catalog: ModelCatalog,
-        keys: KeyStore,
+        keys: ProviderKeys,
         *,
         settings: Callable[[], UserSettings] | None = None,
         factories: ProviderFactories | None = None,
@@ -129,9 +136,14 @@ class ProviderRegistry:
     def refresh(self) -> None:
         """Drop cached adapters (after a key change or catalog reload). Kokoro keeps its loaded session."""
         kokoro = self._cache.get("tts:kokoro")
+        local_stt = self._cache.get("stt:local")
         self._cache.clear()
         if kokoro is not None:
             self._cache["tts:kokoro"] = kokoro
+        if local_stt is not None:  # local speech-to-text keeps its loaded model too, unless its weights just went
+            self._cache["stt:local"] = local_stt
+            if not local_stt.installed():
+                local_stt.unload()
 
     def reload_catalog(self, catalog: ModelCatalog) -> None:
         self.catalog = catalog
@@ -178,13 +190,6 @@ class ProviderRegistry:
             return self._get("tts:openai_compatible", lambda: self._f.openai_compatible(self.catalog))  # type: ignore[no-any-return]
         return None
 
-    def _key_reason(self, provider_id: str) -> str:
-        name = provider_name(provider_id)
-        if self.keys.status(provider_id) == "invalid":
-            return f"Your {name} key was rejected. Paste a new one into the bar to use these voices."
-        article = "an" if name[0] in "AEIOU" else "a"
-        return f"Add {article} {name} key to use these voices."
-
     def voices(self) -> list[Voice]:
         out: list[Voice] = []
         for provider_id, catalog_fn in (
@@ -192,13 +197,8 @@ class ProviderRegistry:
             ("gemini", gemini_tts_mod.catalog_voices),
         ):
             models = self.catalog.tts_models(provider_id)
-            if not models:
-                continue
-            voices = catalog_fn(models)
-            if not self.keys.configured(provider_id):
-                reason = self._key_reason(provider_id)
-                voices = [v.model_copy(update={"available": False, "unavailable_reason": reason}) for v in voices]
-            out.extend(voices)
+            if models and self.keys.configured(provider_id):
+                out.extend(catalog_fn(models))
         if self.catalog.tts_models("kokoro"):
             out.extend(self.kokoro().voices())
         if self.catalog.tts_models("openai_compatible"):
@@ -217,7 +217,7 @@ class ProviderRegistry:
         raise NotFound(f"a voice called {voice_id}")
 
     def tts_for(self, voice_id: str) -> tuple[TtsProvider, TtsRequest]:
-        """Adapter + request template (text empty) for a voice. Raises NotFound / MissingKey /
+        """Adapter + request template (text empty) for a voice. Raises NotFound / Unavailable /
         EngineError(invalid_request) when the voice can't be used right now."""
         try:
             provider_id, model, voice = split_voice_id(voice_id)
@@ -229,14 +229,7 @@ class ProviderRegistry:
         if entry.status == "later":
             raise EngineError("invalid_request", f"{entry.name or model} voices aren't available yet.")
         if provider_id in KEYED_TTS and not self.keys.configured(provider_id):
-            if self.keys.status(provider_id) == "invalid":
-                raise EngineError(
-                    "missing_key",
-                    f"Your {provider_name(provider_id)} key was rejected. Paste a new one into the bar, or keep "
-                    "going with the local voice.",
-                    provider=provider_id,
-                )
-            raise MissingKey(provider_id, "This voice")
+            raise Unavailable("voice", provider=provider_id)
         prov = self.provider(provider_id)
         if prov is None:
             raise NotFound(f"a voice called {voice_id}")
@@ -302,11 +295,18 @@ class ProviderRegistry:
         entry = self.catalog.llm_for("anthropic")
         return entry.default if entry else "claude-sonnet-5-5"
 
+    def local_stt(self) -> Any:
+        """The on-device speech-to-text adapter (`LocalStt`), whether or not its weights are installed."""
+        return self._get("stt:local", lambda: self._f.local_stt(self.catalog, self.paths))
+
     def stt(self) -> SttProvider | None:
-        """First available per 07 § STT routing: OpenAI, Gemini, then the fixture STT in fixture mode.
-        `settings.voice_input.stt_provider` pins one provider ("local" is P1)."""
+        """First available per 07 § STT routing: on-device (when sherpa-onnx and its weights are present),
+        OpenAI, Gemini, then the fixture STT in fixture mode. `settings.voice_input.stt_provider` pins one.
+        Fixture mode never routes to the on-device model: hermetic runs must not depend on installed weights."""
         pref = self._settings().voice_input.stt_provider if self._settings is not None else "auto"
         order = ["openai", "gemini", "fixture"] if pref == "auto" else [pref]
+        if pref == "auto" and not self.fixture_mode:
+            order = ["local", *order]
         if pref == "local" and self.fixture_mode:
             order = ["fixture"]
         for p in order:
@@ -314,6 +314,15 @@ class ProviderRegistry:
             if stt is not None:
                 return stt
         return None
+
+    def stt_unavailable(self) -> tuple[str, str | None]:
+        """Why the bar can't listen, and the local model whose download would fix it (if any)."""
+        pref = self._settings().voice_input.stt_provider if self._settings is not None else "auto"
+        if pref in ("auto", "local") and not self.fixture_mode and self.catalog.local_stt_models():
+            local = self.local_stt()
+            if local.runtime_available() and not local.installed():
+                return t("unavailable.speech_model"), str(local.model)
+        return t("unavailable.speech_input"), None
 
     def _stt(self, provider_id: str) -> SttProvider | None:
         if provider_id in ("openai", "gemini"):
@@ -323,6 +332,10 @@ class ProviderRegistry:
             assert key is not None
             make = self._f.openai_stt if provider_id == "openai" else self._f.gemini_stt
             stt = self._get(f"stt:{provider_id}", lambda: make(self.catalog, key))
+        elif provider_id == "local":
+            if not self.catalog.local_stt_models() or self.local_stt().unavailable_reason() is not None:
+                return None
+            stt = self.local_stt()
         elif provider_id == "fixture" and self.fixture_mode:
             from open_speech.providers.fixture import FixtureStt
 
@@ -333,5 +346,3 @@ class ProviderRegistry:
             stt.usage_sink = self._usage_sink
         return stt  # type: ignore[no-any-return]
 
-    def stt_reason(self) -> str:
-        return "Voice input needs an OpenAI or Gemini key. Paste one into the bar, or type your command."

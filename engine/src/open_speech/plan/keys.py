@@ -19,7 +19,7 @@ from open_speech.rules.model import Rule
 from open_speech.rules.presets import preset_spec
 from open_speech.rules.scope import by_precedence, scope_matches
 
-PROMPT_VERSION = "annotate-1/transform-1"
+PROMPT_VERSION = "annotate-2/transform-1"
 PLANNER_VERSION = "planner-1"
 
 Mode = Literal["classic", "ai_enhanced"]

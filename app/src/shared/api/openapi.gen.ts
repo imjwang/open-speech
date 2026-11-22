@@ -243,6 +243,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/playback/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enqueue
+         * @description Read several documents one after another.
+         */
+        post: operations["enqueue_api_v1_playback_queue_post"];
+        /** Clear Queue */
+        delete: operations["clear_queue_api_v1_playback_queue_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Next Document
+         * @description Leave the current document and start the next one in the queue.
+         */
+        post: operations["next_document_api_v1_playback_next_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/playback/speed": {
         parameters: {
             query?: never;
@@ -394,6 +435,45 @@ export interface paths {
         post?: never;
         /** Delete Lexicon */
         delete: operations["delete_lexicon_api_v1_rules_lexicon__term__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rule Files
+         * @description The text files behind the rules: standing preferences, pronunciations, and one file per rule.
+         */
+        get: operations["rule_files_api_v1_rules_files_get"];
+        put?: never;
+        /** Create Rule File */
+        post: operations["create_rule_file_api_v1_rules_files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules/files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Rule File */
+        get: operations["read_rule_file_api_v1_rules_files__file_id__get"];
+        /** Write Rule File */
+        put: operations["write_rule_file_api_v1_rules_files__file_id__put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -609,36 +689,20 @@ export interface paths {
         patch: operations["patch_settings_api_v1_settings_patch"];
         trace?: never;
     };
-    "/api/v1/keys": {
+    "/api/v1/capabilities": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Keys State */
-        get: operations["keys_state_api_v1_keys_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/keys/{provider}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
         /**
-         * Put Key
-         * @description Write-only. `auto` detects the provider from the key prefix. There is no GET for keys.
+         * Capabilities
+         * @description What this build can do. Provider keys are build configuration, so this is all a client ever learns
+         *     about them: which features exist.
          */
-        put: operations["put_key_api_v1_keys__provider__put"];
+        get: operations["capabilities_api_v1_capabilities_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -786,6 +850,37 @@ export interface components {
             /** Media T1 */
             media_t1?: number | null;
         };
+        /** Appearance */
+        Appearance: {
+            /**
+             * Theme
+             * @default system
+             * @enum {string}
+             */
+            theme: "system" | "lavender" | "ember";
+        };
+        /**
+         * Attachment
+         * @description Something attached to a command in the composer: a file, a link, pasted text, or a document that was
+         *     already imported (uploads).
+         */
+        Attachment: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "file" | "url" | "text" | "document";
+            /** Path */
+            path?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Text */
+            text?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /** Name */
+            name?: string | null;
+        };
         /**
          * BBox
          * @description PDF points, origin top-left of the page (y grows downward).
@@ -913,6 +1008,29 @@ export interface components {
             max_gb: number;
         };
         /**
+         * Capabilities
+         * @description What this build can do (GET /capabilities). Cloud features depend on the providers configured at
+         *     build time; nothing here can be changed from inside the app.
+         */
+        Capabilities: {
+            speech_input: components["schemas"]["SpeechInput"];
+            /** Assistant */
+            assistant: boolean;
+            /** Ai Cleanup */
+            ai_cleanup: boolean;
+            /** Vision */
+            vision: boolean;
+            /** Cloud Voices */
+            cloud_voices?: string[];
+            /** Languages */
+            languages?: string[];
+            /**
+             * Language
+             * @default en
+             */
+            language: string;
+        };
+        /**
          * CreateDocumentRequest
          * @description JSON sources. Files go to `POST /documents/upload` (multipart).
          */
@@ -978,6 +1096,10 @@ export interface components {
              * @default kokoro:kokoro-82m-v1.0:af_heart
              */
             assistant_voice: string;
+            /** Voices */
+            voices?: {
+                [key: string]: string;
+            };
             /**
              * Speed
              * @default 1
@@ -1063,6 +1185,8 @@ export interface components {
             settings?: components["schemas"]["DocumentSettings"];
             /** Flags */
             flags?: string[];
+            /** Language */
+            language?: string | null;
             /**
              * Has Source File
              * @default false
@@ -1191,38 +1315,6 @@ export interface components {
             /** Job Id */
             job_id: string;
         };
-        /** KeyIn */
-        KeyIn: {
-            /** Key */
-            key: string;
-        };
-        /** KeyTestResult */
-        KeyTestResult: {
-            /** Ok */
-            ok: boolean;
-            /** Provider */
-            provider: string;
-            /** Detail */
-            detail: string;
-        };
-        /** KeysState */
-        KeysState: {
-            /**
-             * Anthropic
-             * @enum {string}
-             */
-            anthropic: "configured" | "missing" | "invalid";
-            /**
-             * Openai
-             * @enum {string}
-             */
-            openai: "configured" | "missing" | "invalid";
-            /**
-             * Gemini
-             * @enum {string}
-             */
-            gemini: "configured" | "missing" | "invalid";
-        };
         /** LedgerPage */
         LedgerPage: {
             /** Items */
@@ -1322,6 +1414,12 @@ export interface components {
              * @default
              */
             status: string;
+            /**
+             * Kind
+             * @default tts
+             * @enum {string}
+             */
+            kind: "tts" | "stt";
         };
         /** LocalModelList */
         LocalModelList: {
@@ -1370,6 +1468,11 @@ export interface components {
             /** Document Id */
             document_id?: string | null;
             from?: components["schemas"]["PlayFrom"] | null;
+            /**
+             * Confirm Estimate
+             * @default false
+             */
+            confirm_estimate: boolean;
         };
         /** PlaybackSettings */
         PlaybackSettings: {
@@ -1443,6 +1546,8 @@ export interface components {
             fallback_notice?: string | null;
             /** Error */
             error?: string | null;
+            /** Queue */
+            queue?: components["schemas"]["QueueItem"][];
         };
         /** Position */
         Position: {
@@ -1504,6 +1609,33 @@ export interface components {
              */
             usd_estimate: string;
         };
+        /** QueueItem */
+        QueueItem: {
+            /** Document Id */
+            document_id: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * QueueRequest
+         * @description Read several documents one after another. `now` replaces what is playing and starts the first;
+         *     `next` goes right after the current document; `last` appends.
+         */
+        QueueRequest: {
+            /** Document Ids */
+            document_ids: string[];
+            /**
+             * When
+             * @default now
+             * @enum {string}
+             */
+            when: "now" | "next" | "last";
+            /**
+             * Confirm Estimate
+             * @default false
+             */
+            confirm_estimate: boolean;
+        };
         /** ReaderSettings */
         ReaderSettings: {
             /**
@@ -1527,12 +1659,94 @@ export interface components {
              * @default false
              */
             high_contrast: boolean;
+        };
+        /**
+         * RuleFile
+         * @description One text file under rules/: the standing preferences, the pronunciation list, or a rule.
+         */
+        RuleFile: {
+            /** Id */
+            id: string;
             /**
-             * Theme
-             * @default system
+             * Kind
              * @enum {string}
              */
-            theme: "system" | "light" | "dark";
+            kind: "preferences" | "lexicon" | "rule" | "preset";
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            scope?: components["schemas"]["RuleScope"] | null;
+            /** Tier */
+            tier?: ("filter" | "annotate" | "transform") | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** RuleFileContent */
+        RuleFileContent: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "preferences" | "lexicon" | "rule" | "preset";
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            scope?: components["schemas"]["RuleScope"] | null;
+            /** Tier */
+            tier?: ("filter" | "annotate" | "transform") | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Text */
+            text: string;
+            /** Body */
+            body: string;
+        };
+        /** RuleFileList */
+        RuleFileList: {
+            /** Items */
+            items: components["schemas"]["RuleFile"][];
+            /** Errors */
+            errors?: string[];
+        };
+        /**
+         * RuleFileWrite
+         * @description Save a rule file. Send `body` to change what a rule says (the engine works out how to apply it again),
+         *     or `text` to replace the whole file including its header. `name` creates or renames a rule.
+         */
+        RuleFileWrite: {
+            /** Body */
+            body?: string | null;
+            /** Text */
+            text?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            scope?: components["schemas"]["RuleScope"] | null;
         };
         /**
          * RuleHit
@@ -1748,6 +1962,27 @@ export interface components {
              */
             summary: string;
         };
+        /**
+         * SpeechInput
+         * @description Whether the bar can listen, and with what.
+         */
+        SpeechInput: {
+            /** Available */
+            available: boolean;
+            /** Provider */
+            provider?: string | null;
+            /**
+             * Local
+             * @default false
+             */
+            local: boolean;
+            /** Model */
+            model?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Install Model */
+            install_model?: string | null;
+        };
         /** SpeedRequest */
         SpeedRequest: {
             /** Speed */
@@ -1784,22 +2019,29 @@ export interface components {
             document_id?: string | null;
             /** Selection */
             selection?: string | null;
+            /** Conversation Id */
+            conversation_id?: string | null;
         };
         /** TurnRequest */
         TurnRequest: {
-            /** Text */
+            /**
+             * Text
+             * @default
+             */
             text: string;
             /**
              * Source
              * @default typed
              * @enum {string}
              */
-            source: "typed" | "spoken";
+            source: "typed" | "spoken" | "button";
             /** Session Id */
             session_id?: string | null;
             /** Recording Id */
             recording_id?: string | null;
             context?: components["schemas"]["TurnContext"];
+            /** Attachments */
+            attachments?: components["schemas"]["Attachment"][];
         };
         /** UsageLine */
         UsageLine: {
@@ -1842,6 +2084,13 @@ export interface components {
         };
         /** UserSettings */
         UserSettings: {
+            /**
+             * Language
+             * @default auto
+             * @enum {string}
+             */
+            language: "auto" | "en" | "es";
+            appearance?: components["schemas"]["Appearance"];
             shortcuts?: components["schemas"]["Shortcuts"];
             defaults?: components["schemas"]["Defaults"];
             budget?: components["schemas"]["Budget"];
@@ -1960,12 +2209,7 @@ export interface components {
              * @default auto
              * @enum {string}
              */
-            stt_provider: "auto" | "openai" | "gemini" | "local";
-            /**
-             * Language
-             * @default auto
-             */
-            language: string;
+            stt_provider: "auto" | "local" | "openai" | "gemini";
         };
         /** VoiceList */
         VoiceList: {
@@ -2469,6 +2713,79 @@ export interface operations {
             };
         };
     };
+    enqueue_api_v1_playback_queue_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_queue_api_v1_playback_queue_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackState"];
+                };
+            };
+        };
+    };
+    next_document_api_v1_playback_next_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackState"];
+                };
+            };
+        };
+    };
     speed_api_v1_playback_speed_put: {
         parameters: {
             query?: never;
@@ -2822,6 +3139,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LexiconList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rule_files_api_v1_rules_files_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleFileList"];
+                };
+            };
+        };
+    };
+    create_rule_file_api_v1_rules_files_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleFileWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleFileContent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_rule_file_api_v1_rules_files__file_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleFileContent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_rule_file_api_v1_rules_files__file_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleFileWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleFileContent"];
                 };
             };
             /** @description Validation Error */
@@ -3275,7 +3711,7 @@ export interface operations {
             };
         };
     };
-    keys_state_api_v1_keys_get: {
+    capabilities_api_v1_capabilities_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -3290,42 +3726,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KeysState"];
-                };
-            };
-        };
-    };
-    put_key_api_v1_keys__provider__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider: "anthropic" | "openai" | "gemini" | "auto";
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KeyIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KeyTestResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["Capabilities"];
                 };
             };
         };

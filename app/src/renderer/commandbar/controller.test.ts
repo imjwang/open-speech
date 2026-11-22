@@ -15,11 +15,13 @@ import {
   BarController,
   IDLE_SUGGESTIONS_MS,
   MIC_IDLE_OFF_MS,
+  MIC_OFF_RECHECK_MS,
   PTT_MIN_HOLD_MS,
   TURN_START_TIMEOUT_MS,
   wireBarEvents,
   type BarDeps,
 } from './controller'
+import type { AttachmentItem } from './composer/attachments'
 import { createBarStore, type BarState } from './store'
 
 type Msg<T extends ClientMessage['type']> = Extract<ClientMessage, { type: T }>
@@ -53,11 +55,36 @@ function harness(initial: Partial<BarState> = {}) {
     },
     endOfSpeechMs: () => 800,
     newSessionId: () => `s${++seq}`,
+    newConversationId: () => 'conv',
     now: () => now,
   }
   const controller = new BarController(store, deps)
+  /** Stands in for the Lexical composer: records what the controller asks of it. */
+  const composer = {
+    calls: [] as string[],
+    dictation: null as string | null,
+    inserted: [] as AttachmentItem[],
+    clear() {
+      this.calls.push('clear')
+      this.dictation = null
+    },
+    insertAttachments(items: AttachmentItem[]) {
+      this.calls.push('insert')
+      this.inserted.push(...items)
+    },
+    setDictation(text: string | null) {
+      this.calls.push(text === null ? 'keep' : 'dictate')
+      if (text !== null) this.dictation = text
+    },
+    dropDictation() {
+      this.calls.push('drop')
+      this.dictation = null
+    },
+  }
+  controller.attachComposer(composer)
   return {
     store,
+    composer,
     mic,
     sent,
     audio,
@@ -147,8 +174,8 @@ describe('BarController.open / close', () => {
     expect(h.sent[0]).toEqual({ type: 'bar.state', open: true })
     const starts = h.ofType('mic.start')
     expect(starts).toHaveLength(1)
-    expect(starts[0]).toMatchObject({ session_id: 's1', mode: 'auto', context: { document_id: 'doc-1' } })
-    expect(h.state).toMatchObject({ open: true, mode: 'listening', sessionId: 's1', context: { documentId: 'doc-1' } })
+    expect(starts[0]).toMatchObject({ session_id: 's1', mode: 'auto', context: { document_id: 'doc-1', conversation_id: 'conv' } })
+    expect(h.state).toMatchObject({ open: true, mode: 'listening', sessionId: 's1', context: { documentId: 'doc-1', conversationId: 'conv' } })
     expect(h.mic.active).toBe(true)
     expect(h.listening.at(-1)).toBe(true)
   })
@@ -188,7 +215,7 @@ describe('BarController.open / close', () => {
     const h = harness()
     h.setConnected(false)
     h.open(true)
-    h.controller.setText('read')
+    h.controller.setDraft('read', [])
     h.setConnected(true)
     h.controller.connected()
     expect(h.state.mode).toBe('typing')
@@ -231,11 +258,12 @@ describe('BarController.open / close', () => {
     h.open(true)
     h.controller.close()
 
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false }])
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false, attachments: [] }])
     expect(h.sent.at(-1)).toEqual({ type: 'bar.state', open: false })
     expect(h.mic.active).toBe(false)
     expect(h.listening.at(-1)).toBe(false)
-    expect(h.state).toMatchObject({ open: false, mode: 'typing', text: '' })
+    expect(h.state).toMatchObject({ open: false, mode: 'typing', transcript: '', draft: '', attachments: [] })
+    expect(h.composer.calls.at(-1)).toBe('clear')
   })
 
   it('close is a no-op when already closed', () => {
@@ -261,10 +289,11 @@ describe('BarController listening → typing', () => {
     h.controller.onSttPartial(partial('s1', 'read the'))
     h.controller.keystroke()
 
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false }])
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false, attachments: [] }])
     expect(h.state.mode).toBe('typing')
-    // The transcript stays editable.
-    expect(h.state.text).toBe('read the')
+    // The transcript stays in the composer, as ordinary editable text.
+    expect(h.composer.dictation).toBe('read the')
+    expect(h.composer.calls.slice(-2)).toEqual(['dictate', 'keep'])
     expect(h.mic.active).toBe(false)
   })
 
@@ -294,7 +323,7 @@ describe('BarController listening → typing', () => {
     expect(h.state.mode).toBe('listening')
     h.controller.toggle()
     expect(h.state.mode).toBe('typing')
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false }])
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false, attachments: [] }])
   })
 
   it('partials replace the input in place; stale-session partials are ignored', () => {
@@ -303,7 +332,8 @@ describe('BarController listening → typing', () => {
     h.controller.onSttPartial(partial('s1', 'read'))
     h.controller.onSttPartial(partial('s1', 'read this'))
     h.controller.onSttPartial(partial('other', 'nope'))
-    expect(h.state.text).toBe('read this')
+    expect(h.state.transcript).toBe('read this')
+    expect(h.composer.dictation).toBe('read this')
   })
 
   it('a mic error drops to typing with the error message', () => {
@@ -312,7 +342,7 @@ describe('BarController listening → typing', () => {
     h.mic.handlers!.onError(new Error('Microphone permission denied'))
     expect(h.state.mode).toBe('typing')
     expect(h.state.micError).toBe('Microphone permission denied')
-    expect(h.ofType('mic.stop')[0]).toMatchObject({ submit: false })
+    expect(h.ofType('mic.stop')[0]).toMatchObject({ submit: false, attachments: [] })
   })
 
   it('turns the mic off after MIC_IDLE_OFF_MS without speech', () => {
@@ -323,8 +353,35 @@ describe('BarController listening → typing', () => {
     h.advance(1)
     expect(h.state.mode).toBe('typing')
     expect(h.state.hint).toMatch(/microphone off/i)
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false }])
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false, attachments: [] }])
     expect(h.mic.active).toBe(false)
+  })
+
+  it('does not turn the mic off on the first instant of speech', () => {
+    const h = harness()
+    h.open(true)
+    h.mic.feed(QUIET, 300) // the room is measured
+    h.advance(MIC_IDLE_OFF_MS - 100)
+    h.mic.feed(LOUD, 96) // a word begins just as the timeout lands: not yet long enough to count as speech
+    h.advance(100)
+    expect(h.state.mode).toBe('listening')
+    h.mic.feed(LOUD, 320)
+    h.advance(MIC_OFF_RECHECK_MS)
+    expect(h.state.mode).toBe('listening')
+    expect(h.ofType('mic.stop')).toHaveLength(0)
+  })
+
+  it('a stray noise at the timeout only postpones it', () => {
+    const h = harness()
+    h.open(true)
+    h.mic.feed(QUIET, 300)
+    h.advance(MIC_IDLE_OFF_MS - 100)
+    h.mic.feed(LOUD, 64)
+    h.advance(100)
+    expect(h.state.mode).toBe('listening')
+    h.mic.feed(QUIET, 320)
+    h.advance(MIC_OFF_RECHECK_MS)
+    expect(h.state).toMatchObject({ mode: 'typing', hint: 'Microphone off' })
   })
 
   it('keeps the mic on past MIC_IDLE_OFF_MS once speech started', () => {
@@ -356,7 +413,7 @@ describe('BarController.submit: each utterance submits at most once', () => {
     expect(h.controller.submit('ptt')).toBe(false)
     expect(h.controller.submit('enter')).toBe(false)
 
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: true }])
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: true, attachments: [] }])
     expect(h.state.mode).toBe('finalizing')
   })
 
@@ -367,7 +424,7 @@ describe('BarController.submit: each utterance submits at most once', () => {
     h.silence()
 
     expect(h.state.mode).toBe('finalizing')
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: true }])
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: true, attachments: [] }])
     expect(h.controller.submit('enter')).toBe(false)
     expect(h.ofType('mic.stop')).toHaveLength(1)
   })
@@ -377,7 +434,7 @@ describe('BarController.submit: each utterance submits at most once', () => {
     h.open(true)
     h.controller.onSttPartial(partial('s1', 'read this'))
     expect(h.controller.submit('enter')).toBe(true)
-    expect(h.ofType('mic.stop')[0]).toMatchObject({ submit: true })
+    expect(h.ofType('mic.stop')[0]).toMatchObject({ submit: true, attachments: [] })
   })
 
   it('enter with nothing heard keeps listening and sends nothing', () => {
@@ -397,7 +454,7 @@ describe('BarController.submit: each utterance submits at most once', () => {
     h.controller.hotkeyReleased()
     h.controller.hotkeyReleased()
 
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: true }])
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: true, attachments: [] }])
     expect(h.state.mode).toBe('finalizing')
     expect(h.controller.openedViaHotkey).toBe(false)
   })
@@ -418,7 +475,7 @@ describe('BarController.submit: each utterance submits at most once', () => {
     h.tick(PTT_MIN_HOLD_MS + 50)
     h.controller.hotkeyReleased()
     expect(h.state.mode).toBe('typing')
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false }])
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false, attachments: [] }])
   })
 
   it('hotkey release is ignored when the bar was not opened by the hotkey', () => {
@@ -436,7 +493,9 @@ describe('BarController.submit: each utterance submits at most once', () => {
     h.speak()
     h.controller.onSttFinal(final('s1', 'read this'))
 
-    expect(h.state).toMatchObject({ mode: 'finalizing', text: 'read this' })
+    // What was said moves out of the composer (which stays free for the next thing) into the pending row.
+    expect(h.state).toMatchObject({ mode: 'finalizing', transcript: '', pending: { text: 'read this', attachments: [] } })
+    expect(h.composer.calls).toContain('clear')
     expect(h.ofType('mic.stop')).toHaveLength(0)
     expect(h.mic.active).toBe(false)
     expect(h.controller.submit('enter')).toBe(false)
@@ -451,7 +510,7 @@ describe('BarController.submit: each utterance submits at most once', () => {
     h.controller.onSttFinal(final('s1', '   '))
 
     expect(h.state.mode).toBe('typing')
-    expect(h.state.text).toBe('')
+    expect(h.state).toMatchObject({ transcript: '', pending: null })
     expect(h.state.hint).toMatch(/didn't catch that/i)
     h.advance(TURN_START_TIMEOUT_MS)
     expect(h.state.notices).toHaveLength(0)
@@ -464,7 +523,7 @@ describe('BarController.submit: each utterance submits at most once', () => {
     h.controller.submit('enter')
     h.advance(TURN_START_TIMEOUT_MS)
     expect(h.state.mode).toBe('typing')
-    expect(h.state.notices.at(-1)).toMatchObject({ level: 'warn', text: expect.stringMatching(/did not answer/) })
+    expect(h.state.notices.at(-1)).toMatchObject({ level: 'warn', text: expect.stringMatching(/no answer/i) })
   })
 
   it('an interceptor gets the final transcript (not a partial), sends no command, then listens again', () => {
@@ -509,40 +568,142 @@ describe('BarController.submit: each utterance submits at most once', () => {
   })
 })
 
-describe('BarController.submitText', () => {
+describe('BarController: speech as a command, or as dictation', () => {
+  const report: AttachmentItem = { kind: 'file', path: '/a/report.pdf', name: 'report.pdf', fileKind: 'pdf' }
+
+  it('with nothing typed, speech is a command: it is sent with the attached badges and the composer is freed', () => {
+    const h = harness()
+    h.open(false)
+    h.controller.setDraft('', [report])
+    h.controller.toggle()
+    expect(h.ofType('mic.start')[0]).toMatchObject({ transcribe_only: false })
+    h.speak()
+    h.controller.onSttPartial(partial('s1', 'read these'))
+    expect(h.controller.submit('vad')).toBe(true)
+
+    expect(h.ofType('mic.stop').at(-1)).toEqual({
+      type: 'mic.stop',
+      session_id: 's1',
+      submit: true,
+      attachments: [{ kind: 'file', path: '/a/report.pdf', name: 'report.pdf' }],
+    })
+    expect(h.state).toMatchObject({ mode: 'finalizing', draft: '', attachments: [] })
+    expect(h.state.pending).toEqual({ text: 'read these', attachments: [{ kind: 'file', title: 'report.pdf' }] })
+    expect(h.composer.calls.at(-1)).toBe('clear')
+  })
+
+  it('if nothing was heard after all, the badges come back', () => {
+    const h = harness()
+    h.open(false)
+    h.controller.setDraft('', [report])
+    h.controller.toggle()
+    h.speak()
+    h.controller.submit('enter')
+    h.controller.onSttFinal(final('s1', ''))
+    expect(h.composer.inserted).toEqual([report])
+    expect(h.state).toMatchObject({ mode: 'typing', pending: null })
+  })
+
+  it('with text already typed, speech is dictation: transcribe-only, added to the text, nothing sent', () => {
+    const h = harness()
+    h.open(false)
+    h.composer.calls.length = 0 // opening the bar starts from an empty composer
+    h.controller.setDraft('summarize', [])
+    h.controller.toggle()
+    expect(h.ofType('mic.start')[0]).toMatchObject({ transcribe_only: true })
+    expect(h.state.dictating).toBe(true)
+    h.speak()
+    h.controller.onSttPartial(partial('s1', 'the second chapter'))
+    h.controller.submit('vad')
+    expect(h.ofType('mic.stop').at(-1)).toMatchObject({ submit: true, attachments: [] })
+    h.controller.onSttFinal(final('s1', 'the second chapter.'))
+
+    expect(h.composer.dictation).toBe('the second chapter.')
+    expect(h.composer.calls.slice(-2)).toEqual(['dictate', 'keep'])
+    expect(h.composer.calls).not.toContain('clear')
+    expect(h.state).toMatchObject({ mode: 'typing', dictating: false, pending: null })
+    expect(h.ofType('command')).toHaveLength(0)
+  })
+
+  it('what is typed while an utterance is still being processed is kept for the next command', () => {
+    const h = harness()
+    h.open(true)
+    h.composer.calls.length = 0 // opening the bar starts from an empty composer
+    h.speak()
+    h.controller.onSttPartial(partial('s1', 'pause'))
+    h.controller.submit('vad')
+    // The user types straight away, before the transcript or the turn has come back.
+    h.controller.setDraft('faster', [])
+    h.controller.onSttFinal(final('s1', 'pause'))
+    h.controller.onTurn(turn('t1', 's1', 'spoken', 'pause'))
+    h.controller.onDone(done('t1'))
+
+    expect(h.state.draft).toBe('faster')
+    expect(h.composer.calls.filter((c) => c === 'clear')).toHaveLength(1) // once, when the utterance was sent
+    expect(h.state.mode).toBe('typing')
+  })
+
+  it('everything said while the bar stays open shares one conversation id', () => {
+    const h = harness()
+    h.open(true)
+    h.controller.keystroke()
+    h.controller.submitCommand('faster')
+    expect(h.ofType('mic.start')[0]?.context).toMatchObject({ conversation_id: 'conv' })
+    expect(h.ofType('command')[0]?.context).toMatchObject({ conversation_id: 'conv' })
+  })
+})
+
+describe('BarController.submitCommand', () => {
   it('sends the trimmed text as a typed command and waits for the turn', () => {
     const h = harness()
     h.open(false, false, 'doc-9')
-    expect(h.controller.submitText('  read this page  ')).toBe(true)
+    expect(h.controller.submitCommand('  read this page  ')).toBe(true)
 
     expect(h.ofType('command')).toEqual([
-      { type: 'command', text: 'read this page', source: 'typed', session_id: 's1', context: { document_id: 'doc-9' } },
+      {
+        type: 'command',
+        text: 'read this page',
+        source: 'typed',
+        session_id: 's1',
+        context: { document_id: 'doc-9', conversation_id: 'conv' },
+        attachments: [],
+      },
     ])
-    expect(h.state).toMatchObject({ mode: 'waiting', sessionId: 's1', text: '', pendingText: 'read this page' })
+    expect(h.state).toMatchObject({ mode: 'waiting', sessionId: 's1', pending: { text: 'read this page', attachments: [] } })
   })
 
-  it('Enter in typing mode submits the input text', () => {
+  it('sends attachments with the command, or on their own ("read these")', () => {
     const h = harness()
     h.open(false)
-    h.controller.setText('show voices')
-    expect(h.controller.submit('enter')).toBe(true)
-    expect(h.ofType('command')[0]).toMatchObject({ text: 'show voices' })
+    const files = [{ kind: 'file' as const, path: '/a/report.pdf', name: 'report.pdf' }]
+    expect(h.controller.submitCommand('', files, { shown: [{ kind: 'file', title: 'report.pdf' }] })).toBe(true)
+    expect(h.ofType('command')[0]).toMatchObject({ text: '', attachments: files })
+    expect(h.state.pending).toEqual({ text: '', attachments: [{ kind: 'file', title: 'report.pdf' }] })
   })
 
-  it('refuses empty text and a second submit while waiting', () => {
+  it('a toolbar press is sent as a button command and shows no "you said" line', () => {
     const h = harness()
     h.open(false)
-    expect(h.controller.submitText('   ')).toBe(false)
-    expect(h.controller.submitText('one')).toBe(true)
-    expect(h.controller.submitText('two')).toBe(false)
-    expect(h.ofType('command')).toHaveLength(1)
+    expect(h.controller.submitCommand('show voices', [], { source: 'button' })).toBe(true)
+    expect(h.ofType('command')[0]).toMatchObject({ text: 'show voices', source: 'button' })
+    expect(h.state.pending).toBeNull()
+  })
+
+  it('refuses a command with nothing in it; a second command while one is in flight is allowed', () => {
+    const h = harness()
+    h.open(false)
+    expect(h.controller.submitCommand('   ')).toBe(false)
+    expect(h.controller.submitCommand('one')).toBe(true)
+    // The composer is never locked: the next command can be sent while the first is still being answered.
+    expect(h.controller.submitCommand('two')).toBe(true)
+    expect(h.ofType('command').map((c) => c.text)).toEqual(['one', 'two'])
   })
 
   it('stops the mic (without submitting audio) when a suggestion is chosen while listening', () => {
     const h = harness()
     h.open(true)
-    h.controller.submitText('How much have I spent?')
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false }])
+    h.controller.submitCommand('How much have I spent?')
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false, attachments: [] }])
     expect(h.ofType('command')[0]).toMatchObject({ session_id: 's2' })
   })
 
@@ -550,32 +711,32 @@ describe('BarController.submitText', () => {
     const h = harness()
     h.open(false)
     h.setConnected(false)
-    expect(h.controller.submitText('hello')).toBe(false)
+    expect(h.controller.submitCommand('hello')).toBe(false)
     expect(h.state.notices.at(-1)).toMatchObject({ level: 'error' })
     expect(h.state.mode).toBe('typing')
   })
 })
 
 describe('BarController engine events', () => {
-  it('missing_key while listening switches to typing, sets canListen:false, and adds no notice', () => {
+  it('unavailable while listening switches to typing, sets canListen:false, and adds no notice', () => {
     const h = harness()
     h.open(true)
-    h.controller.onError({ type: 'error', problem: { code: 'missing_key', detail: 'Add an OpenAI or Gemini key to talk.' } })
+    h.controller.onError({ type: 'error', problem: { code: 'unavailable', detail: 'Add an OpenAI or Gemini key to talk.' } })
 
     expect(h.state).toMatchObject({ mode: 'typing', canListen: false })
     expect(h.state.notices).toHaveLength(0)
     expect(h.state.announcement?.text).toBe('Add an OpenAI or Gemini key to talk.')
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false }])
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false, attachments: [] }])
   })
 
   it('other errors add an error notice and end a waiting turn', () => {
     const h = harness()
     h.open(false)
-    h.controller.submitText('hello')
+    h.controller.submitCommand('hello')
     h.controller.onError({ type: 'error', problem: { code: 'provider_error', title: 'Upstream failed' } })
 
     expect(h.state.notices).toEqual([expect.objectContaining({ level: 'error', text: 'Upstream failed' })])
-    expect(h.state).toMatchObject({ mode: 'typing', pendingText: null })
+    expect(h.state).toMatchObject({ mode: 'typing', pending: null })
     // The turn timeout was cleared.
     h.advance(TURN_START_TIMEOUT_MS)
     expect(h.state.notices).toHaveLength(1)
@@ -590,9 +751,9 @@ describe('BarController engine events', () => {
   it('a typed turn: assistant.turn → waiting, done → typing', () => {
     const h = harness()
     h.open(false)
-    h.controller.submitText('hello')
+    h.controller.submitCommand('hello')
     h.controller.onTurn(turn('t1', 's1', 'typed', 'hello'))
-    expect(h.state).toMatchObject({ mode: 'waiting', pendingText: null, selected: 'reply:t1' })
+    expect(h.state).toMatchObject({ mode: 'waiting', pending: null, selected: 'reply:t1' })
     h.controller.onDelta({ type: 'assistant.delta', turn_id: 't1', text: 'Hi ' })
     h.controller.onDelta({ type: 'assistant.delta', turn_id: 't1', text: 'there' })
     h.controller.onDone(done('t1'))
@@ -609,7 +770,7 @@ describe('BarController engine events', () => {
     expect(h.state.selected).toBe('action:a1')
     expect(h.state.actions.a1).toMatchObject({ actionId: 'a1', turnId: 't1', status: 'pending', summary: 'Skip page footers' })
     expect(h.state.turns).toEqual([expect.objectContaining({ turnId: 't1', actionIds: ['a1'] })])
-    expect(h.state.announcement?.text).toMatch(/Press Enter to confirm/)
+    expect(h.state.announcement?.text).toMatch(/Enter confirms, Escape cancels/)
     expect(h.controller.latestPendingAction()?.actionId).toBe('a1')
   })
 
@@ -649,7 +810,7 @@ describe('BarController engine events', () => {
   it('done for a typed turn with a pending action returns to typing (Enter confirms)', () => {
     const h = harness()
     h.open(false)
-    h.controller.submitText('skip footers')
+    h.controller.submitCommand('skip footers')
     h.controller.onTurn(turn('t1', 's1', 'typed'))
     h.controller.onAction(action('t1', 'a1'))
     h.controller.onDone(done('t1'))
@@ -664,11 +825,12 @@ describe('BarController engine events', () => {
     expect(h.state.turns[0]).toMatchObject({ done: true, error: 'Budget reached.' })
   })
 
-  it('a keys card opens key entry', () => {
+  it('a card joins its turn; the same list shown again replaces itself', () => {
     const h = harness()
-    h.controller.onCard({ type: 'assistant.card', turn_id: 't1', kind: 'keys', title: 'Keys' })
-    expect(h.state.keyEntry).toBe(true)
-    expect(h.state.turns[0]?.cards[0]).toMatchObject({ id: 't1:0', kind: 'keys', rows: [], data: {} })
+    h.controller.onCard({ type: 'assistant.card', turn_id: 't1', kind: 'voices', title: 'Voices', rows: [{ id: 'a', title: 'A' }] })
+    h.controller.onCard({ type: 'assistant.card', turn_id: 't1', kind: 'voices', title: 'Voices', rows: [{ id: 'b', title: 'B' }] })
+    expect(h.state.turns[0]?.cards).toHaveLength(1)
+    expect(h.state.turns[0]?.cards[0]).toMatchObject({ id: 't1:voices', kind: 'voices', rows: [{ id: 'b', title: 'B' }], data: {} })
   })
 
   it('usage alerts map stop → error and warn → warn', () => {
@@ -699,7 +861,7 @@ describe('BarController.withMicPaused', () => {
     expect(h.state.mode).toBe('typing')
     expect(h.state.prompting).toBe(true)
     expect(h.mic.active).toBe(false)
-    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false }])
+    expect(h.ofType('mic.stop')).toEqual([{ type: 'mic.stop', session_id: 's1', submit: false, attachments: [] }])
 
     d.resolve()
     await p
@@ -731,7 +893,7 @@ describe('BarController.withMicPaused', () => {
     const typed = harness()
     typed.open(true)
     await typed.controller.withMicPaused(async () => {
-      typed.controller.setText('read')
+      typed.controller.setDraft('read', [])
     })
     expect(typed.state.mode).toBe('typing')
 
@@ -752,9 +914,9 @@ describe('wireBarEvents', () => {
     const off = wireBarEvents(socket, h.controller)
     h.open(true)
     socket.emit({ type: 'stt.partial', session_id: 's1', text: 'hello' } as ServerMessage)
-    expect(h.state.text).toBe('hello')
+    expect(h.state.transcript).toBe('hello')
     off()
     socket.emit({ type: 'stt.partial', session_id: 's1', text: 'ignored' } as ServerMessage)
-    expect(h.state.text).toBe('hello')
+    expect(h.state.transcript).toBe('hello')
   })
 })

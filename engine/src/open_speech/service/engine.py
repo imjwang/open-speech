@@ -12,6 +12,7 @@ from typing import Any
 from open_speech import __version__
 from open_speech.api import schemas as s
 from open_speech.config import EngineEnv, Paths
+from open_speech.i18n import resolve_language, set_default_language
 from open_speech.providers.base import LlmCall
 from open_speech.service.events import EventBus
 from open_speech.store.db import Database
@@ -25,7 +26,6 @@ class Engine:
         env: EngineEnv | None = None,
         *,
         output: Any | None = None,
-        use_keychain: bool = False,
         agent_runner_factory: Any | None = None,
     ) -> None:
         from open_speech.cache.audio import AudioCache
@@ -36,17 +36,19 @@ class Engine:
         from open_speech.plan.planner import Planner
         from open_speech.playback.synth import Synthesizer
         from open_speech.playback.transport import Transport
-        from open_speech.providers.keys import KeyStore
+        from open_speech.providers.keys import ProviderKeys
         from open_speech.providers.registry import ProviderRegistry
         from open_speech.rules.files import RuleStore
         from open_speech.service.assistant import AssistantService
         from open_speech.service.clipboard import ClipboardReader
         from open_speech.service.documents import DocumentService
-        from open_speech.service.misc import KeyService, ModelService, RecordingService, UsageService, VoiceService
+        from open_speech.service.misc import ModelService, RecordingService, UsageService, VoiceService
         from open_speech.service.playback import PlaybackService
         from open_speech.service.rules import RuleService
         from open_speech.service.settings import SettingsService
         from open_speech.service.voice_input import VoiceInputService
+        from open_speech.store.assets import AssetStore
+        from open_speech.store.pages import PageStore
         from open_speech.usage.budget import BudgetGuard
         from open_speech.usage.ledger import Ledger
         from open_speech.usage.pricing import Pricing
@@ -61,17 +63,18 @@ class Engine:
 
         # runtime (workstream B)
         self.catalog = ModelCatalog.load(self.paths)
-        self.keystore = KeyStore(self.env, use_keychain=use_keychain)
-        self.registry = ProviderRegistry(self.env, self.paths, self.catalog, self.keystore)
+        self.keys = ProviderKeys(self.env)
+        self.registry = ProviderRegistry(self.env, self.paths, self.catalog, self.keys, settings=self.settings.get)
         self.pricing = Pricing.load(self.paths)
         self.ledger = Ledger(self.db, self.pricing)
         self.budget = BudgetGuard(self.ledger, self.settings.get, self.events)
-        self.audio_cache = AudioCache(self.paths, self.db)
+        self.assets = AssetStore(self.paths.cache, self.db)
+        self.audio_cache = AudioCache(self.assets)
         self.synth = Synthesizer(
             self.registry, self.audio_cache, self.ledger, self.budget, self.settings.get, self.events
         )
         self.model_manager = LocalModelManager(
-            self.paths, self.catalog, self.events, on_change=lambda _model: self.registry.refresh()
+            self.paths, self.catalog, self.events, on_change=self._models_changed
         )
         if output is None:
             output = self._default_output()
@@ -81,8 +84,11 @@ class Engine:
             self.events,
             settings=self.settings.get,
             on_position=self._on_position,
-            **self._transport_extras(),
+            anchor_resolver=self._resolve_anchor,
+            on_finished=lambda document_id: self.playback.document_finished(document_id),
+            queue=lambda: self.playback.queue(),
         )
+        self.pages = PageStore(self.assets, allow_private=self.env.open_speech_allow_private_urls)
 
         # pipeline (workstream A)
         self.extract_cache = ExtractCache(self.paths)
@@ -99,12 +105,13 @@ class Engine:
         self.rules = RuleService(self)
         self.assistant = AssistantService(self)
         self.usage = UsageService(self)
-        self.keys = KeyService(self)
         self.models = ModelService(self)
         self.recordings = RecordingService(self)
         self.voice_input = VoiceInputService(self)
         self._bg: list[asyncio.Task[Any]] = []
         self._ensure_default_voice()
+        set_default_language(resolve_language(self.settings.get().language))
+        self.settings.on_change(self._settings_changed)
 
     # ------------------------------------------------------------------ wiring helpers
 
@@ -120,17 +127,6 @@ class Engine:
         except Exception as e:  # noqa: BLE001 — no PortAudio (Linux CI) → headless real-time clock output
             log.info("audio output unavailable (%s); using NullOutput", e)
             return NullOutput()
-
-    def _transport_extras(self) -> dict[str, Any]:
-        import inspect
-
-        from open_speech.playback.transport import Transport
-
-        params = inspect.signature(Transport.__init__).parameters
-        extras: dict[str, Any] = {}
-        if "anchor_resolver" in params:
-            extras["anchor_resolver"] = self._resolve_anchor
-        return extras
 
     def _resolve_anchor(self, utterance: Any, spoken_start: int, spoken_end: int) -> Any:
         """Map a spoken-text word range to a source anchor, adding PDF word bboxes and web DOM anchors."""
@@ -176,6 +172,41 @@ class Engine:
                 anchor.bbox = block.bbox
         return anchor
 
+    def _models_changed(self, _model: str) -> None:
+        """A local model was installed or removed: voices and listening may have just become possible."""
+        from open_speech.api.ws_schema import CapabilitiesChanged
+
+        self.registry.refresh()
+        self.events.publish(CapabilitiesChanged(capabilities=self.capabilities()))
+
+    def _settings_changed(self, old: Any, new: Any) -> None:
+        """settings.toml changed (voice command, API, hand edit): speak the new language and tell clients."""
+        from open_speech.api.ws_schema import CapabilitiesChanged, SettingsChanged
+
+        language = set_default_language(resolve_language(new.language))
+        self.events.publish(SettingsChanged(settings=new, language=language))
+        if old.voice_input.stt_provider != new.voice_input.stt_provider or old.language != new.language:
+            self.registry.refresh()
+            self.events.publish(CapabilitiesChanged(capabilities=self.capabilities()))
+
+    def effective_theme(self) -> str:
+        """The theme on screen: the chosen one, or what "system" means on this Mac right now."""
+        theme = self.settings.get().appearance.theme
+        if theme != "system":
+            return theme
+        import subprocess
+        import sys
+
+        if sys.platform == "darwin":
+            try:
+                out = subprocess.run(
+                    ["defaults", "read", "-g", "AppleInterfaceStyle"], capture_output=True, text=True, timeout=2
+                )
+                return "ember" if "dark" in out.stdout.lower() else "lavender"
+            except (OSError, subprocess.SubprocessError):
+                pass
+        return "lavender"
+
     def _ensure_default_voice(self) -> None:
         """If the configured default voice isn't usable (e.g. Kokoro weights not installed yet, or fixture mode),
         reading still works with the best local voice; the setting itself is left alone."""
@@ -205,12 +236,12 @@ class Engine:
         self.budget.after_record()
 
     def has_agent(self) -> bool:
-        return self._agent_runner_factory is not None or bool(self.keystore.get("anthropic"))
+        return self._agent_runner_factory is not None or self.keys.configured("anthropic")
 
     def agent_runner(self) -> Any | None:
         if self._agent_runner_factory is not None:
             return self._agent_runner_factory()
-        key = self.keystore.get("anthropic")
+        key = self.keys.get("anthropic") if self.keys.configured("anthropic") else None
         if not key:
             return None
         from open_speech.providers.anthropic_agent import AnthropicAgentRunner
@@ -259,6 +290,31 @@ class Engine:
         with contextlib.suppress(Exception):
             await self.transport.close()
         self.db.close()
+
+    def capabilities(self) -> s.Capabilities:
+        from open_speech.config import LANGUAGES
+        from open_speech.providers.registry import KEYED_TTS
+
+        stt = self.registry.stt()
+        if stt is not None:
+            speech = s.SpeechInput(
+                available=True,
+                provider=stt.id,
+                local=stt.id in ("local", "fixture"),
+                model=getattr(stt, "model", None) or None,
+            )
+        else:
+            reason, install_model = self.registry.stt_unavailable()
+            speech = s.SpeechInput(available=False, reason=reason, install_model=install_model)
+        return s.Capabilities(
+            speech_input=speech,
+            assistant=self.has_agent(),
+            ai_cleanup=self.registry.llm() is not None,
+            vision=self.registry.vision() is not None,
+            cloud_voices=[p for p in KEYED_TTS if self.keys.configured(p)],
+            languages=list(LANGUAGES),
+            language=resolve_language(self.settings.get().language),
+        )
 
     def health(self) -> s.Health:
         return s.Health(

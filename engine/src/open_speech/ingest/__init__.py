@@ -96,7 +96,7 @@ async def ingest(
     vision_rules: Sequence[RuleBrief] = (),
     fetch: Fetcher | None = None,
 ) -> IngestResult:
-    """Ingest one source. Raises MissingKey("anthropic", "Describing images") when an image needs vision
+    """Ingest one source. Raises `Unavailable("vision")` when an image needs vision
     and `vision` is None; EngineError("invalid_request", …) for unreadable input."""
     if src.kind == "html_blocks":
         if src.html_blocks is None:

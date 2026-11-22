@@ -5,14 +5,14 @@
  */
 import type { OpenSpeechBridge } from '@shared/bridge-types'
 import type { EngineInfo, ReaderTarget, WebModeRequest } from '@shared/ipc'
-import type { BarOpenedEvent, ClipboardContent, WebViewState } from '@shared/ipc-channels'
+import type { BarOpenedEvent, ClipboardContent, FileSearchResult, WebViewState } from '@shared/ipc-channels'
 
 export interface Capabilities {
   /** Running inside the Electron shell. */
   electron: boolean
-  /** Native open-file dialog that returns a path (`kind: file_path`). */
-  fileDialog: boolean
-  /** Open rule files / the rules folder in the OS. */
+  /** Files have paths here: the native open panel, the `@` file menu, dropped files. */
+  files: boolean
+  /** Reveal the rules folder in the OS. */
   rulesFolder: boolean
   /** Live web pages in a WebContentsView. */
   webView: boolean
@@ -61,7 +61,11 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
   return btoa(binary)
 }
 
-export function pageHref(page: 'commandbar' | 'reader', query: Record<string, string>, engine: EngineInfo | null): string {
+export function pageHref(
+  page: 'commandbar' | 'reader' | 'rules',
+  query: Record<string, string>,
+  engine: EngineInfo | null,
+): string {
   const params = new URLSearchParams(query)
   if (engine) {
     params.set('engine', engine.baseUrl)
@@ -76,7 +80,7 @@ export function createBrowserBridge(win: Window = window): Bridge {
   const closedListeners = new Set<() => void>()
   return {
     platform: 'browser',
-    capabilities: { electron: false, fileDialog: false, rulesFolder: false, webView: false },
+    capabilities: { electron: false, files: false, rulesFolder: false, webView: false },
     getEngine: async () => engine,
     onEngineChanged: () => () => undefined,
     hideBar: () => {
@@ -134,8 +138,16 @@ export function createBrowserBridge(win: Window = window): Bridge {
         return { kind: 'empty' }
       }
     },
-    openFileDialog: async () => null,
-    openRuleFile: () => undefined,
+    pickFiles: async () => [],
+    searchFiles: async (): Promise<FileSearchResult> => ({ folder: null, hits: [] }),
+    pathForFile: () => '',
+    openRules: (item) => {
+      win.open(pageHref('rules', item ? { item } : {}, engine), 'open-speech-rules')
+    },
+    onRulesShow: (cb) => {
+      const t = win.setTimeout(() => cb(params.get('item')), 0)
+      return () => win.clearTimeout(t)
+    },
     openRulesFolder: () => undefined,
   }
 }
@@ -143,7 +155,7 @@ export function createBrowserBridge(win: Window = window): Bridge {
 export function createElectronBridge(api: OpenSpeechBridge): Bridge {
   return {
     ...api,
-    capabilities: { electron: true, fileDialog: true, rulesFolder: true, webView: true },
+    capabilities: { electron: true, files: true, rulesFolder: true, webView: true },
   }
 }
 

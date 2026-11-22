@@ -97,7 +97,10 @@ def test_preflight_from_allowed_origin(client: TestClient) -> None:
 
 
 def test_ws_requires_token(client: TestClient) -> None:
-    with pytest.raises(WebSocketDisconnect) as exc, client.websocket_connect("/api/v1/ws", headers={"Host": "127.0.0.1:8765"}) as ws:
+    with (
+        pytest.raises(WebSocketDisconnect) as exc,
+        client.websocket_connect("/api/v1/ws", headers={"Host": "127.0.0.1:8765"}) as ws,
+    ):
         ws.receive_json()
     assert exc.value.code == 4401
 
@@ -115,17 +118,16 @@ def test_ws_rejects_foreign_origin(client: TestClient) -> None:
 def test_ws_hello_with_token(client: TestClient) -> None:
     with client.websocket_connect(f"/api/v1/ws?token={TOKEN}", headers={"Host": "127.0.0.1:8765"}) as ws:
         hello = ws.receive_json()
-        assert hello["type"] == "hello" and hello["protocol"] == 1
+        assert hello["type"] == "hello" and hello["protocol"] == 2
         state = ws.receive_json()
         assert state["type"] == "playback.state"
 
 
 def test_contracts_are_current() -> None:
     """CI diffs the committed OpenAPI and WS schema (04 § Versioning)."""
-    from open_speech.api import export
-
-    assert export.main.__doc__ is None or True
     import sys
+
+    from open_speech.api import export
 
     argv = sys.argv
     try:

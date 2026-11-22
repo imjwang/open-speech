@@ -1,4 +1,4 @@
-import type { BarOpenedEvent, ClipboardContent, WebViewState } from './ipc-channels'
+import type { BarOpenedEvent, ClipboardContent, FileHit, FileSearchResult, WebViewState } from './ipc-channels'
 import type { EngineInfo, ReaderTarget, WebModeRequest } from './ipc'
 
 /**
@@ -26,8 +26,15 @@ export interface OpenSpeechBridge {
   // OS
   openExternal(url: string): void
   readClipboard(): Promise<ClipboardContent>
-  openFileDialog(): Promise<{ path: string } | null>
-  openRuleFile(ruleId: string): void
+  /** The native open panel; several files may be chosen. */
+  pickFiles(): Promise<FileHit[]>
+  /** The `@` menu: search files by name, or browse a folder when the query is a path. */
+  searchFiles(query: string): Promise<FileSearchResult>
+  /** The path of a file dropped or pasted into the page ('' when it has none, e.g. a pasted screenshot). */
+  pathForFile(file: File): string
+  // rules editor window
+  openRules(item?: string): void
+  onRulesShow(cb: (item: string | null) => void): () => void
   openRulesFolder(): void
 }
 

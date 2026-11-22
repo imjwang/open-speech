@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from open_speech.cache.plans import PlanCache
 from open_speech.config import DEFAULT_LLM
 from open_speech.document.model import Document
+from open_speech.i18n import t
 from open_speech.plan.build import LOOKAHEAD_BATCHES, BuildSpec, Memo, build_script
 from open_speech.plan.keys import PROMPT_VERSION, active_rules, effective_rules_hash, plan_key, tiering
 from open_speech.plan.script import SpeechScript
@@ -41,6 +42,8 @@ class PlanContext(BaseModel):
 class PlanResult(BaseModel):
     script: SpeechScript
     llm_calls: list[tuple[str, LlmCall]] = Field(default_factory=list)
+    # AI Enhanced was wanted but could not run (unavailable, over budget, provider error): worth trying again.
+    degraded: bool = False
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -55,13 +58,13 @@ def _spec(ctx: PlanContext) -> BuildSpec:
     key = plan_key(doc.source_id, rh, model, PROMPT_VERSION if ctx.mode == "ai_enhanced" else "", ctx.mode)
     warnings: list[str] = []
     for r in tiers.inactive:
-        warnings.append(f"“{r.name}” needs AI Enhanced mode, so it wasn't applied.")
+        warnings.append(t("plan.rule_needs_ai", name=r.name))
     for r in tiers.extra_transforms:
-        warnings.append(f"Only one rewrite rule applies at a time; “{r.name}” was not applied.")
+        warnings.append(t("plan.one_rewrite", name=r.name))
     for flag in doc.flags:
         if flag.startswith("scanned_pages:"):
             pages = flag.split(":", 1)[1].replace(",", ", ")
-            warnings.append(f"Page {pages} has no text layer (scanned), so it can't be read without AI extraction.")
+            warnings.append(t("plan.scanned", pages=pages))
     return BuildSpec(
         document=doc,
         filters=tiers.filters,
@@ -120,7 +123,7 @@ class Planner:
         result = await build_script(spec, llm, memo, playhead_order=-1, ahead=0, everything=not first_batch_only)
         # Don't pin a plan that silently fell back to Classic because Claude was unavailable.
         self._save(ctx.document.id, memo, None if result.degraded else result.script)
-        return PlanResult(script=result.script, llm_calls=result.calls)
+        return PlanResult(script=result.script, llm_calls=result.calls, degraded=result.degraded)
 
     async def extend(
         self, ctx: PlanContext, llm: LlmProvider | None, script: SpeechScript, upto_utterance: int

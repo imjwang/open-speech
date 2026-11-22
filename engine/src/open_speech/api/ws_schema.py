@@ -12,10 +12,18 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter
 
-from open_speech.api.schemas import PlaybackState, SpeechDiff, TurnContext
+from open_speech.api.schemas import (
+    Attachment,
+    AttachmentOut,
+    Capabilities,
+    PlaybackState,
+    SpeechDiff,
+    TurnContext,
+)
+from open_speech.config import UserSettings
 from open_speech.document.model import Anchor, Fidelity
 
-PROTOCOL = 1
+PROTOCOL = 2
 
 
 def _now() -> str:
@@ -43,14 +51,17 @@ class MicStop(_Msg):
     type: Literal["mic.stop"] = "mic.stop"
     session_id: str
     submit: bool = True  # False = cancel (e.g. the user started typing; FR-BAR-3)
+    # What is attached in the composer when the utterance ends ("read these", "summarize this").
+    attachments: list[Attachment] = Field(default_factory=list, max_length=50)
 
 
 class Command(_Msg):
     type: Literal["command"] = "command"
-    text: str
-    source: Literal["typed", "spoken"] = "typed"
+    text: str = ""
+    source: Literal["typed", "spoken", "button"] = "typed"
     session_id: str | None = None
     context: TurnContext = Field(default_factory=TurnContext)
+    attachments: list[Attachment] = Field(default_factory=list, max_length=50)
 
 
 class Subscribe(_Msg):
@@ -99,8 +110,9 @@ class AssistantTurn(_Msg):
     turn_id: str
     session_id: str | None = None
     text: str
-    source: Literal["typed", "spoken"]
+    source: Literal["typed", "spoken", "button"]
     recording_id: str | None = None
+    attachments: list[AttachmentOut] = Field(default_factory=list)
 
 
 class AssistantDelta(_Msg):
@@ -123,7 +135,7 @@ class AssistantCard(_Msg):
 
     type: Literal["assistant.card"] = "assistant.card"
     turn_id: str
-    kind: Literal["voices", "rules", "usage", "recents", "models", "where", "keys", "presets", "info"]
+    kind: Literal["voices", "rules", "usage", "recents", "models", "where", "presets", "settings", "queue", "info"]
     title: str
     rows: list[CardRow] = Field(default_factory=list)
     data: dict[str, Any] = Field(default_factory=dict)
@@ -196,6 +208,37 @@ class DocumentUpdated(_Msg):
     reason: str
 
 
+class RulesChanged(_Msg):
+    """A rule file, the pronunciation list or the preferences changed (by voice, the editor or on disk)."""
+
+    type: Literal["rules.changed"] = "rules.changed"
+    reason: str = ""
+
+
+class SettingsChanged(_Msg):
+    """settings.toml changed (by voice, the API or a hand edit): theme, language and shortcuts apply at once."""
+
+    type: Literal["settings.changed"] = "settings.changed"
+    settings: UserSettings
+    language: str  # the language now in use ("auto" resolved)
+
+
+class CapabilitiesChanged(_Msg):
+    """What the build can do changed while running, e.g. the local speech model finished installing."""
+
+    type: Literal["capabilities.changed"] = "capabilities.changed"
+    capabilities: Capabilities
+
+
+class UiOpen(_Msg):
+    """The assistant asks the shell to show something: the rules editor (optionally on one file), the reader
+    for a document, or the bar."""
+
+    type: Literal["ui.open"] = "ui.open"
+    target: Literal["rules", "reader", "bar"]
+    item: str | None = None
+
+
 class ErrorMsg(_Msg):
     type: Literal["error"] = "error"
     problem: dict[str, Any]
@@ -216,6 +259,10 @@ ServerMessage = Annotated[
     | UsageAlert
     | JobProgress
     | DocumentUpdated
+    | RulesChanged
+    | SettingsChanged
+    | CapabilitiesChanged
+    | UiOpen
     | ErrorMsg,
     Field(discriminator="type"),
 ]

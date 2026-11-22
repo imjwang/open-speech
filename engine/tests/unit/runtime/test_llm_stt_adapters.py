@@ -186,9 +186,9 @@ async def test_openai_stt_transcribe_and_words(catalog: ModelCatalog, recorder: 
 
 
 async def test_openai_stt_stream_buffers_then_final(catalog: ModelCatalog, recorder: Recorder) -> None:
-    recorder.add("POST", "/audio/transcriptions", lambda r: httpx2.Response(200, json=_json("openai_transcription.json")))
-    stt = OpenAIStt(catalog, "sk-test", http_client=recorder.client(), base_url="https://openai.test/v1",
-                    max_retries=0)
+    transcription = _json("openai_transcription.json")
+    recorder.add("POST", "/audio/transcriptions", lambda r: httpx2.Response(200, json=transcription))
+    stt = OpenAIStt(catalog, "sk-test", http_client=recorder.client(), base_url="https://openai.test/v1", max_retries=0)
     events = [e async for e in stt.stream(_frames(1.0))]
     assert [(e.kind, e.text) for e in events] == [("final", "read my clipboard")]
     assert len(recorder.requests) == 1
@@ -206,13 +206,16 @@ async def test_openai_stt_stream_buffers_then_final(catalog: ModelCatalog, recor
 
 async def test_gemini_stt_transcribe(catalog: ModelCatalog, recorder: Recorder, tmp_path: Path) -> None:
     recorder.add("POST", "/interactions", lambda r: httpx2.Response(200, json=_json("gemini_transcribe.json")))
-    stt = GeminiStt(catalog, "AIza-test", http_client=recorder.client(), base_url="https://gemini.test/",
-                    retry_attempts=1)
+    stt = GeminiStt(
+        catalog, "AIza-test", http_client=recorder.client(), base_url="https://gemini.test/", retry_attempts=1
+    )
     t = await stt.transcribe(_wav(tmp_path), words=True)
     body = recorder.json_body()
     assert body["model"] == "gemini-3.5-transcribe" and body["store"] is False
     assert body["generation_config"]["transcription_config"] == {
-        "mode": {"type": "verbatim"}, "timestamp_granularities": ["word"]}
+        "mode": {"type": "verbatim"},
+        "timestamp_granularities": ["word"],
+    }
     assert body["input"][0]["content"][0]["mime_type"] == "audio/wav"
     assert t.text == "skip the footnotes"
     assert t.words[2] == {"word": "footnotes", "start": 0.54, "end": 1.1}

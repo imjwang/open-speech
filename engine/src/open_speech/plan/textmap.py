@@ -70,6 +70,16 @@ class MappedText:
             return None
         return lo, hi
 
+    def offset_of_source(self, src_pos: int) -> int:
+        """Current-text offset of source position `src_pos`. For source text that has been removed, this is
+        the place in the current text where it used to be."""
+        pos = 0
+        for p in self.pieces:
+            if p.src_end > src_pos:
+                return pos + (min(len(p.text), max(0, src_pos - p.src_start)) if p.exact else 0)
+            pos += len(p.text)
+        return pos
+
     def is_exact_range(self, start: int, end: int) -> bool:
         """True when [start, end) lies entirely in exact pieces."""
         offs = self._offsets()

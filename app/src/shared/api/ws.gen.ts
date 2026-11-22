@@ -3,7 +3,7 @@
 // Regenerate with `pnpm gen:api`; `pnpm check:api` fails when this file is stale.
 
 /** WebSocket protocol version announced by the engine in its `hello` message. */
-export const WS_PROTOCOL = 1 as const
+export const WS_PROTOCOL = 2 as const
 
 export type ClientMessage = MicStart | MicStop | Command | Subscribe | BarState
 export type ServerMessage =
@@ -21,6 +21,10 @@ export type ServerMessage =
   | UsageAlert
   | JobProgress
   | DocumentUpdated
+  | RulesChanged
+  | SettingsChanged
+  | CapabilitiesChanged
+  | UiOpen
   | ErrorMsg
 
 /**
@@ -42,6 +46,7 @@ export interface MicStart {
 export interface TurnContext {
   document_id?: string | null
   selection?: string | null
+  conversation_id?: string | null
 }
 export interface MicStop {
   ts?: string
@@ -49,15 +54,35 @@ export interface MicStop {
   type: 'mic.stop'
   session_id: string
   submit?: boolean
+  /**
+   * @maxItems 50
+   */
+  attachments?: Attachment[]
+}
+/**
+ * Something attached to a command in the composer: a file, a link, pasted text, or a document that was
+ * already imported (uploads).
+ */
+export interface Attachment {
+  kind: 'file' | 'url' | 'text' | 'document'
+  path?: string | null
+  url?: string | null
+  text?: string | null
+  document_id?: string | null
+  name?: string | null
 }
 export interface Command {
   ts?: string
   id?: string | null
   type: 'command'
-  text: string
-  source?: 'typed' | 'spoken'
+  text?: string
+  source?: 'typed' | 'spoken' | 'button'
   session_id?: string | null
   context?: TurnContext
+  /**
+   * @maxItems 50
+   */
+  attachments?: Attachment[]
 }
 export interface Subscribe {
   ts?: string
@@ -107,8 +132,15 @@ export interface AssistantTurn {
   turn_id: string
   session_id?: string | null
   text: string
-  source: 'typed' | 'spoken'
+  source: 'typed' | 'spoken' | 'button'
   recording_id?: string | null
+  attachments?: AttachmentOut[]
+}
+export interface AttachmentOut {
+  kind: string
+  title: string
+  document_id?: string | null
+  error?: string | null
 }
 export interface AssistantDelta {
   ts?: string
@@ -125,7 +157,8 @@ export interface AssistantCard {
   id?: string | null
   type: 'assistant.card'
   turn_id: string
-  kind: 'voices' | 'rules' | 'usage' | 'recents' | 'models' | 'where' | 'keys' | 'presets' | 'info'
+  kind:
+    'voices' | 'rules' | 'usage' | 'recents' | 'models' | 'where' | 'presets' | 'settings' | 'queue' | 'info'
   title: string
   rows?: CardRow[]
   data?: {
@@ -225,6 +258,11 @@ export interface PlaybackState {
   progress?: number
   fallback_notice?: string | null
   error?: string | null
+  queue?: QueueItem[]
+}
+export interface QueueItem {
+  document_id: string
+  title: string
 }
 export interface PlaybackWord {
   ts?: string
@@ -292,6 +330,132 @@ export interface DocumentUpdated {
   type: 'document.updated'
   document_id: string
   reason: string
+}
+/**
+ * A rule file, the pronunciation list or the preferences changed (by voice, the editor or on disk).
+ */
+export interface RulesChanged {
+  ts?: string
+  id?: string | null
+  type: 'rules.changed'
+  reason?: string
+}
+/**
+ * settings.toml changed (by voice, the API or a hand edit): theme, language and shortcuts apply at once.
+ */
+export interface SettingsChanged {
+  ts?: string
+  id?: string | null
+  type: 'settings.changed'
+  settings: UserSettings
+  language: string
+}
+export interface UserSettings {
+  language?: 'auto' | 'en' | 'es'
+  appearance?: Appearance
+  shortcuts?: Shortcuts
+  defaults?: Defaults
+  budget?: Budget
+  voice_input?: VoiceInput
+  cache?: CacheSettings
+  llm?: LlmSettings
+  reader?: ReaderSettings
+  playback?: PlaybackSettings
+  onboarding_completed?: boolean
+}
+export interface Appearance {
+  theme?: 'system' | 'lavender' | 'ember'
+}
+export interface Shortcuts {
+  open_bar?: string
+  play_pause?: string
+  read_clipboard?: string
+  read_selection?: string
+  screenshot?: string
+}
+export interface Defaults {
+  voice?: string
+  assistant_voice?: string
+  voices?: {
+    [k: string]: string | undefined
+  }
+  speed?: number
+  mode?: 'classic' | 'ai_enhanced'
+  style?: string | null
+}
+export interface Budget {
+  monthly_usd?: string
+  warn_at?: number
+  hard_stop?: boolean
+  estimate_threshold_usd?: string
+}
+export interface VoiceInput {
+  end_of_speech_ms?: number
+  recording_retention_days?: number
+  stt_provider?: 'auto' | 'local' | 'openai' | 'gemini'
+}
+export interface CacheSettings {
+  max_gb?: number
+}
+export interface LlmSettings {
+  model?: string
+  annotate_effort?: 'low' | 'medium' | 'high'
+  assistant_effort?: 'low' | 'medium' | 'auto'
+}
+export interface ReaderSettings {
+  font_size?: number
+  line_spacing?: number
+  font?: 'system' | 'atkinson' | 'opendyslexic'
+  high_contrast?: boolean
+}
+export interface PlaybackSettings {
+  fallback?: 'same_provider' | 'another_voice' | 'kokoro'
+  prefetch_seconds?: number
+  max_ahead_seconds?: number
+}
+/**
+ * What the build can do changed while running, e.g. the local speech model finished installing.
+ */
+export interface CapabilitiesChanged {
+  ts?: string
+  id?: string | null
+  type: 'capabilities.changed'
+  capabilities: Capabilities
+}
+/**
+ * What this build can do (GET /capabilities). Cloud features depend on the providers configured at
+ * build time; nothing here can be changed from inside the app.
+ */
+export interface Capabilities {
+  speech_input: SpeechInput
+  assistant: boolean
+  ai_cleanup: boolean
+  vision: boolean
+  cloud_voices?: string[]
+  languages?: string[]
+  language?: string
+}
+/**
+ * Whether the bar can listen, and with what.
+ */
+export interface SpeechInput {
+  available: boolean
+  provider?: string | null
+  local?: boolean
+  model?: string | null
+  reason?: string | null
+  install_model?: string | null
+}
+/**
+ * The assistant asks the shell to show something: the rules editor (optionally on one file), the reader
+ * for a document, or the bar.
+ */
+export interface UiOpen {
+  ts?: string
+  id?: string | null
+  type: 'ui.open'
+  target: 'rules' | 'reader' | 'bar'
+  item?: string | null
 }
 export interface ErrorMsg {
   ts?: string

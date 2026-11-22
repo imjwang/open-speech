@@ -9,7 +9,7 @@
    (filter / annotate / transform), compiles filters into the `compiled` schema, suggests a scope and
    names it. The engine validates the schema and test-runs the regexes; a filter that doesn't validate
    is downgraded to `annotate` rather than saved broken.
-3. With no key and no fast-path match: `MissingKey`.
+3. With no LLM in this build and no fast-path match: `Unavailable`.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from pydantic import ValidationError
 
 from open_speech.api.schemas import RuleScope
 from open_speech.document.model import BlockType, MarkKind
-from open_speech.errors import EngineError, MissingKey
+from open_speech.errors import EngineError, Unavailable
 from open_speech.providers.base import CompiledRuleDraft, LlmCall, LlmProvider
 from open_speech.rules.model import MAX_PATTERN_LEN, CompiledFilter, ReplaceSpec, Rule, Tier, slugify
 from open_speech.rules.scope import TYPE_NOUNS, normalize_host
@@ -379,7 +379,7 @@ async def compile_rule(
     if fast is not None:
         return fast, None
     if llm is None:
-        raise MissingKey("anthropic", "Understanding that rule")
+        raise Unavailable("rule")
 
     _, phrase_kind, phrase_value = _extract_scope(_clean(instruction))
     context: dict[str, Any] = {

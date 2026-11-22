@@ -13,6 +13,7 @@ from open_speech.playback.stretch import Stretcher, stretch
 from open_speech.playback.timing import count_syllables, estimate_word_timings, voiced_bounds, word_spans
 from open_speech.providers.base import WordTiming
 from open_speech.providers.pcm import encode_ogg_opus, resample, tone
+from open_speech.store.assets import AssetStore
 from open_speech.store.db import Database
 
 from .helpers import fixture_bytes
@@ -48,7 +49,7 @@ def _words() -> list[WordTiming]:
 
 
 def test_put_get_roundtrip_preserves_length_and_timings(paths: Paths, db: Database) -> None:
-    cache = AudioCache(paths, db)
+    cache = AudioCache(AssetStore(paths.cache, db))
     x = tone(220, 1.0, 24000)
     key = AudioCache.key("hello world", "fixture", "tone-v1", "alto")
     put = cache.put(key, x, 24000, _words())
@@ -64,7 +65,7 @@ def test_put_get_roundtrip_preserves_length_and_timings(paths: Paths, db: Databa
 
 
 def test_put_resamples_non_opus_rates(paths: Paths, db: Database) -> None:
-    cache = AudioCache(paths, db)
+    cache = AudioCache(AssetStore(paths.cache, db))
     key = AudioCache.key("x", "p", "m", "v")
     got = cache.put(key, tone(220, 0.5, 22050), 22050, [])
     assert got.sample_rate == 24000
@@ -72,7 +73,7 @@ def test_put_resamples_non_opus_rates(paths: Paths, db: Database) -> None:
 
 
 def test_put_encoded_keeps_vendor_bytes(paths: Paths, db: Database) -> None:
-    cache = AudioCache(paths, db)
+    cache = AudioCache(AssetStore(paths.cache, db))
     data = fixture_bytes("openai_speech.ogg")
     key = AudioCache.key("y", "openai", "gpt-4o-mini-tts", "coral")
     got = cache.put_encoded(key, data, _words())
@@ -81,7 +82,7 @@ def test_put_encoded_keeps_vendor_bytes(paths: Paths, db: Database) -> None:
 
 
 def test_lru_eviction_respects_pins_and_access(paths: Paths, db: Database) -> None:
-    cache = AudioCache(paths, db)
+    cache = AudioCache(AssetStore(paths.cache, db))
     keys = [AudioCache.key(f"utt {i}", "fixture", "tone-v1", "alto") for i in range(5)]
     for k in keys:
         cache.put(k, tone(220, 0.5, 24000), 24000, [])
@@ -97,11 +98,11 @@ def test_lru_eviction_respects_pins_and_access(paths: Paths, db: Database) -> No
 
 
 def test_clear_keeps_pins_and_index_is_rebuilt_after_reset(paths: Paths, db: Database) -> None:
-    cache = AudioCache(paths, db)
+    cache = AudioCache(AssetStore(paths.cache, db))
     a, b = AudioCache.key("a", "p", "m", "v"), AudioCache.key("b", "p", "m", "v")
     cache.put(a, tone(220, 0.2, 24000), 24000, [])
     cache.put(b, tone(220, 0.2, 24000), 24000, [])
-    db.execute("DELETE FROM audio_cache")  # simulate a lost index: files are adopted on access
+    db.execute("DELETE FROM assets")  # simulate a lost index: files are adopted on access
     assert cache.size_bytes() == 0
     assert cache.get(a) is not None and cache.size_bytes() > 0
     assert cache.clear(pinned={a}) == 1
@@ -109,7 +110,7 @@ def test_clear_keeps_pins_and_index_is_rebuilt_after_reset(paths: Paths, db: Dat
 
 
 def test_corrupt_sidecar_is_a_miss(paths: Paths, db: Database) -> None:
-    cache = AudioCache(paths, db)
+    cache = AudioCache(AssetStore(paths.cache, db))
     k = AudioCache.key("c", "p", "m", "v")
     got = cache.put(k, tone(220, 0.2, 24000), 24000, [])
     got.path.with_suffix(".json").write_text("{not json")

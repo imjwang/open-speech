@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING, Any, Literal
 from open_speech.api import schemas as s
 from open_speech.api.ws_schema import DocumentUpdated
 from open_speech.document.model import Document, SourceKind
-from open_speech.errors import EngineError, EstimateRequired, MissingKey, NotFound
+from open_speech.errors import EngineError, EstimateRequired, NotFound, Unavailable
+from open_speech.i18n import t
 from open_speech.plan.script import SpeechScript
 
 if TYPE_CHECKING:
@@ -46,6 +47,22 @@ class DocumentService:
         self._docs: OrderedDict[str, Document] = OrderedDict()
         self._scripts: dict[str, SpeechScript] = {}
         self._plan_locks: dict[str, asyncio.Lock] = {}
+        self._warming: set[asyncio.Task[None]] = set()
+        self._replan: set[str] = set()  # documents whose plan in memory fell back to Classic
+
+    def _warm_voice(self, voice_id: str | None) -> None:
+        """A document is being opened, so speech is about to be needed: start loading a local voice now, in
+        the background, instead of when the first sentence is requested (NFR-1, time to first audio)."""
+        try:
+            provider, template = self.e.registry.tts_for(voice_id or self.e.settings.get().defaults.voice)
+        except EngineError:
+            return
+        prewarm = getattr(provider, "prewarm", None)
+        if prewarm is None:
+            return
+        task = asyncio.get_running_loop().create_task(prewarm(template.model, template.voice))
+        self._warming.add(task)
+        task.add_done_callback(self._warming.discard)
 
     # ------------------------------------------------------------------ create
 
@@ -56,7 +73,7 @@ class DocumentService:
         match req.kind:
             case "text":
                 if not (req.text or "").strip():
-                    raise EngineError("invalid_request", "There's no text to read.")
+                    raise EngineError("invalid_request", t("error.no_text"))
                 src = SourceInput(kind="text", text=req.text, title=req.title)
             case "url":
                 if not req.url:
@@ -92,13 +109,13 @@ class DocumentService:
                 elif clip.text and clip.text.strip():
                     src = SourceInput(kind="text", text=clip.text, title=req.title or "Clipboard")
                 else:
-                    raise EngineError("invalid_request", "Your clipboard is empty. Copy some text or an image first.")
+                    raise EngineError("invalid_request", t("error.clipboard_empty"))
             case "file_path":
                 if not req.path:
                     raise EngineError("invalid_request", "A file path is required.")
                 p = Path(req.path).expanduser()
                 if not p.is_file():
-                    raise NotFound(f"the file {p.name}")
+                    raise NotFound(t("what.file", name=p.name))
                 return await self.create_from_upload(
                     p.name,
                     p.read_bytes(),
@@ -134,10 +151,7 @@ class DocumentService:
         elif ext in (".txt", ".md", ".markdown") or media_type.startswith("text/") or ext in (".pdf", ".docx"):
             src = SourceInput(kind="file", data=data, filename=filename, media_type=media_type)
         else:
-            raise EngineError(
-                "invalid_request",
-                f"I can't read {ext or 'that kind of'} files yet. PDF, DOCX, text, Markdown and images work.",
-            )
+            raise EngineError("invalid_request", t("error.unsupported_file", ext=ext or "?"))
         return await self._ingest_and_open(
             src, play=play, voice_id=voice_id, mode=mode, confirm_estimate=confirm_estimate, path=path
         )
@@ -154,6 +168,7 @@ class DocumentService:
     ) -> s.CreateDocumentResponse:
         from open_speech.ingest import ingest
 
+        self._warm_voice(voice_id)  # loads while the document is extracted and planned
         vision = None
         if src.kind == "image":
             vision = self.e.registry.vision()
@@ -164,6 +179,7 @@ class DocumentService:
             extract_cache=self.e.extract_cache,
             vision=vision,
             vision_rules=self._vision_rules(),
+            fetch=self.e.pages.fetch,
         )
         doc = result.document
         if path:
@@ -181,6 +197,8 @@ class DocumentService:
             changed = True
         if changed:
             self._save_settings(doc.id, settings)
+        if not voice_id:
+            self._warm_voice(self.voice_for(doc.id))  # e.g. the Spanish voice for a Spanish document
 
         estimate: s.Estimate | None = None
         if self.mode_for(doc) == "ai_enhanced":
@@ -191,9 +209,32 @@ class DocumentService:
         await self.script_for(doc)
         playing = False
         if play:
-            await self.e.playback.play(s.PlayRequest(document_id=doc.id))
-            playing = True
+            try:
+                await self.e.playback.play(s.PlayRequest(document_id=doc.id, confirm_estimate=confirm_estimate))
+                playing = True
+            except EstimateRequired:
+                # Opened, not started: say what it would cost wherever a window is listening. Pressing play
+                # is then the go-ahead (the playback service remembers that the question was put).
+                estimate = await self.e.usage.estimate(s.EstimateRequest(document_id=doc.id))
+                self._announce_cost(doc, estimate)
         return s.CreateDocumentResponse(document=await self.get(doc.id), estimate=estimate, playing=playing)
+
+    def _announce_cost(self, doc: Document, estimate: s.Estimate) -> None:
+        from decimal import Decimal
+
+        from open_speech.api.ws_schema import UsageAlert
+        from open_speech.i18n import say
+
+        amount = Decimal(estimate.usd_estimate)
+        budget = self.e.usage.budget()
+        self.e.events.publish(
+            UsageAlert(
+                level="warn",
+                spent=budget.spent_usd,
+                budget=budget.monthly_usd,
+                message=t("alert.read_cost", title=doc.title, amount=say.money_figure(amount)),
+            )
+        )
 
     def _vision_rules(self) -> list[Any]:
         from open_speech.providers.base import RuleBrief
@@ -219,13 +260,15 @@ class DocumentService:
         with self.e.db.transaction() as c:
             if existing:
                 c.execute(
-                    "UPDATE documents SET title=?, url=?, site=?, path=COALESCE(?, path), page_count=?, extract_key=?, last_opened_at=? WHERE id=?",
+                    "UPDATE documents SET title=?, url=?, site=?, path=COALESCE(?, path), page_count=?, "
+                    "extract_key=?, last_opened_at=? WHERE id=?",
                     (doc.title, doc.url, doc.site, doc.path, doc.page_count, doc.extractor_version, now, doc.id),
                 )
                 c.execute("DELETE FROM documents_fts WHERE doc_id=?", (doc.id,))
             else:
                 c.execute(
-                    "INSERT INTO documents(id, source_id, kind, title, url, site, path, page_count, extract_key, settings_json, created_at, last_opened_at) "
+                    "INSERT INTO documents(id, source_id, kind, title, url, site, path, page_count, extract_key, "
+                    "settings_json, created_at, last_opened_at) "
                     "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         doc.id,
@@ -263,6 +306,10 @@ class DocumentService:
         return Path(fn).suffix if fn else ".txt"
 
     def _remember(self, doc: Document) -> None:
+        if doc.language is None:
+            from open_speech.document.language import language_of_blocks
+
+            doc.language = language_of_blocks(b.text for b in doc.blocks)
         self._docs[doc.id] = doc
         self._docs.move_to_end(doc.id)
         while len(self._docs) > 16:
@@ -272,7 +319,7 @@ class DocumentService:
     def _row(self, document_id: str) -> Any:
         row = self.e.db.one("SELECT * FROM documents WHERE id=?", (document_id,))
         if row is None:
-            raise NotFound("that document")
+            raise NotFound(t("what.document"))
         return row
 
     def _settings(self, document_id: str) -> dict[str, Any]:
@@ -296,6 +343,9 @@ class DocumentService:
         self._remember(doc)
         return doc
 
+    def title(self, document_id: str) -> str:
+        return str(self._row(document_id)["title"])
+
     def touch(self, document_id: str) -> None:
         self.e.db.execute("UPDATE documents SET last_opened_at=? WHERE id=?", (_now(), document_id))
 
@@ -306,9 +356,9 @@ class DocumentService:
         pos = self.e.db.one("SELECT * FROM positions WHERE document_id=?", (row["id"],))
         try:
             doc = self.load(row["id"])
-            block_count, flags = len(doc.blocks), list(doc.flags)
+            block_count, flags, language = len(doc.blocks), list(doc.flags), doc.language
         except EngineError:
-            block_count, flags = 0, ["extract_missing"]
+            block_count, flags, language = 0, ["extract_missing"], None
         return s.DocumentOut(
             id=row["id"],
             kind=row["kind"],
@@ -328,6 +378,7 @@ class DocumentService:
                 voice_id=st.get("voice_id"), mode=st.get("mode"), pinned=bool(st.get("pinned"))
             ),
             flags=flags,
+            language=language,
             has_source_file=bool(st.get("source_ext")),
         )
 
@@ -341,7 +392,8 @@ class DocumentService:
                 return s.DocumentList(items=[])
             rows = self.e.db.query(
                 "SELECT d.* FROM documents_fts f JOIN documents d ON d.id = f.doc_id "
-                "WHERE documents_fts MATCH ? ORDER BY bm25(documents_fts, 0.0, 10.0, 1.0), d.last_opened_at DESC LIMIT ?",
+                "WHERE documents_fts MATCH ? ORDER BY bm25(documents_fts, 0.0, 10.0, 1.0), d.last_opened_at DESC "
+                "LIMIT ?",
                 (terms, limit),
             )
         else:
@@ -383,11 +435,18 @@ class DocumentService:
         return self.e.rule_store.mode_for(doc, self.e.settings.get().defaults.mode)
 
     def voice_for(self, document_id: str | None) -> str:
+        """The voice that reads a document: its own choice if it has one, else the default voice, or, when
+        the default can't pronounce the document's language, the user's voice for that language."""
+        language: str | None = None
         if document_id:
             v = self._settings(document_id).get("voice_id")
             if v:
                 return str(v)
-        return self.e.settings.get().defaults.voice
+            try:
+                language = self.load(document_id).language
+            except EngineError:
+                language = None
+        return self.e.voices.for_language(self.e.settings.get().defaults.voice, language)
 
     def plan_context(self, doc: Document) -> Any:
         from open_speech.plan.planner import PlanContext
@@ -411,33 +470,30 @@ class DocumentService:
         return llm
 
     async def script_for(self, doc: Document, *, force: bool = False) -> SpeechScript:
+        from open_speech.plan.planner import plan_key_for
+
         lock = self._plan_locks.setdefault(doc.id, asyncio.Lock())
         async with lock:
-            if not force and doc.id in self._scripts:
-                cached = self._scripts[doc.id]
-                ctx = self.plan_context(doc)
-                if cached.mode == ctx.mode:
-                    from open_speech.plan.planner import plan_key as _pk
-
-                    try:
-                        if cached.plan_key == _pk(ctx):
-                            return cached
-                    except Exception:  # noqa: BLE001 — planner without a public plan_key: fall through and re-plan
-                        pass
             ctx = self.plan_context(doc)
+            # The plan in memory is reused while everything it was made from is unchanged. One made without the
+            # AI cleanup it should have had is tried again, in case the assistant or the budget is back.
+            if not force and doc.id not in self._replan and doc.id in self._scripts:
+                cached = self._scripts[doc.id]
+                if cached.mode == ctx.mode and cached.plan_key == plan_key_for(ctx):
+                    return cached
             llm = self.llm_for_plan(ctx.mode)
             result = await self.e.planner.plan(ctx, llm, first_batch_only=True)
             for op, call in result.llm_calls:
                 self.e.record_llm(op, call, document_id=doc.id)
             script = result.script
             if ctx.mode == "ai_enhanced" and llm is None:
-                reason = (
-                    "AI Enhanced needs an Anthropic key, so this used Classic cleanup."
-                    if self.e.registry.llm() is None
-                    else "Your budget is used up, so this used Classic cleanup."
-                )
+                reason = t("unavailable.ai_cleanup") if self.e.registry.llm() is None else t("plan.budget_classic")
                 if reason not in script.warnings:
                     script.warnings.append(reason)
+            if result.degraded or (ctx.mode == "ai_enhanced" and llm is None):
+                self._replan.add(doc.id)
+            else:
+                self._replan.discard(doc.id)
             self._scripts[doc.id] = script
             return script
 
@@ -471,7 +527,7 @@ class DocumentService:
         doc = self.load(document_id)
         if self.mode_for(doc) == "ai_enhanced":
             if self.e.registry.llm() is None:
-                raise MissingKey("anthropic", "Regenerating with AI Enhanced")
+                raise Unavailable("ai_cleanup")
             est = await self.e.usage.estimate(s.EstimateRequest(document_id=document_id, operation="regenerate"))
             if est.requires_confirmation and not confirm_estimate:
                 raise EstimateRequired(est.usd_estimate, "regenerate")

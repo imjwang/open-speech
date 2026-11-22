@@ -6,7 +6,8 @@ export const IPC = {
   // renderer → main (invoke: request/response)
   engineGet: 'engine:get',
   clipboardRead: 'clipboard:read',
-  dialogOpenFile: 'dialog:open-file',
+  dialogOpenFiles: 'dialog:open-files',
+  fsSearch: 'fs:search',
   // renderer → main (send: fire and forget)
   barHide: 'bar:hide',
   barResize: 'bar:resize',
@@ -14,7 +15,7 @@ export const IPC = {
   barOpen: 'bar:open',
   readerOpen: 'reader:open',
   shellOpenExternal: 'shell:open-external',
-  rulesOpenFile: 'rules:open-file',
+  rulesOpen: 'rules:open',
   rulesOpenFolder: 'rules:open-folder',
   webSetMode: 'web:set-mode',
   webFollow: 'web:follow',
@@ -23,6 +24,7 @@ export const IPC = {
   barOpened: 'bar:opened',
   barClosed: 'bar:closed',
   readerShow: 'reader:show',
+  rulesShow: 'rules:show',
   webState: 'web:state',
   // web preload ↔ main
   webBlocks: 'web:blocks',
@@ -40,6 +42,26 @@ export interface BarOpenedEvent {
   viaHotkey: boolean
   /** Document context, e.g. ⌘K in the reader. */
   documentId?: string
+}
+
+/** What kind of thing a file is, for its icon and for whether it can be read aloud. */
+export type FileKind = 'folder' | 'pdf' | 'doc' | 'text' | 'web' | 'image' | 'other'
+
+/** One result in the `@` file menu. Names and paths only: file contents never cross this channel. */
+export interface FileHit {
+  path: string
+  name: string
+  kind: FileKind
+  /** Where it lives, shortened for display ("~/Documents/Papers"). */
+  where: string
+  /** Its own path with the home folder as `~` ("~/Documents/Papers/draft.pdf"): what `@` browsing types. */
+  short: string
+}
+
+export interface FileSearchResult {
+  /** The folder being browsed ("~/Documents/"), or null for a search by name. */
+  folder: string | null
+  hits: FileHit[]
 }
 
 export type ClipboardContent =

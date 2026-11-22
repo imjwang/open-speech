@@ -10,22 +10,14 @@ import '@/styles/globals.css'
 import { getBridge } from '@/bridge'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { EngineProvider, LiveEngine } from '@/engine'
-import { applyTheme } from '@/theme'
+import { syncPrefs } from '@/prefs'
 import { ReaderApp } from './ReaderApp'
-import { useReaderStore } from './store'
 
 const bridge = getBridge()
-let disposeTheme = applyTheme('system')
-useReaderStore.subscribe((state, prev) => {
-  const theme = state.settings?.theme ?? 'system'
-  if (theme !== (prev.settings?.theme ?? 'system')) {
-    disposeTheme()
-    disposeTheme = applyTheme(theme)
-  }
-})
 
 const engine = new LiveEngine()
 engine.start(bridge)
+syncPrefs(engine) // theme, language and reader options follow the engine
 
 const root = document.getElementById('root')
 if (root) {

@@ -1,4 +1,5 @@
-"""Prefixed IDs (04 § Conventions): doc_, blk_, utt_, rule_, act_, rec_, job_, turn_, voice ids are provider:model:voice."""
+"""Prefixed IDs (04 § Conventions): doc_, blk_, utt_, rule_, act_, rec_, job_, turn_, voice ids are "
+"provider:model:voice."""
 
 from __future__ import annotations
 

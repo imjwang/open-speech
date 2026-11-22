@@ -54,6 +54,11 @@ export class EnergyVad {
     return this.heardSpeech
   }
 
+  /** Sound above the room's level is arriving right now, though not yet for long enough to call it speech. */
+  get maybeSpeech(): boolean {
+    return !this.speaking && this.speechMs > 0
+  }
+
   get threshold(): number {
     return Math.max(this.floorDb + this.marginDb, this.minThresholdDb)
   }
