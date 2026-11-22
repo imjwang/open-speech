@@ -1,0 +1,18 @@
+# Field Notes on Cupping (docx, 12 blocks) · classic
+H Field Notes on Cupping
+¶ We cupped twelve lots from three origins over two days. Each lot was scored by four tasters and the scores were averaged.
+H Method
+¶ Samples were roasted light and rested for a day. Brewing water was heated to 93 °C. The full protocol is described at.
+¶ Grind size was fixed for every sample.
+¶ Cups were covered until the break.
+H Results
+¶ The washed lots scored highest overall, as the table shows.
+¶ Clarity beats intensity when the cups cool.
+
+--- removed (6)
+footnotes skip blk_1: 1
+footnotes drop_block blk_2: 1 Scores follow the 2004 protocol with a 100-point scale.
+footnotes skip blk_4: 2
+urls skip blk_4: https://example.net/cupping
+footnotes drop_block blk_5: 2 Water was filtered to 120 ppm total dissolved solids.
+tables drop_block blk_10: Origin, Mean score. Ethiopia, 87.5. Colombia, 85.0.

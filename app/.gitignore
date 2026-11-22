@@ -1,0 +1,4 @@
+# App-local build artefacts (the repo root ignores node_modules/, out/, release/, dist/, build/)
+/engine-runtime/
+/test-results/
+/e2e/.artifacts/

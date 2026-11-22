@@ -291,7 +291,9 @@ async def keys_state(engine: E) -> s.KeysState:
 
 
 @router.put("/keys/{provider}", response_model=s.KeyTestResult, tags=["settings"])
-async def put_key(provider: Literal["anthropic", "openai", "gemini", "auto"], body: s.KeyIn, engine: E) -> s.KeyTestResult:
+async def put_key(
+    provider: Literal["anthropic", "openai", "gemini", "auto"], body: s.KeyIn, engine: E
+) -> s.KeyTestResult:
     """Write-only. `auto` detects the provider from the key prefix. There is no GET for keys."""
     return await engine.keys.put(provider, body.key)
 

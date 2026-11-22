@@ -1,0 +1,87 @@
+{
+  "url": "https://www.example-news.com/2026/11/council-budget",
+  "title": "Council approves new budget after long debate | Example News",
+  "blocks": [
+    {
+      "id": "b0",
+      "type": "h1",
+      "text": "Council approves new budget after long debate",
+      "dom_anchor": {
+        "xpath": "/html/body/article/*[1]",
+        "start_offset": 0
+      }
+    },
+    {
+      "id": "b1",
+      "type": "p",
+      "text": "The city council voted 7 to 2 on Tuesday to approve next year's budget, which adds funding for parks [3] and road repairs (about $5 million in total).",
+      "dom_anchor": {
+        "xpath": "/html/body/article/*[2]",
+        "start_offset": 0
+      }
+    },
+    {
+      "id": "b2",
+      "type": "p",
+      "text": "Supporters said the plan was overdue. \"It's about time,\" said council member Rosa Diaz, who has pushed for park funding since 2019 (Diaz, 2021).",
+      "dom_anchor": {
+        "xpath": "/html/body/article/*[3]",
+        "start_offset": 0
+      }
+    },
+    {
+      "id": "b3",
+      "type": "h2",
+      "text": "What changes",
+      "dom_anchor": {
+        "xpath": "/html/body/article/*[4]",
+        "start_offset": 0
+      }
+    },
+    {
+      "id": "b4",
+      "type": "li",
+      "text": "Parks get $2 million for maintenance.",
+      "dom_anchor": {
+        "xpath": "/html/body/article/*[5]",
+        "start_offset": 0
+      }
+    },
+    {
+      "id": "b5",
+      "type": "li",
+      "text": "Road repairs get $3 million, see https://example-news.com/budget-table for details.",
+      "dom_anchor": {
+        "xpath": "/html/body/article/*[6]",
+        "start_offset": 0
+      }
+    },
+    {
+      "id": "b6",
+      "type": "blockquote",
+      "text": "We will deliver on our promises, the mayor said in a statement.",
+      "dom_anchor": {
+        "xpath": "/html/body/article/*[7]",
+        "start_offset": 0
+      }
+    },
+    {
+      "id": "b7",
+      "type": "figcaption",
+      "text": "Figure 2: Council members during the vote on Tuesday.",
+      "dom_anchor": {
+        "xpath": "/html/body/article/*[8]",
+        "start_offset": 0
+      }
+    },
+    {
+      "id": "b8",
+      "type": "p",
+      "text": "The budget takes effect in January.",
+      "dom_anchor": {
+        "xpath": "/html/body/article/*[9]",
+        "start_offset": 0
+      }
+    }
+  ]
+}

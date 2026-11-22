@@ -1,0 +1,23 @@
+{
+ "task": "transcribe",
+ "language": "english",
+ "duration": 1.2,
+ "text": "read my clipboard",
+ "words": [
+  {
+   "word": "read",
+   "start": 0.1,
+   "end": 0.35
+  },
+  {
+   "word": "my",
+   "start": 0.4,
+   "end": 0.5
+  },
+  {
+   "word": "clipboard",
+   "start": 0.55,
+   "end": 1.1
+  }
+ ]
+}

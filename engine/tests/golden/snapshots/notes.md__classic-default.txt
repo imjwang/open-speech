@@ -1,0 +1,17 @@
+# Brewing Notes (text, 13 blocks) · classic
+H Brewing Notes
+¶ A short guide to pour-over brewing. See the full guide for more.
+H Equipment
+¶ A gooseneck kettle
+¶ A paper filter, rinsed
+¶ 1. Not a real list item, just text
+H Recipe
+¶ 1. Weigh 15 g of coffee.
+¶ 2. Pour 250 g of water at 94 °C in three stages.
+¶ ratio = water / coffee
+¶ Step, Time. Bloom, 0:45. Finish, 3:00.
+¶ Taste first, then adjust the grind.
+
+--- removed (2)
+footnotes skip blk_4: 1
+footnotes drop_block blk_12: 1 Rinsing removes the papery taste.

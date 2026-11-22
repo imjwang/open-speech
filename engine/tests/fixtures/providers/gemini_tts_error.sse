@@ -1,0 +1,6 @@
+event: interaction.created
+data: {"event_type": "interaction.created", "interaction": {"id": "int_tts_2", "status": "in_progress"}}
+
+event: error
+data: {"event_type": "error", "error": {"code": "503", "message": "The model is overloaded."}}
+

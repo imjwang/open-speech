@@ -1,0 +1,40 @@
+{
+ "id": "int_stt_1",
+ "status": "completed",
+ "model": "gemini-3.5-transcribe",
+ "steps": [
+  {
+   "type": "model_output",
+   "content": [
+    {
+     "type": "text",
+     "text": "skip the footnotes",
+     "annotations": [
+      {
+       "type": "word_info",
+       "text": "skip",
+       "start_offset": "0.120s",
+       "end_offset": "0.400s"
+      },
+      {
+       "type": "word_info",
+       "text": "the",
+       "start_offset": "0.420s",
+       "end_offset": "0.520s"
+      },
+      {
+       "type": "word_info",
+       "text": "footnotes",
+       "start_offset": "0.540s",
+       "end_offset": "1.100s"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "usage": {
+  "total_input_tokens": 36,
+  "total_output_tokens": 4
+ }
+}

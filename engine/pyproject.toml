@@ -39,7 +39,10 @@ dependencies = [
 
 [project.optional-dependencies]
 # Default install for packaged builds (08 § Local models). English G2P without espeak (R13).
-local-kokoro = ["onnxruntime>=1.20"]
+local-kokoro = [
+    "misaki>=0.9.4",
+    "onnxruntime>=1.20",
+]
 mcp = ["mcp>=1.2"]
 
 [project.scripts]
@@ -70,12 +73,12 @@ asyncio_default_fixture_loop_scope = "function"
 markers = ["live: hits real provider APIs (needs OPEN_SPEECH_LIVE=1)"]
 
 [tool.ruff]
-line-length = 110
+line-length = 120
 target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
-ignore = ["B008"]
+ignore = ["B008", "SIM118", "ASYNC109", "ASYNC240"]
 
 [tool.mypy]
 python_version = "3.13"

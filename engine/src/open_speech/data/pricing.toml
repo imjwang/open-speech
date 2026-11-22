@@ -1,0 +1,101 @@
+# Open Speech pricing catalog (08 § Pricing catalog). Dated, versioned, overridable in app data
+# (`pricing.toml`, deep-merged over this file; overrides apply on the next ledger write), updated by PR.
+# Every number the UI or voice reports from these is labelled *estimated*. Values are decimal strings.
+#
+# Keys a model entry may carry (all optional; usd = the sum of the terms that apply):
+#   input_per_mtok / text_input_per_mtok   × input tokens (TTS: chars / chars_per_token when no count)
+#   output_per_mtok                        × output tokens
+#   audio_output_per_mtok                  × audio output tokens (or audio_sec × audio_tokens_per_sec)
+#   cache_read_per_mtok / cache_write_per_mtok × prompt-cache tokens (write defaults to input × 1.25)
+#   per_audio_minute                       × audio minutes (STT)
+#   per_mchars                             × characters
+#   per_image                              × images (only for providers that bill images separately)
+
+version = "2026-11-21"
+currency = "USD"
+chars_per_token = 4
+
+# ------------------------------------------------------------------------------------- Anthropic
+# Image input is billed as input tokens (already in response.usage), so no per_image here.
+
+[anthropic."claude-sonnet-5-5"]
+input_per_mtok = "2.00"
+output_per_mtok = "10.00"
+cache_read_per_mtok = "0.10"
+cache_write_per_mtok = "2.50"
+
+[anthropic."claude-opus-5-5"]
+input_per_mtok = "4.00"
+output_per_mtok = "20.00"
+cache_read_per_mtok = "0.20"
+cache_write_per_mtok = "5.00"
+
+[anthropic."claude-haiku-5-5"]
+input_per_mtok = "0.10"
+output_per_mtok = "0.50"
+cache_read_per_mtok = "0.01"
+cache_write_per_mtok = "0.125"
+
+# ---------------------------------------------------------------------------------------- OpenAI
+
+[openai."gpt-4o-mini-tts"]
+# (verify) text input + audio output pricing; approx $0.015 per audio minute
+text_input_per_mtok = "0.60"
+audio_output_per_mtok = "12.00"
+audio_tokens_per_sec = "20.833"   # 1250 audio tokens per minute → $0.015/min
+
+[openai."gpt-4o-transcribe"]
+per_audio_minute = "0.006"        # (verify)
+
+[openai."gpt-4o-mini-transcribe"]
+per_audio_minute = "0.003"        # (verify)
+
+[openai."gpt-transcribe"]
+per_audio_minute = "0.006"        # (verify)
+
+[openai."gpt-realtime-whisper"]
+per_audio_minute = "0.006"        # (verify)
+
+[openai."gpt-live-transcribe"]
+per_audio_minute = "0.006"        # (verify)
+
+[openai."whisper-1"]
+per_audio_minute = "0.006"        # (verify)
+
+# ---------------------------------------------------------------------------------------- Gemini
+
+[gemini."gemini-3.8-flash-tts"]
+# (verify) indicative: text input + audio output tokens (~25 audio tokens per second)
+input_per_mtok = "0.50"
+audio_output_per_mtok = "10.00"
+audio_tokens_per_sec = "25"
+
+[gemini."gemini-3.8-flash-lite-tts"]
+# (verify) priced like Flash until confirmed, so estimates err high
+input_per_mtok = "0.50"
+audio_output_per_mtok = "10.00"
+audio_tokens_per_sec = "25"
+
+[gemini."gemini-3.5-transcribe"]
+per_audio_minute = "0.002"        # (verify)
+
+[gemini."gemini-3.8-live"]
+per_audio_minute = "0.002"        # (verify)
+
+# ----------------------------------------------------------------------------- fixture (test-only)
+# Deterministic test providers bill like their real counterparts so the ledger, budget and estimates
+# have realistic numbers in end-to-end runs. Never used in packaged builds.
+
+[fixture."tone-paid-v1"]
+text_input_per_mtok = "0.60"
+audio_output_per_mtok = "12.00"
+audio_tokens_per_sec = "20.833"
+
+[fixture."fixture-llm"]
+input_per_mtok = "2.00"
+output_per_mtok = "10.00"
+cache_read_per_mtok = "0.10"
+cache_write_per_mtok = "2.50"
+
+[fixture."fixture-stt"]
+per_audio_minute = "0.006"

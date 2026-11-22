@@ -1,0 +1,30 @@
+---
+author: fixture
+---
+# Brewing Notes
+
+A short guide to **pour-over** brewing. See the [full guide](https://example.org/guide) for more.
+
+## Equipment
+
+- A gooseneck kettle
+- A paper filter, rinsed[^1]
+- 1. Not a real list item, just text
+
+## Recipe
+
+1. Weigh 15 g of coffee.
+2. Pour 250 g of water at 94 °C in three stages.
+
+```
+ratio = water / coffee
+```
+
+| Step | Time |
+|------|------|
+| Bloom | 0:45 |
+| Finish | 3:00 |
+
+> Taste first, then adjust the grind.
+
+[^1]: Rinsing removes the papery taste.

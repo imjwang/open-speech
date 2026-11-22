@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Open Speech · browser mode</title>
+  </head>
+  <body style="font-family: system-ui, sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5">
+    <h1>Open Speech renderer (browser mode)</h1>
+    <p>
+      Pages need the engine's address and token:
+      <code>?engine=http://127.0.0.1:&lt;port&gt;&amp;token=&lt;token&gt;</code>. The engine must allow this origin
+      (<code>OPEN_SPEECH_ALLOWED_ORIGINS</code>).
+    </p>
+    <ul>
+      <li><a id="bar" href="/commandbar/index.html">Command bar</a> (add <code>&amp;listen=0</code> to start typing)</li>
+      <li><a id="reader" href="/reader/index.html">Reader</a> (add <code>&amp;doc=doc_…</code>)</li>
+    </ul>
+    <script type="module" src="./landing.ts"></script>
+  </body>
+</html>

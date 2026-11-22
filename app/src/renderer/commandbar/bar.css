@@ -1,0 +1,20 @@
+/* The Electron bar window is transparent (vibrancy shows through the rounded panel). */
+html,
+body {
+  background: transparent;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* Plain-browser mode (UI tests): centre the bar on a neutral backdrop. */
+html.in-browser,
+html.in-browser body {
+  overflow: auto;
+  background: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  min-height: 100%;
+}
+html.in-browser #root {
+  max-width: 680px;
+  margin: 12vh auto 0;
+  padding: 0 12px;
+}

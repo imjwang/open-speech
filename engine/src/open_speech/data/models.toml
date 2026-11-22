@@ -1,0 +1,153 @@
+# Open Speech model catalog (08 § Model catalog).
+#
+# Every model ID the engine uses comes from here; nothing is hard-coded elsewhere. User overrides in
+# app data (`models.toml`) are deep-merged over this file: tables merge, scalars and lists replace.
+#
+# Layout: [tts.<provider>."<model>"], [stt.<provider>], [llm.<provider>].
+# Voice IDs are "provider:model:voice" (04 § Conventions).
+
+# ------------------------------------------------------------------------------------------- TTS
+
+[tts.openai."gpt-4o-mini-tts"]
+name = "OpenAI"
+snapshot = "gpt-4o-mini-tts-2025-12-15"   # sent to the API so cached audio stays reproducible
+voices = ["alloy", "ash", "ballad", "cedar", "coral", "echo", "fable", "marin", "nova", "onyx", "sage", "shimmer", "verse"]  # (verify list)
+formats = ["opus", "mp3", "aac", "flac", "wav", "pcm"]
+style = "instructions"
+stream = true
+max_input_chars = 4000          # (verify)
+timestamps = false
+languages = ["en"]
+
+[tts.gemini."gemini-3.8-flash-tts"]
+name = "Gemini Flash TTS"
+api = "interactions"            # client.interactions.create, api_version v1beta, google-genai >= 2.25
+api_version = "v1beta"
+voices = ["Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar", "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat"]
+voices_endpoint = true          # client.voices.list() for the larger library (P1)
+format = "l16"                  # 24 kHz mono PCM16 when streaming; wav when unary
+sample_rate = 24000
+style = "speech_metadata"
+stream = true
+max_input_chars = 4000          # (verify)
+timestamps = false
+languages = ["en"]
+
+[tts.gemini."gemini-3.8-flash-lite-tts"]
+inherit = "gemini-3.8-flash-tts"
+name = "Gemini Flash Lite TTS"
+languages = 101                 # count only; the API auto-detects the language
+
+[tts.kokoro."kokoro-82m-v1.0"]
+name = "Kokoro"
+local = true
+license = "Apache-2.0"
+ram_gb = 1.3
+speed = "~10x real time on CPU"
+languages = ["en-US", "en-GB"]  # more via optional phonemizer extras
+timestamps = true
+max_input_chars = 4000
+sample_rate = 24000
+max_tokens = 510                # model context minus the two pad tokens
+voices = [
+  "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole", "af_nova",
+  "af_river", "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam",
+  "am_michael", "am_onyx", "am_puck", "am_santa", "bf_alice", "bf_emma", "bf_isabella", "bf_lily",
+  "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
+]
+
+[tts.kokoro."kokoro-82m-v1.0".weights]
+url = "hf://onnx-community/Kokoro-82M-v1.0-ONNX-timestamped"
+revision = "main"
+quant = "q8"
+size_mb = 92
+# sha256 pins: Hugging Face was unreachable from the workstation that wrote this catalog, so the pins
+# are empty. An empty pin is installed trust-on-first-use (the hash is recorded in the model's
+# manifest.json and reported as "unpinned"). Fill these in before a packaged release (03 § Supply chain).
+sha256 = ""
+model_file = "onnx/model_quantized.onnx"
+tokenizer_file = "tokenizer.json"
+voice_file = "voices/{voice}.bin"
+files = [
+  { path = "onnx/model_quantized.onnx", sha256 = "", size_mb = 92 },
+  { path = "tokenizer.json", sha256 = "", size_mb = 0.1 },
+]
+voice_size_mb = 0.5
+
+[tts.qwen3."qwen3-tts-12hz-0.6b"]            # P2, preset voices only (no cloning)
+name = "Qwen3-TTS"
+local = true
+status = "later"                 # listed by the model manager, never offered as a voice yet
+runtimes = ["mlx-audio"]         # Apple Silicon
+size_gb = 1.3                    # GGUF Q8; ~2.5 GB bf16
+ram_gb = 3
+speed = "~1.3–1.8x real time on M-series"
+license = "Apache-2.0"
+languages = ["zh", "en", "ja", "ko", "de", "fr", "ru", "pt", "es", "it"]
+requires = "apple-silicon"
+timestamps = false
+voices = []
+
+# Deterministic test voices (providers/fixture.py). Only surfaced when OPEN_SPEECH_FIXTURE_PROVIDERS=1;
+# never in packaged builds. "tone-v1" stands in for the free local voice, "tone-paid-v1" simulates a
+# paid cloud voice (priced in pricing.toml) so budget and estimate flows can be exercised end to end.
+[tts.fixture."tone-v1"]
+name = "Test tone voice"
+test_only = true
+local = true
+timestamps = true
+style = "instructions"
+voices = ["alto", "bass"]
+sample_rate = 24000
+max_input_chars = 4000
+languages = ["en"]
+license = "Apache-2.0"
+
+[tts.fixture."tone-paid-v1"]
+name = "Test tone voice (paid simulation)"
+test_only = true
+local = false
+timestamps = true
+style = "instructions"
+voices = ["soprano"]
+sample_rate = 24000
+max_input_chars = 4000
+languages = ["en"]
+
+# BYO OpenAI-compatible server (P1, FR-VOICE-7). Add entries in the user models.toml, e.g.:
+# [tts.openai_compatible."kokoro-fastapi"]
+# base_url = "http://127.0.0.1:8880/v1"
+# api_model = "kokoro"
+# voices = ["af_heart"]
+# response_format = "wav"
+
+# ------------------------------------------------------------------------------------------- STT
+
+[stt.openai]
+streaming = ["gpt-realtime-whisper", "gpt-live-transcribe"]   # (verify streaming semantics)
+batch = ["gpt-4o-transcribe", "gpt-4o-mini-transcribe", "gpt-transcribe"]
+word_timestamps = ["whisper-1"]
+
+[stt.gemini]
+streaming = ["gemini-3.8-live"]       # (verify) Live API input transcription
+batch = ["gemini-3.5-transcribe"]     # word timestamps
+api_version = "v1beta"
+
+[stt.fixture]
+test_only = true
+batch = ["fixture-stt"]
+
+# ------------------------------------------------------------------------------------------- LLM
+
+[llm.anthropic]
+default = "claude-sonnet-5-5"
+options = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-2"]
+annotate_max_tokens = 4096
+transform_max_tokens = 16000
+compile_max_tokens = 2048
+vision_max_tokens = 4096
+
+[llm.fixture]
+test_only = true
+default = "fixture-llm"
+options = ["fixture-llm"]

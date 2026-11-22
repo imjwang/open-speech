@@ -1,0 +1,4 @@
+# scanned (pdf, 1 blocks) · classic
+# flags: scanned_pages:1
+
+--- removed (0)

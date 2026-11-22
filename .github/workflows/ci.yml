@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    # 10 § Delivery: CI runs on macOS arm64 runners.
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras --frozen
+      - name: Lint
+        run: uv run ruff check .
+      - name: API contracts are current (openapi.json, ws-schema.json)
+        run: uv run python -m open_speech.api.export --check
+      - name: Tests (fixtures only; no live provider calls)
+        run: uv run pytest -q
+        env:
+          OPEN_SPEECH_LIVE: "0"
+
+  app:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Generated engine client is current (FR-API-2)
+        run: pnpm check:api
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  e2e:
+    needs: [engine, app]
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: cd engine && uv sync --all-extras --frozen
+      - run: cd app && pnpm install --frozen-lockfile
+      - name: UI, accessibility and voice-only workflows (fixture providers)
+        run: cd app && pnpm e2e

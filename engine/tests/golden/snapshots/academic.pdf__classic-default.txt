@@ -1,0 +1,73 @@
+# Listening to Papers: Robust Reading Order for Synthetic Documents (pdf, 47 blocks) · classic
+H Listening to Papers: Robust Reading Order for Synthetic Documents
+¶ Ana Lee and Ben Park
+¶ Department of Listening, Example University
+H Abstract
+¶ We study how a speech engine can read academic papers aloud without stumbling over running heads, page numbers or citation markers. Our method clusters text lines into columns, detects repeated page furniture and types every block, so that a listener hears only the content. On a synthetic corpus it removes all headers and footers while keeping the body in the correct reading order.
+H 1 Introduction
+¶ Reading documents aloud is an old idea, yet most tools still read everything on the page, including the running head and the page number. Screen readers improved this for the web, but scientific papers remain hard because of their dense two-column layouts.
+¶ Prior systems relied on hand-written templates. Others learned layout from large corpora and needed expensive annotation of every page in the training set. Our approach needs no training data and runs in milliseconds on a laptop.
+¶ Listeners care most about continuity. A sentence that is split across two columns should still be heard as one sentence, and a word hyphenated at the end of a line should be heard as one word.
+  We therefore treat the column as the unit of reading and merge paragraphs that continue across column breaks, which keeps the prosody of the synthesized speech natural and the highlighting exact, because every word in the output maps back to its box on the page.
+  Earlier prototypes that ignored this produced audible seams in the middle of sentences, which listeners in our pilot study found distracting. They also found it tiring to hear the same journal name at the top of every page, and several asked for a way to skip citation markers entirely.
+¶ This paper makes three contributions. First, we describe a gutter detector that works on the raw character boxes of a page. Second, we show how repeated page furniture can be found with a simple vote across pages.
+  Third, we evaluate the combination on a synthetic corpus whose ground truth is known exactly, so that every error can be traced to a specific heuristic and fixed.
+H 2 Method
+¶ We first group characters into lines and lines into columns.
+¶ Smith et al. showed that the gap between columns is the strongest signal, and we follow their observation. The score of a candidate gutter is defined as
+¶ S(g) = w · h(g) + b (1)
+¶ where h(g) is the height of the empty band. Lines that cross every gutter are treated as full-width and break the page into bands that are read one after another.
+H 2.1 Page furniture
+¶ Repeated page furniture is detected by comparing the top and bottom eight percent of every page. Text that repeats on at least thirty percent of pages is marked as a header or footer, and short numeric lines are marked as page numbers. Digits are normalized before the comparison, so that a running head which includes the page number still matches across pages.
+  More details are given at together with the evaluation scripts.
+¶ Figure 1: Share of pages with correctly ordered columns for five document families.
+¶ Footnotes are recognized by their small type, their position at the bottom of a column and a leading marker that matches a superscript in the body text. Captions are recognized by their label and by their distance to the nearest figure or table on the page.
+H 3 Results
+¶ On our synthetic corpus the method removed every running head and page number while keeping the order of the body text intact. Errors were concentrated in pages with wide tables, which we leave for future work.
+  The detector never merged two columns into one line, even on pages where the gutter was only a few points wide, because the vote uses every line of the page rather than a single row of text.
+¶ We also measured how often a paragraph was split in the wrong place. Splits happened only when a paragraph ended exactly at the right margin, which is rare in practice and harmless for listening, since the reader pauses briefly at the end of each utterance anyway. A short pilot with six listeners confirmed that the output was easy to follow.
+H 4 Discussion
+¶ Two limitations deserve attention. The first is that the method assumes a fixed number of columns per band, so a page that mixes a narrow sidebar with a wide main column is read as two columns of equal standing. In practice this produced a plausible order on every page we tried, but a sidebar placed in the middle of the main text would be read too early.
+¶ The second limitation concerns tables. A ruled table is easy to find, but a table drawn with whitespace alone looks very much like a block of short lines, and our detector reads it row by row. Listeners rated this acceptable for small tables and tedious for large ones, which suggests that a short spoken summary would serve them better than a faithful reading of every cell.
+¶ Finally, we note that every heuristic described here is deterministic and runs without network access. This matters for privacy, since the documents people listen to are often personal, and for cost, since nothing needs to be sent to a remote model before reading can begin. When a language model is available, it can refine the result, but it is never required.
+H 5 Conclusion
+¶ Simple geometric heuristics are enough to make papers pleasant to listen to. We hope this encourages more work on listening-first document tools, and we plan to extend the method to documents with three or more columns.
+H References
+¶ D. Klatt. Review of text-to-speech conversion for English. JASA, 1987.
+¶ A. Smith and B. Jones. Accessible reading on the web. In Proc.
+  ASSETS, 2015.
+¶ C. Lee. Screen readers in practice: a decade of lessons learned in the field. CHI, 2018.
+¶ M. Garcia. Layout analysis of scientific documents. ICDAR, 2021.
+¶ R. Smith, T. Brown and K. Wu. Reading order from geometry. DocEng, 2020.
+¶ S. Lee and J. Kim. Learning layout from large corpora. ACL, 2019.
+¶ P. Park. Tables are hard. Workshop on Document Intelligence, 2022.
+
+--- removed (28)
+headers drop_block blk_0: Journal of Synthetic Results · Vol. 7
+headers drop_block blk_1: Lee and Park
+citations skip blk_8: [1]
+citations skip blk_8: [2, 3]
+citations skip blk_8: [4–6]
+citations skip blk_9: (Smith et al., 2020)
+citations skip blk_9: (Lee and Kim, 2019; Garcia 2021)
+footnotes skip blk_9: 1
+citations skip blk_14: (2020)
+footnotes skip blk_16: 2
+urls skip blk_18: https://example.org/method
+footnotes drop_block blk_22: 1 Code and data are available from the authors on request.
+footnotes drop_block blk_23: 2 A band is a horizontal slice of the page between two full-width lines.
+footers drop_block blk_24: © 2026 The Authors. Licensed under CC BY 4.0.
+page-numbers drop_block blk_25: Page 1 of 2
+headers drop_block blk_26: Journal of Synthetic Results · Vol. 7
+headers drop_block blk_27: Lee and Park
+citations skip blk_29: [7]
+citations skip blk_30: (Park, 2022)
+citations skip blk_38: [1]
+citations skip blk_39: [2]
+citations skip blk_40: [3]
+citations skip blk_41: [4]
+citations skip blk_42: [5]
+citations skip blk_43: [6]
+citations skip blk_44: [7]
+footers drop_block blk_45: © 2026 The Authors. Licensed under CC BY 4.0.
+page-numbers drop_block blk_46: Page 2 of 2

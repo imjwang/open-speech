@@ -1,0 +1,16 @@
+# Council approves new budget after long debate (web, 9 blocks) · classic
+H Council approves new budget after long debate
+¶ The city council voted 7 to 2 on Tuesday to approve next year's budget, which adds funding for parks and road repairs.
+¶ Supporters said the plan was overdue. "It's about time," said council member Rosa Diaz, who has pushed for park funding since 2019.
+H What changes
+¶ Parks get $2 million for maintenance.
+¶ Road repairs get $3 million, see for details.
+¶ We will deliver on our promises, the mayor said in a statement.
+¶ The budget takes effect in January.
+
+--- removed (5)
+citations skip blk_1: [3]
+parentheses skip blk_1: (about $5 million in total)
+citations skip blk_2: (Diaz, 2021)
+urls skip blk_5: https://example-news.com/budget-table
+captions drop_block blk_7: Figure 2: Council members during the vote on Tuesday.

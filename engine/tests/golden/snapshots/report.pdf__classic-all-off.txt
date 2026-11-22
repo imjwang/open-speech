@@ -1,0 +1,19 @@
+# Quarterly Operations Report (pdf, 16 blocks) · classic
+H Quarterly Operations Report
+¶ This report summarizes operations for the third quarter. Output grew steadily while costs stayed flat, and the new roasting line reached full capacity in August.
+H Highlights
+¶ Production rose to 41 tonnes, up 12 percent from the second quarter.
+¶ Energy use per kilogram fell for the third quarter in a row.
+¶ Two new wholesale partners signed annual contracts.
+H Production
+¶ Most of the growth came from the new line, which ran two shifts from July onward. The older line was used for small batches and for training new staff. Detailed figures are published at https://example.com/reports/q3 for partners.
+¶ Northwind Roasters · Internal
+¶ Page 1 of 2
+¶ Line, July, August, September. New line, 6.1, 8.4, 8.9. Old line, 5.2, 5.0, 4.7.
+¶ Table 1: Output by line, in tonnes.
+H Outlook
+¶ We expect demand to stay strong through the holidays. The main risk is the price of green coffee, which rose sharply in September (see the appendix for the full price series). We will review contracts in January.
+¶ Northwind Roasters · Internal
+¶ Page 2 of 2
+
+--- removed (0)
