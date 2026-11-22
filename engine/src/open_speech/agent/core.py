@@ -47,7 +47,11 @@ async def run_agent_turn(
 
     runner = e.agent_runner()
     if runner is None:
-        raise MissingKey("anthropic", "That request")
+        err = MissingKey("anthropic", "That request")
+        err.detail = (
+            "Free-form requests need an Anthropic key. Paste one here, or say “help” to hear what works without one."
+        )
+        raise err
     e.budget.check_paid()
     settings = e.settings.get()
     tools = build_tools(e, turn_id=turn_id, context=req.context)

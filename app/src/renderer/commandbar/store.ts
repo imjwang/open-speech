@@ -47,6 +47,8 @@ export interface TurnModel {
   replyRecordingId: string | null
   done: boolean
   error: string | null
+  /** Problem code of `error` (e.g. "missing_key": shown as guidance with a key action, not as a failure). */
+  errorCode?: string | null
   cards: CardModel[]
   actionIds: string[]
 }

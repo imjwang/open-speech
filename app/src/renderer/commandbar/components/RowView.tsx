@@ -332,6 +332,16 @@ export function RowView({ row, handlers }: { row: Row; handlers: RowHandlers }) 
     }
     case 'reply': {
       const t = row.turn
+      if (t.error && t.errorCode === 'missing_key') {
+        return (
+          <Item row={row} handlers={handlers} className="items-start">
+            <KeyRound aria-hidden="true" className="mt-0.5 text-muted-foreground" />
+            <span className="whitespace-pre-wrap">{t.error}</span>
+            <SrHint>. Press Enter to paste a key.</SrHint>
+            <Hints items={[['↵', 'paste a key']]} />
+          </Item>
+        )
+      }
       return (
         <Item row={row} handlers={handlers} className="items-start">
           {t.error ? (

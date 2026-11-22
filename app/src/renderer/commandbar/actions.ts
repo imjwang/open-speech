@@ -92,6 +92,10 @@ export class BarActions {
         if (row.turn.recordingId) return this.replay(row.turn.recordingId)
         return
       case 'reply':
+        if (row.turn.errorCode === 'missing_key') {
+          this.controller.store.setState({ keyEntry: true })
+          return
+        }
         if (row.turn.replyRecordingId) return this.replay(row.turn.replyRecordingId)
         return
       case 'action':

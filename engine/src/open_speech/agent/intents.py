@@ -309,6 +309,10 @@ def parse(text: str, *, has_pending_action: bool = False) -> Intent | None:  # n
         verb = m.group(1) if m else "describe"
         mode = {"read": "auto", "describe": "describe", "transcribe": "transcribe"}[verb]
         return Intent("read_clipboard", {"image_mode": mode})
+    # A bare link or file path, typed or pasted: read it (no verb needed, no LLM).
+    raw = text.strip().strip("<>\"'")
+    if " " not in raw and (re.fullmatch(r"https?://\S+", raw, re.I) or raw.startswith(("/", "~/"))):
+        return Intent("open_source", {"target": raw, "play": True})
     m = re.fullmatch(r"(?:read|open|play)(?: me)? (.+)", t)
     if m:
         target = text.strip().split(None, 1)[1] if len(text.strip().split(None, 1)) > 1 else m.group(1)

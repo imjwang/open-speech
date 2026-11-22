@@ -458,11 +458,14 @@ export class BarController {
       msg.error && typeof msg.error === 'object'
         ? String((msg.error as Record<string, unknown>).detail ?? (msg.error as Record<string, unknown>).title ?? 'Something went wrong.')
         : null
+    const errorCode =
+      msg.error && typeof msg.error === 'object' ? String((msg.error as Record<string, unknown>).code ?? '') || null : null
     this.updateTurn(msg.turn_id, (t) => ({
       done: true,
       reply: msg.text ? msg.text : t.reply,
       replyRecordingId: msg.reply_recording_id ?? null,
       error: errorText,
+      errorCode,
     }))
     const s = this.s
     const turn = s.turns.find((t) => t.turnId === msg.turn_id)
