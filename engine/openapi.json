@@ -1,0 +1,5259 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Open Speech Engine",
+    "summary": "Local REST + WebSocket API. Every request needs `Authorization: Bearer <token>`.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/documents": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Create Document",
+        "operationId": "create_document_api_v1_documents_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDocumentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateDocumentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List Documents",
+        "operationId": "list_documents_api_v1_documents_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/upload": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Upload Document",
+        "operationId": "upload_document_api_v1_documents_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_document_api_v1_documents_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateDocumentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Document",
+        "operationId": "get_document_api_v1_documents__document_id__get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Delete Document",
+        "operationId": "delete_document_api_v1_documents__document_id__delete",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/blocks": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Blocks",
+        "operationId": "get_blocks_api_v1_documents__document_id__blocks_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlocksPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/script": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Script",
+        "operationId": "get_script_api_v1_documents__document_id__script_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/source": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Source",
+        "operationId": "get_source_api_v1_documents__document_id__source_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/regenerate": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Regenerate",
+        "operationId": "regenerate_api_v1_documents__document_id__regenerate_post",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "confirm_estimate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Confirm Estimate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/settings": {
+      "put": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Document Settings",
+        "operationId": "document_settings_api_v1_documents__document_id__settings_put",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback": {
+      "get": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Playback State",
+        "operationId": "playback_state_api_v1_playback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback/play": {
+      "post": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Play",
+        "operationId": "play_api_v1_playback_play_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback/pause": {
+      "post": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Pause",
+        "operationId": "pause_api_v1_playback_pause_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback/resume": {
+      "post": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Resume",
+        "operationId": "resume_api_v1_playback_resume_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback/stop": {
+      "post": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Stop",
+        "operationId": "stop_api_v1_playback_stop_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback/skip": {
+      "post": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Skip",
+        "operationId": "skip_api_v1_playback_skip_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback/speed": {
+      "put": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Speed",
+        "operationId": "speed_api_v1_playback_speed_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback/voice": {
+      "put": {
+        "tags": [
+          "playback"
+        ],
+        "summary": "Voice",
+        "operationId": "voice_api_v1_playback_voice_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/voices": {
+      "get": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "List Voices",
+        "operationId": "list_voices_api_v1_voices_get",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lang"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/voices/{voice_id}/preview": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Preview Voice",
+        "operationId": "preview_voice_api_v1_voices__voice_id__preview_post",
+        "parameters": [
+          {
+            "name": "voice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Voice Id"
+            }
+          },
+          {
+            "name": "style",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Style"
+            }
+          },
+          {
+            "name": "play",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Play"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "List Rules",
+        "operationId": "list_rules_api_v1_rules_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Save Rule",
+        "operationId": "save_rule_api_v1_rules_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveRuleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules/proposals": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Propose Rule",
+        "operationId": "propose_rule_api_v1_rules_proposals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleProposalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleProposal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules/presets": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Get Presets",
+        "operationId": "get_presets_api_v1_rules_presets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetsState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Put Presets",
+        "operationId": "put_presets_api_v1_rules_presets_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetsState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules/lexicon": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Get Lexicon",
+        "operationId": "get_lexicon_api_v1_rules_lexicon_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LexiconList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Add Lexicon",
+        "operationId": "add_lexicon_api_v1_rules_lexicon_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LexiconEntry"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LexiconList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules/lexicon/{term}": {
+      "delete": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Delete Lexicon",
+        "operationId": "delete_lexicon_api_v1_rules_lexicon__term__delete",
+        "parameters": [
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Term"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LexiconList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules/{rule_id}": {
+      "patch": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Patch Rule",
+        "operationId": "patch_rule_api_v1_rules__rule_id__patch",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rule Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RulePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Delete Rule",
+        "operationId": "delete_rule_api_v1_rules__rule_id__delete",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rule Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/skills": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "List Skills",
+        "operationId": "list_skills_api_v1_skills_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Skills Api V1 Skills Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/turns": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Assistant Turn",
+        "operationId": "assistant_turn_api_v1_assistant_turns_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TurnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Pending Actions",
+        "operationId": "pending_actions_api_v1_actions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ActionOut"
+                  },
+                  "type": "array",
+                  "title": "Response Pending Actions Api V1 Actions Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions/{action_id}/confirm": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Confirm Action",
+        "operationId": "confirm_action_api_v1_actions__action_id__confirm_post",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions/{action_id}/cancel": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Cancel Action",
+        "operationId": "cancel_action_api_v1_actions__action_id__cancel_post",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usage/summary": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Usage Summary",
+        "operationId": "usage_summary_api_v1_usage_summary_get",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "today",
+                "week",
+                "month"
+              ],
+              "type": "string",
+              "default": "month",
+              "title": "Period"
+            }
+          },
+          {
+            "name": "group_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "provider",
+                "op",
+                "document"
+              ],
+              "type": "string",
+              "default": "provider",
+              "title": "Group By"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usage/ledger": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Usage Ledger",
+        "operationId": "usage_ledger_api_v1_usage_ledger_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "name": "op",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Op"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usage/estimate": {
+      "post": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Usage Estimate",
+        "operationId": "usage_estimate_api_v1_usage_estimate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstimateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estimate"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usage/budget": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Get Budget",
+        "operationId": "get_budget_api_v1_usage_budget_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Put Budget",
+        "operationId": "put_budget_api_v1_usage_budget_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Settings",
+        "operationId": "get_settings_api_v1_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Patch Settings",
+        "description": "JSON merge patch over `settings.toml` (nested objects merge; scalars replace).",
+        "operationId": "patch_settings_api_v1_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/keys": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Keys State",
+        "operationId": "keys_state_api_v1_keys_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeysState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/keys/{provider}": {
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Put Key",
+        "description": "Write-only. `auto` detects the provider from the key prefix. There is no GET for keys.",
+        "operationId": "put_key_api_v1_keys__provider__put",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "anthropic",
+                "openai",
+                "gemini",
+                "auto"
+              ],
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyTestResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/local": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Local Models",
+        "operationId": "local_models_api_v1_models_local_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalModelList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/local/{model_id}": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Install Model",
+        "operationId": "install_model_api_v1_models_local__model_id__post",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Remove Model",
+        "operationId": "remove_model_api_v1_models_local__model_id__delete",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recordings/{recording_id}": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Get Recording",
+        "operationId": "get_recording_api_v1_recordings__recording_id__get",
+        "parameters": [
+          {
+            "name": "recording_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recording Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recordings/{recording_id}/play": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Play Recording",
+        "description": "Replay a recording through the engine's output (FR-BAR-6) \u2014 reading ducks around it.",
+        "operationId": "play_recording_api_v1_recordings__recording_id__play_post",
+        "parameters": [
+          {
+            "name": "recording_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recording Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Health",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionOut": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "title": "Action Id"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_id",
+          "kind",
+          "summary",
+          "status"
+        ],
+        "title": "ActionOut"
+      },
+      "ActionResult": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "title": "Action Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "cancelled",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_id",
+          "status",
+          "message"
+        ],
+        "title": "ActionResult"
+      },
+      "Anchor": {
+        "properties": {
+          "block_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Id"
+          },
+          "char_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char Start"
+          },
+          "char_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char End"
+          },
+          "bbox": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBox"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dom_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DomAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "media_t0": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media T0"
+          },
+          "media_t1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media T1"
+          }
+        },
+        "type": "object",
+        "title": "Anchor",
+        "description": "Where spoken text lives in the source. One of the three shapes in 04 (`playback.word`)."
+      },
+      "BBox": {
+        "properties": {
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "x0": {
+            "type": "number",
+            "title": "X0"
+          },
+          "y0": {
+            "type": "number",
+            "title": "Y0"
+          },
+          "x1": {
+            "type": "number",
+            "title": "X1"
+          },
+          "y1": {
+            "type": "number",
+            "title": "Y1"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page",
+          "x0",
+          "y0",
+          "x1",
+          "y1"
+        ],
+        "title": "BBox",
+        "description": "PDF points, origin top-left of the page (y grows downward)."
+      },
+      "Block": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/BlockType"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "order": {
+            "type": "integer",
+            "title": "Order"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "bbox": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBox"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "marks": {
+            "items": {
+              "$ref": "#/components/schemas/Mark"
+            },
+            "type": "array",
+            "title": "Marks"
+          },
+          "dom_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DomAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "word_boxes": {
+            "items": {
+              "$ref": "#/components/schemas/WordBox"
+            },
+            "type": "array",
+            "title": "Word Boxes"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "text",
+          "order"
+        ],
+        "title": "Block"
+      },
+      "BlockType": {
+        "type": "string",
+        "enum": [
+          "heading",
+          "paragraph",
+          "list_item",
+          "quote",
+          "code",
+          "table",
+          "caption",
+          "figure",
+          "footnote",
+          "header",
+          "footer",
+          "page_number",
+          "equation",
+          "toc",
+          "reference_entry"
+        ],
+        "title": "BlockType"
+      },
+      "BlocksPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "BlocksPage"
+      },
+      "Body_upload_document_api_v1_documents_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "play": {
+            "type": "boolean",
+            "title": "Play",
+            "default": false
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "classic",
+                  "ai_enhanced"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "confirm_estimate": {
+            "type": "boolean",
+            "title": "Confirm Estimate",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_document_api_v1_documents_upload_post"
+      },
+      "Budget": {
+        "properties": {
+          "monthly_usd": {
+            "type": "string",
+            "title": "Monthly Usd",
+            "default": "10"
+          },
+          "warn_at": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Warn At",
+            "default": 0.8
+          },
+          "hard_stop": {
+            "type": "boolean",
+            "title": "Hard Stop",
+            "default": true
+          },
+          "estimate_threshold_usd": {
+            "type": "string",
+            "title": "Estimate Threshold Usd",
+            "default": "0.50"
+          }
+        },
+        "type": "object",
+        "title": "Budget"
+      },
+      "BudgetState": {
+        "properties": {
+          "monthly_usd": {
+            "type": "string",
+            "title": "Monthly Usd"
+          },
+          "warn_at": {
+            "type": "number",
+            "title": "Warn At"
+          },
+          "hard_stop": {
+            "type": "boolean",
+            "title": "Hard Stop"
+          },
+          "spent_usd": {
+            "type": "string",
+            "title": "Spent Usd"
+          },
+          "pct": {
+            "type": "number",
+            "title": "Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "monthly_usd",
+          "warn_at",
+          "hard_stop",
+          "spent_usd",
+          "pct"
+        ],
+        "title": "BudgetState"
+      },
+      "BudgetUpdate": {
+        "properties": {
+          "monthly_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Usd"
+          },
+          "warn_at": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warn At"
+          },
+          "hard_stop": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hard Stop"
+          }
+        },
+        "type": "object",
+        "title": "BudgetUpdate"
+      },
+      "CacheSettings": {
+        "properties": {
+          "max_gb": {
+            "type": "number",
+            "maximum": 500.0,
+            "minimum": 0.1,
+            "title": "Max Gb",
+            "default": 5.0
+          }
+        },
+        "type": "object",
+        "title": "CacheSettings"
+      },
+      "CreateDocumentRequest": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "url",
+              "text",
+              "image",
+              "html_blocks",
+              "clipboard",
+              "file_path"
+            ],
+            "title": "Kind"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "image_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Base64"
+          },
+          "media_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Type"
+          },
+          "html_blocks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HtmlBlocksPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "image_mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "transcribe",
+              "describe"
+            ],
+            "title": "Image Mode",
+            "default": "auto"
+          },
+          "play": {
+            "type": "boolean",
+            "title": "Play",
+            "default": false
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "classic",
+                  "ai_enhanced"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "confirm_estimate": {
+            "type": "boolean",
+            "title": "Confirm Estimate",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "CreateDocumentRequest",
+        "description": "JSON sources. Files go to `POST /documents/upload` (multipart)."
+      },
+      "CreateDocumentResponse": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DocumentOut"
+          },
+          "estimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "playing": {
+            "type": "boolean",
+            "title": "Playing",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "document"
+        ],
+        "title": "CreateDocumentResponse"
+      },
+      "Defaults": {
+        "properties": {
+          "voice": {
+            "type": "string",
+            "title": "Voice",
+            "default": "kokoro:kokoro-82m-v1.0:af_heart"
+          },
+          "assistant_voice": {
+            "type": "string",
+            "title": "Assistant Voice",
+            "default": "kokoro:kokoro-82m-v1.0:af_heart"
+          },
+          "speed": {
+            "type": "number",
+            "maximum": 5.0,
+            "minimum": 0.5,
+            "title": "Speed",
+            "default": 1.0
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "ai_enhanced"
+            ],
+            "title": "Mode",
+            "default": "classic"
+          },
+          "style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style"
+          }
+        },
+        "type": "object",
+        "title": "Defaults"
+      },
+      "DiffRemoval": {
+        "properties": {
+          "block_id": {
+            "type": "string",
+            "title": "Block Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "rule_name": {
+            "type": "string",
+            "title": "Rule Name"
+          },
+          "whole_block": {
+            "type": "boolean",
+            "title": "Whole Block",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "block_id",
+          "text",
+          "rule_name"
+        ],
+        "title": "DiffRemoval"
+      },
+      "DiffReplacement": {
+        "properties": {
+          "block_id": {
+            "type": "string",
+            "title": "Block Id"
+          },
+          "old": {
+            "type": "string",
+            "title": "Old"
+          },
+          "new": {
+            "type": "string",
+            "title": "New"
+          },
+          "rule_name": {
+            "type": "string",
+            "title": "Rule Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "block_id",
+          "old",
+          "new",
+          "rule_name"
+        ],
+        "title": "DiffReplacement"
+      },
+      "DiffTransform": {
+        "properties": {
+          "source_block_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Block Ids"
+          },
+          "script": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Script"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_block_ids",
+          "script"
+        ],
+        "title": "DiffTransform"
+      },
+      "DocumentList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "DocumentList"
+      },
+      "DocumentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "site": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "block_count": {
+            "type": "integer",
+            "title": "Block Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "last_opened_at": {
+            "type": "string",
+            "title": "Last Opened At"
+          },
+          "progress": {
+            "type": "number",
+            "title": "Progress",
+            "default": 0.0
+          },
+          "position": {
+            "$ref": "#/components/schemas/Position"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/DocumentSettings"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "has_source_file": {
+            "type": "boolean",
+            "title": "Has Source File",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "created_at",
+          "last_opened_at"
+        ],
+        "title": "DocumentOut"
+      },
+      "DocumentSettings": {
+        "properties": {
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "classic",
+                  "ai_enhanced"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "pinned": {
+            "type": "boolean",
+            "title": "Pinned",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "DocumentSettings"
+      },
+      "DocumentSettingsUpdate": {
+        "properties": {
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "classic",
+                  "ai_enhanced"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "pinned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned"
+          }
+        },
+        "type": "object",
+        "title": "DocumentSettingsUpdate"
+      },
+      "DomAnchor": {
+        "properties": {
+          "xpath": {
+            "type": "string",
+            "title": "Xpath"
+          },
+          "start_offset": {
+            "type": "integer",
+            "title": "Start Offset",
+            "default": 0
+          },
+          "end_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "xpath"
+        ],
+        "title": "DomAnchor"
+      },
+      "Estimate": {
+        "properties": {
+          "usd_estimate": {
+            "type": "string",
+            "title": "Usd Estimate"
+          },
+          "breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/EstimateLine"
+            },
+            "type": "array",
+            "title": "Breakdown"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assumptions"
+          },
+          "requires_confirmation": {
+            "type": "boolean",
+            "title": "Requires Confirmation",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "usd_estimate"
+        ],
+        "title": "Estimate"
+      },
+      "EstimateLine": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "usd_estimate": {
+            "type": "string",
+            "title": "Usd Estimate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "usd_estimate"
+        ],
+        "title": "EstimateLine"
+      },
+      "EstimateRequest": {
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "classic",
+                  "ai_enhanced"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "read",
+              "regenerate",
+              "export",
+              "keep_offline",
+              "transform"
+            ],
+            "title": "Operation",
+            "default": "read"
+          }
+        },
+        "type": "object",
+        "title": "EstimateRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "uptime_s": {
+            "type": "number",
+            "title": "Uptime S"
+          },
+          "fixture_providers": {
+            "type": "boolean",
+            "title": "Fixture Providers",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "version",
+          "uptime_s"
+        ],
+        "title": "Health"
+      },
+      "HtmlBlock": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "paragraph"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "dom_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DomAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "HtmlBlock"
+      },
+      "HtmlBlocksPayload": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/HtmlBlock"
+            },
+            "type": "array",
+            "title": "Blocks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "blocks"
+        ],
+        "title": "HtmlBlocksPayload"
+      },
+      "JobAccepted": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "JobAccepted"
+      },
+      "KeyIn": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "KeyIn"
+      },
+      "KeyTestResult": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "provider",
+          "detail"
+        ],
+        "title": "KeyTestResult"
+      },
+      "KeysState": {
+        "properties": {
+          "anthropic": {
+            "type": "string",
+            "enum": [
+              "configured",
+              "missing",
+              "invalid"
+            ],
+            "title": "Anthropic"
+          },
+          "openai": {
+            "type": "string",
+            "enum": [
+              "configured",
+              "missing",
+              "invalid"
+            ],
+            "title": "Openai"
+          },
+          "gemini": {
+            "type": "string",
+            "enum": [
+              "configured",
+              "missing",
+              "invalid"
+            ],
+            "title": "Gemini"
+          }
+        },
+        "type": "object",
+        "required": [
+          "anthropic",
+          "openai",
+          "gemini"
+        ],
+        "title": "KeysState"
+      },
+      "LedgerPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerRow"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "LedgerPage"
+      },
+      "LedgerRow": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "ts": {
+            "type": "string",
+            "title": "Ts"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "op": {
+            "type": "string",
+            "title": "Op"
+          },
+          "units": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Units"
+          },
+          "usd_estimate": {
+            "type": "string",
+            "title": "Usd Estimate"
+          },
+          "pricing_version": {
+            "type": "string",
+            "title": "Pricing Version"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          },
+          "cache_hit": {
+            "type": "boolean",
+            "title": "Cache Hit"
+          },
+          "local": {
+            "type": "boolean",
+            "title": "Local"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ts",
+          "provider",
+          "model",
+          "op",
+          "units",
+          "usd_estimate",
+          "pricing_version",
+          "cache_hit",
+          "local"
+        ],
+        "title": "LedgerRow"
+      },
+      "LexiconEntry": {
+        "properties": {
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "spoken": {
+            "type": "string",
+            "title": "Spoken"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "term",
+          "spoken"
+        ],
+        "title": "LexiconEntry"
+      },
+      "LexiconList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LexiconEntry"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "LexiconList"
+      },
+      "LlmSettings": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "default": "claude-sonnet-5-5"
+          },
+          "annotate_effort": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Annotate Effort",
+            "default": "low"
+          },
+          "assistant_effort": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "auto"
+            ],
+            "title": "Assistant Effort",
+            "default": "low"
+          }
+        },
+        "type": "object",
+        "title": "LlmSettings"
+      },
+      "LocalModel": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "size_mb": {
+            "type": "integer",
+            "title": "Size Mb"
+          },
+          "ram_gb": {
+            "type": "number",
+            "title": "Ram Gb"
+          },
+          "license": {
+            "type": "string",
+            "title": "License"
+          },
+          "installed": {
+            "type": "boolean",
+            "title": "Installed"
+          },
+          "fit": {
+            "type": "string",
+            "enum": [
+              "fits",
+              "slow",
+              "unsupported"
+            ],
+            "title": "Fit"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "name",
+          "size_mb",
+          "ram_gb",
+          "license",
+          "installed",
+          "fit"
+        ],
+        "title": "LocalModel"
+      },
+      "LocalModelList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LocalModel"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "LocalModelList"
+      },
+      "Mark": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MarkKind"
+          },
+          "start": {
+            "type": "integer",
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "start",
+          "end"
+        ],
+        "title": "Mark"
+      },
+      "MarkKind": {
+        "type": "string",
+        "enum": [
+          "citation_ref",
+          "link",
+          "url",
+          "emphasis",
+          "parenthetical",
+          "bracket",
+          "brace",
+          "formula",
+          "footnote_ref"
+        ],
+        "title": "MarkKind"
+      },
+      "ModeOverride": {
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/RuleScope"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "ai_enhanced"
+            ],
+            "title": "Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "mode"
+        ],
+        "title": "ModeOverride"
+      },
+      "PlayFrom": {
+        "properties": {
+          "block_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Id"
+          },
+          "char": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "utterance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utterance Id"
+          },
+          "utterance_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utterance Index"
+          }
+        },
+        "type": "object",
+        "title": "PlayFrom"
+      },
+      "PlayRequest": {
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlayFrom"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "PlayRequest"
+      },
+      "PlaybackSettings": {
+        "properties": {
+          "fallback": {
+            "type": "string",
+            "enum": [
+              "same_provider",
+              "another_voice",
+              "kokoro"
+            ],
+            "title": "Fallback",
+            "default": "kokoro"
+          },
+          "prefetch_seconds": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 5.0,
+            "title": "Prefetch Seconds",
+            "default": 30
+          },
+          "max_ahead_seconds": {
+            "type": "integer",
+            "maximum": 3600.0,
+            "minimum": 10.0,
+            "title": "Max Ahead Seconds",
+            "default": 120
+          }
+        },
+        "type": "object",
+        "title": "PlaybackSettings"
+      },
+      "PlaybackState": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "loading",
+              "playing",
+              "paused",
+              "stopped",
+              "error"
+            ],
+            "title": "State",
+            "default": "idle"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
+          },
+          "utterance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utterance Id"
+          },
+          "utterance_index": {
+            "type": "integer",
+            "title": "Utterance Index",
+            "default": 0
+          },
+          "utterance_count": {
+            "type": "integer",
+            "title": "Utterance Count",
+            "default": 0
+          },
+          "offset_ms": {
+            "type": "integer",
+            "title": "Offset Ms",
+            "default": 0
+          },
+          "speed": {
+            "type": "number",
+            "title": "Speed",
+            "default": 1.0
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
+          "time_left_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Left S"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "heading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading"
+          },
+          "progress": {
+            "type": "number",
+            "title": "Progress",
+            "default": 0.0
+          },
+          "fallback_notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Notice"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "title": "PlaybackState"
+      },
+      "Position": {
+        "properties": {
+          "utterance_index": {
+            "type": "integer",
+            "title": "Utterance Index",
+            "default": 0
+          },
+          "offset_ms": {
+            "type": "integer",
+            "title": "Offset Ms",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "Position"
+      },
+      "PresetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "classic": {
+            "type": "string",
+            "title": "Classic"
+          },
+          "ai_enhanced_adds": {
+            "type": "string",
+            "title": "Ai Enhanced Adds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "classic",
+          "ai_enhanced_adds"
+        ],
+        "title": "PresetOut"
+      },
+      "PresetsState": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "ai_enhanced"
+            ],
+            "title": "Mode"
+          },
+          "overrides": {
+            "items": {
+              "$ref": "#/components/schemas/ModeOverride"
+            },
+            "type": "array",
+            "title": "Overrides"
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/PresetOut"
+            },
+            "type": "array",
+            "title": "Presets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "presets"
+        ],
+        "title": "PresetsState"
+      },
+      "PresetsUpdate": {
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "classic",
+                  "ai_enhanced"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "presets": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Presets"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "PresetsUpdate"
+      },
+      "PreviewResponse": {
+        "properties": {
+          "recording_id": {
+            "type": "string",
+            "title": "Recording Id"
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached"
+          },
+          "usd_estimate": {
+            "type": "string",
+            "title": "Usd Estimate",
+            "default": "0"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recording_id",
+          "cached"
+        ],
+        "title": "PreviewResponse"
+      },
+      "ReaderSettings": {
+        "properties": {
+          "font_size": {
+            "type": "integer",
+            "maximum": 48.0,
+            "minimum": 10.0,
+            "title": "Font Size",
+            "default": 18
+          },
+          "line_spacing": {
+            "type": "number",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Line Spacing",
+            "default": 1.6
+          },
+          "font": {
+            "type": "string",
+            "enum": [
+              "system",
+              "atkinson",
+              "opendyslexic"
+            ],
+            "title": "Font",
+            "default": "system"
+          },
+          "high_contrast": {
+            "type": "boolean",
+            "title": "High Contrast",
+            "default": false
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ],
+            "title": "Theme",
+            "default": "system"
+          }
+        },
+        "type": "object",
+        "title": "ReaderSettings"
+      },
+      "RuleHit": {
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "title": "Rule Id"
+          },
+          "rule_name": {
+            "type": "string",
+            "title": "Rule Name"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "drop_block",
+              "skip",
+              "replace",
+              "transform",
+              "keep_only"
+            ],
+            "title": "Action"
+          },
+          "block_id": {
+            "type": "string",
+            "title": "Block Id"
+          },
+          "src_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Src Start"
+          },
+          "src_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Src End"
+          },
+          "original": {
+            "type": "string",
+            "title": "Original",
+            "default": ""
+          },
+          "replacement": {
+            "type": "string",
+            "title": "Replacement",
+            "default": ""
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "filter",
+              "annotate",
+              "transform"
+            ],
+            "title": "Tier",
+            "default": "filter"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rule_id",
+          "rule_name",
+          "action",
+          "block_id"
+        ],
+        "title": "RuleHit",
+        "description": "Which rule changed what. Powers Script view, the speech diff and \"why didn't it read that?\"."
+      },
+      "RuleList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RuleOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "conflicts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Conflicts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "RuleList"
+      },
+      "RuleOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/RuleScope"
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "filter",
+              "annotate",
+              "transform"
+            ],
+            "title": "Tier"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By"
+          },
+          "compiled": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compiled"
+          },
+          "preset": {
+            "type": "boolean",
+            "title": "Preset",
+            "default": false
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "instruction",
+          "scope",
+          "tier",
+          "enabled",
+          "created_by"
+        ],
+        "title": "RuleOut"
+      },
+      "RulePatch": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "filter",
+                  "annotate",
+                  "transform"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          },
+          "instruction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instruction"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "title": "RulePatch"
+      },
+      "RuleProposal": {
+        "properties": {
+          "proposal_id": {
+            "type": "string",
+            "title": "Proposal Id"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/RuleOut"
+          },
+          "diff": {
+            "$ref": "#/components/schemas/SpeechDiff"
+          },
+          "conflicts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Conflicts"
+          },
+          "estimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proposal_id",
+          "rule",
+          "diff",
+          "summary"
+        ],
+        "title": "RuleProposal"
+      },
+      "RuleProposalRequest": {
+        "properties": {
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope_hint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "site",
+                  "document",
+                  "type",
+                  "global"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Hint"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instruction"
+        ],
+        "title": "RuleProposalRequest"
+      },
+      "RuleScope": {
+        "properties": {
+          "sites": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sites"
+          },
+          "types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Types"
+          },
+          "docs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Docs"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          }
+        },
+        "type": "object",
+        "title": "RuleScope"
+      },
+      "SaveRuleRequest": {
+        "properties": {
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "SaveRuleRequest"
+      },
+      "ScriptOut": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "ai_enhanced"
+            ],
+            "title": "Mode"
+          },
+          "utterances": {
+            "items": {
+              "$ref": "#/components/schemas/Utterance"
+            },
+            "type": "array",
+            "title": "Utterances"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/RuleHit"
+            },
+            "type": "array",
+            "title": "Removed"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "mode",
+          "utterances",
+          "removed"
+        ],
+        "title": "ScriptOut"
+      },
+      "Shortcuts": {
+        "properties": {
+          "open_bar": {
+            "type": "string",
+            "title": "Open Bar",
+            "default": "Alt+Space"
+          },
+          "play_pause": {
+            "type": "string",
+            "title": "Play Pause",
+            "default": "Alt+Shift+Space"
+          },
+          "read_clipboard": {
+            "type": "string",
+            "title": "Read Clipboard",
+            "default": "Alt+Shift+R"
+          },
+          "read_selection": {
+            "type": "string",
+            "title": "Read Selection",
+            "default": "Alt+A"
+          },
+          "screenshot": {
+            "type": "string",
+            "title": "Screenshot",
+            "default": "Alt+X"
+          }
+        },
+        "type": "object",
+        "title": "Shortcuts"
+      },
+      "SkipRequest": {
+        "properties": {
+          "unit": {
+            "type": "string",
+            "enum": [
+              "sentence",
+              "paragraph",
+              "heading",
+              "seconds"
+            ],
+            "title": "Unit"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "unit"
+        ],
+        "title": "SkipRequest"
+      },
+      "SpeechDiff": {
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "removals": {
+            "items": {
+              "$ref": "#/components/schemas/DiffRemoval"
+            },
+            "type": "array",
+            "title": "Removals"
+          },
+          "replacements": {
+            "items": {
+              "$ref": "#/components/schemas/DiffReplacement"
+            },
+            "type": "array",
+            "title": "Replacements"
+          },
+          "transforms": {
+            "items": {
+              "$ref": "#/components/schemas/DiffTransform"
+            },
+            "type": "array",
+            "title": "Transforms"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "SpeechDiff"
+      },
+      "SpeedRequest": {
+        "properties": {
+          "speed": {
+            "type": "number",
+            "maximum": 5.0,
+            "minimum": 0.5,
+            "title": "Speed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "speed"
+        ],
+        "title": "SpeedRequest"
+      },
+      "TextSegment": {
+        "properties": {
+          "spoken_start": {
+            "type": "integer",
+            "title": "Spoken Start"
+          },
+          "spoken_end": {
+            "type": "integer",
+            "title": "Spoken End"
+          },
+          "block_id": {
+            "type": "string",
+            "title": "Block Id"
+          },
+          "src_start": {
+            "type": "integer",
+            "title": "Src Start"
+          },
+          "src_end": {
+            "type": "integer",
+            "title": "Src End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "spoken_start",
+          "spoken_end",
+          "block_id",
+          "src_start",
+          "src_end"
+        ],
+        "title": "TextSegment",
+        "description": "Spoken text [spoken_start, spoken_end) came from block text [src_start, src_end).\n\nA lexicon replacement (\"SQL\" \u2192 \"sequel\") is one segment whose spoken and source ranges differ in\nlength. Text that has no source (a generated transform) has no segments; its utterance carries\nblock/section anchors instead."
+      },
+      "TurnAccepted": {
+        "properties": {
+          "turn_id": {
+            "type": "string",
+            "title": "Turn Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "turn_id"
+        ],
+        "title": "TurnAccepted"
+      },
+      "TurnContext": {
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selection"
+          }
+        },
+        "type": "object",
+        "title": "TurnContext"
+      },
+      "TurnRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "typed",
+              "spoken"
+            ],
+            "title": "Source",
+            "default": "typed"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "recording_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recording Id"
+          },
+          "context": {
+            "$ref": "#/components/schemas/TurnContext"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "TurnRequest"
+      },
+      "UsageLine": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "usd_estimate": {
+            "type": "string",
+            "title": "Usd Estimate"
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "usd_estimate",
+          "calls"
+        ],
+        "title": "UsageLine"
+      },
+      "UsageSummary": {
+        "properties": {
+          "period": {
+            "type": "string",
+            "enum": [
+              "today",
+              "week",
+              "month"
+            ],
+            "title": "Period"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "provider",
+              "op",
+              "document"
+            ],
+            "title": "Group By"
+          },
+          "total_usd": {
+            "type": "string",
+            "title": "Total Usd"
+          },
+          "cache_savings_usd": {
+            "type": "string",
+            "title": "Cache Savings Usd"
+          },
+          "budget_usd": {
+            "type": "string",
+            "title": "Budget Usd"
+          },
+          "budget_pct": {
+            "type": "number",
+            "title": "Budget Pct"
+          },
+          "breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/UsageLine"
+            },
+            "type": "array",
+            "title": "Breakdown"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated",
+            "default": true
+          },
+          "spoken": {
+            "type": "string",
+            "title": "Spoken"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period",
+          "group_by",
+          "total_usd",
+          "cache_savings_usd",
+          "budget_usd",
+          "budget_pct",
+          "breakdown",
+          "spoken"
+        ],
+        "title": "UsageSummary"
+      },
+      "UserSettings": {
+        "properties": {
+          "shortcuts": {
+            "$ref": "#/components/schemas/Shortcuts"
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/Defaults"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/Budget"
+          },
+          "voice_input": {
+            "$ref": "#/components/schemas/VoiceInput"
+          },
+          "cache": {
+            "$ref": "#/components/schemas/CacheSettings"
+          },
+          "llm": {
+            "$ref": "#/components/schemas/LlmSettings"
+          },
+          "reader": {
+            "$ref": "#/components/schemas/ReaderSettings"
+          },
+          "playback": {
+            "$ref": "#/components/schemas/PlaybackSettings"
+          },
+          "onboarding_completed": {
+            "type": "boolean",
+            "title": "Onboarding Completed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "UserSettings"
+      },
+      "Utterance": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "block_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Block Ids"
+          },
+          "anchors": {
+            "items": {
+              "$ref": "#/components/schemas/Anchor"
+            },
+            "type": "array",
+            "title": "Anchors"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/TextSegment"
+            },
+            "type": "array",
+            "title": "Segments"
+          },
+          "fidelity": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "block",
+              "section",
+              "media"
+            ],
+            "title": "Fidelity",
+            "default": "exact"
+          },
+          "rule_trace": {
+            "items": {
+              "$ref": "#/components/schemas/RuleHit"
+            },
+            "type": "array",
+            "title": "Rule Trace"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "heading_path": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Heading Path"
+          },
+          "is_heading": {
+            "type": "boolean",
+            "title": "Is Heading",
+            "default": false
+          },
+          "paragraph_start": {
+            "type": "boolean",
+            "title": "Paragraph Start",
+            "default": false
+          },
+          "voice_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "index",
+          "text",
+          "block_ids"
+        ],
+        "title": "Utterance"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "Voice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "styles": {
+            "type": "boolean",
+            "title": "Styles",
+            "default": false
+          },
+          "local": {
+            "type": "boolean",
+            "title": "Local",
+            "default": false
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "default": true
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
+          "timestamps": {
+            "type": "boolean",
+            "title": "Timestamps",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "model",
+          "name"
+        ],
+        "title": "Voice"
+      },
+      "VoiceInput": {
+        "properties": {
+          "end_of_speech_ms": {
+            "type": "integer",
+            "maximum": 5000.0,
+            "minimum": 200.0,
+            "title": "End Of Speech Ms",
+            "default": 800
+          },
+          "recording_retention_days": {
+            "type": "integer",
+            "maximum": 3650.0,
+            "minimum": 0.0,
+            "title": "Recording Retention Days",
+            "default": 30
+          },
+          "stt_provider": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "openai",
+              "gemini",
+              "local"
+            ],
+            "title": "Stt Provider",
+            "default": "auto"
+          }
+        },
+        "type": "object",
+        "title": "VoiceInput"
+      },
+      "VoiceList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Voice"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "VoiceList"
+      },
+      "VoiceRequest": {
+        "properties": {
+          "voice_id": {
+            "type": "string",
+            "title": "Voice Id"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "document",
+              "default",
+              "assistant"
+            ],
+            "title": "Scope",
+            "default": "document"
+          }
+        },
+        "type": "object",
+        "required": [
+          "voice_id"
+        ],
+        "title": "VoiceRequest"
+      },
+      "WordBox": {
+        "properties": {
+          "start": {
+            "type": "integer",
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "title": "End"
+          },
+          "bbox": {
+            "$ref": "#/components/schemas/BBox"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "bbox"
+        ],
+        "title": "WordBox",
+        "description": "Word-level geometry for PDF highlight overlays: char range into Block.text + bbox."
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ]
+}

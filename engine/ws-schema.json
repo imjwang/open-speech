@@ -1,0 +1,1665 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Open Speech WebSocket protocol",
+  "protocol": 1,
+  "binary_frames": "Mic audio: 16-bit LE PCM, 16 kHz mono, between mic.start and mic.stop",
+  "client": {
+    "$defs": {
+      "BarState": {
+        "description": "The bar tells the engine it opened or closed, for ducking (07 \u00a7 Ducking).",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "bar.state",
+            "default": "bar.state",
+            "title": "Type",
+            "type": "string"
+          },
+          "open": {
+            "title": "Open",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "open"
+        ],
+        "title": "BarState",
+        "type": "object"
+      },
+      "Command": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "command",
+            "default": "command",
+            "title": "Type",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "source": {
+            "default": "typed",
+            "enum": [
+              "typed",
+              "spoken"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Session Id"
+          },
+          "context": {
+            "$ref": "#/$defs/TurnContext"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "Command",
+        "type": "object"
+      },
+      "MicStart": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "mic.start",
+            "default": "mic.start",
+            "title": "Type",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "mode": {
+            "default": "auto",
+            "enum": [
+              "push_to_talk",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "context": {
+            "$ref": "#/$defs/TurnContext"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "MicStart",
+        "type": "object"
+      },
+      "MicStop": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "mic.stop",
+            "default": "mic.stop",
+            "title": "Type",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "submit": {
+            "default": true,
+            "title": "Submit",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "MicStop",
+        "type": "object"
+      },
+      "Subscribe": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "subscribe",
+            "default": "subscribe",
+            "title": "Type",
+            "type": "string"
+          },
+          "topics": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Topics",
+            "type": "array"
+          }
+        },
+        "title": "Subscribe",
+        "type": "object"
+      },
+      "TurnContext": {
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Document Id"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Selection"
+          }
+        },
+        "title": "TurnContext",
+        "type": "object"
+      }
+    },
+    "discriminator": {
+      "mapping": {
+        "bar.state": "#/$defs/BarState",
+        "command": "#/$defs/Command",
+        "mic.start": "#/$defs/MicStart",
+        "mic.stop": "#/$defs/MicStop",
+        "subscribe": "#/$defs/Subscribe"
+      },
+      "propertyName": "type"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/MicStart"
+      },
+      {
+        "$ref": "#/$defs/MicStop"
+      },
+      {
+        "$ref": "#/$defs/Command"
+      },
+      {
+        "$ref": "#/$defs/Subscribe"
+      },
+      {
+        "$ref": "#/$defs/BarState"
+      }
+    ]
+  },
+  "server": {
+    "$defs": {
+      "Anchor": {
+        "description": "Where spoken text lives in the source. One of the three shapes in 04 (`playback.word`).",
+        "properties": {
+          "block_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Block Id"
+          },
+          "char_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Char Start"
+          },
+          "char_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Char End"
+          },
+          "bbox": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/BBox"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dom_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DomAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "media_t0": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Media T0"
+          },
+          "media_t1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Media T1"
+          }
+        },
+        "title": "Anchor",
+        "type": "object"
+      },
+      "AssistantAction": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "assistant.action",
+            "default": "assistant.action",
+            "title": "Type",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "action_id": {
+            "title": "Action Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "spoken": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Spoken"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SpeechDiff"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          }
+        },
+        "required": [
+          "turn_id",
+          "action_id",
+          "kind",
+          "summary"
+        ],
+        "title": "AssistantAction",
+        "type": "object"
+      },
+      "AssistantActionResolved": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "assistant.action_resolved",
+            "default": "assistant.action_resolved",
+            "title": "Type",
+            "type": "string"
+          },
+          "action_id": {
+            "title": "Action Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "confirmed",
+              "cancelled",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_id",
+          "status",
+          "message"
+        ],
+        "title": "AssistantActionResolved",
+        "type": "object"
+      },
+      "AssistantCard": {
+        "description": "Structured rows for the bar (09 \u00a7 Rows, not screens).",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "assistant.card",
+            "default": "assistant.card",
+            "title": "Type",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "voices",
+              "rules",
+              "usage",
+              "recents",
+              "models",
+              "where",
+              "keys",
+              "presets",
+              "info"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/$defs/CardRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          }
+        },
+        "required": [
+          "turn_id",
+          "kind",
+          "title"
+        ],
+        "title": "AssistantCard",
+        "type": "object"
+      },
+      "AssistantDelta": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "assistant.delta",
+            "default": "assistant.delta",
+            "title": "Type",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn_id",
+          "text"
+        ],
+        "title": "AssistantDelta",
+        "type": "object"
+      },
+      "AssistantDone": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "assistant.done",
+            "default": "assistant.done",
+            "title": "Type",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          },
+          "reply_recording_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reply Recording Id"
+          },
+          "handled_by": {
+            "default": "agent",
+            "enum": [
+              "fast_path",
+              "agent",
+              "error"
+            ],
+            "title": "Handled By",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          }
+        },
+        "required": [
+          "turn_id"
+        ],
+        "title": "AssistantDone",
+        "type": "object"
+      },
+      "AssistantTurn": {
+        "description": "A turn started (typed or spoken). Lets every client render the user row immediately.",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "assistant.turn",
+            "default": "assistant.turn",
+            "title": "Type",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Session Id"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "typed",
+              "spoken"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "recording_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Recording Id"
+          }
+        },
+        "required": [
+          "turn_id",
+          "text",
+          "source"
+        ],
+        "title": "AssistantTurn",
+        "type": "object"
+      },
+      "BBox": {
+        "description": "PDF points, origin top-left of the page (y grows downward).",
+        "properties": {
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "x0": {
+            "title": "X0",
+            "type": "number"
+          },
+          "y0": {
+            "title": "Y0",
+            "type": "number"
+          },
+          "x1": {
+            "title": "X1",
+            "type": "number"
+          },
+          "y1": {
+            "title": "Y1",
+            "type": "number"
+          }
+        },
+        "required": [
+          "page",
+          "x0",
+          "y0",
+          "x1",
+          "y1"
+        ],
+        "title": "BBox",
+        "type": "object"
+      },
+      "CardRow": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Value"
+          },
+          "selected": {
+            "default": false,
+            "title": "Selected",
+            "type": "boolean"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "CardRow",
+        "type": "object"
+      },
+      "DiffRemoval": {
+        "properties": {
+          "block_id": {
+            "title": "Block Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "rule_name": {
+            "title": "Rule Name",
+            "type": "string"
+          },
+          "whole_block": {
+            "default": false,
+            "title": "Whole Block",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "block_id",
+          "text",
+          "rule_name"
+        ],
+        "title": "DiffRemoval",
+        "type": "object"
+      },
+      "DiffReplacement": {
+        "properties": {
+          "block_id": {
+            "title": "Block Id",
+            "type": "string"
+          },
+          "old": {
+            "title": "Old",
+            "type": "string"
+          },
+          "new": {
+            "title": "New",
+            "type": "string"
+          },
+          "rule_name": {
+            "title": "Rule Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "block_id",
+          "old",
+          "new",
+          "rule_name"
+        ],
+        "title": "DiffReplacement",
+        "type": "object"
+      },
+      "DiffTransform": {
+        "properties": {
+          "source_block_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Block Ids",
+            "type": "array"
+          },
+          "script": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Script",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_block_ids",
+          "script"
+        ],
+        "title": "DiffTransform",
+        "type": "object"
+      },
+      "DocumentUpdated": {
+        "description": "The script for a document changed (rule saved, lexicon edit, regenerate) \u2014 reader refreshes.",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "document.updated",
+            "default": "document.updated",
+            "title": "Type",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "reason"
+        ],
+        "title": "DocumentUpdated",
+        "type": "object"
+      },
+      "DomAnchor": {
+        "properties": {
+          "xpath": {
+            "title": "Xpath",
+            "type": "string"
+          },
+          "start_offset": {
+            "default": 0,
+            "title": "Start Offset",
+            "type": "integer"
+          },
+          "end_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "End Offset"
+          }
+        },
+        "required": [
+          "xpath"
+        ],
+        "title": "DomAnchor",
+        "type": "object"
+      },
+      "ErrorMsg": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "error",
+            "default": "error",
+            "title": "Type",
+            "type": "string"
+          },
+          "problem": {
+            "additionalProperties": true,
+            "title": "Problem",
+            "type": "object"
+          }
+        },
+        "required": [
+          "problem"
+        ],
+        "title": "ErrorMsg",
+        "type": "object"
+      },
+      "Hello": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "hello",
+            "default": "hello",
+            "title": "Type",
+            "type": "string"
+          },
+          "protocol": {
+            "default": 1,
+            "title": "Protocol",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "Hello",
+        "type": "object"
+      },
+      "JobProgress": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "job.progress",
+            "default": "job.progress",
+            "title": "Type",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "pct": {
+            "title": "Pct",
+            "type": "number"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "pct",
+          "label"
+        ],
+        "title": "JobProgress",
+        "type": "object"
+      },
+      "PlaybackState": {
+        "properties": {
+          "state": {
+            "default": "idle",
+            "enum": [
+              "idle",
+              "loading",
+              "playing",
+              "paused",
+              "stopped",
+              "error"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Document Id"
+          },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Document Title"
+          },
+          "utterance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Utterance Id"
+          },
+          "utterance_index": {
+            "default": 0,
+            "title": "Utterance Index",
+            "type": "integer"
+          },
+          "utterance_count": {
+            "default": 0,
+            "title": "Utterance Count",
+            "type": "integer"
+          },
+          "offset_ms": {
+            "default": 0,
+            "title": "Offset Ms",
+            "type": "integer"
+          },
+          "speed": {
+            "default": 1.0,
+            "title": "Speed",
+            "type": "number"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Voice Id"
+          },
+          "time_left_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Time Left S"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page Count"
+          },
+          "heading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Heading"
+          },
+          "progress": {
+            "default": 0.0,
+            "title": "Progress",
+            "type": "number"
+          },
+          "fallback_notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fallback Notice"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          }
+        },
+        "title": "PlaybackState",
+        "type": "object"
+      },
+      "PlaybackStateMsg": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "playback.state",
+            "default": "playback.state",
+            "title": "Type",
+            "type": "string"
+          },
+          "playback": {
+            "$ref": "#/$defs/PlaybackState"
+          }
+        },
+        "required": [
+          "playback"
+        ],
+        "title": "PlaybackStateMsg",
+        "type": "object"
+      },
+      "PlaybackWord": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "playback.word",
+            "default": "playback.word",
+            "title": "Type",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "utterance_id": {
+            "title": "Utterance Id",
+            "type": "string"
+          },
+          "utterance_index": {
+            "title": "Utterance Index",
+            "type": "integer"
+          },
+          "anchor": {
+            "$ref": "#/$defs/Anchor"
+          },
+          "sentence_anchors": {
+            "items": {
+              "$ref": "#/$defs/Anchor"
+            },
+            "title": "Sentence Anchors",
+            "type": "array"
+          },
+          "fidelity": {
+            "enum": [
+              "exact",
+              "block",
+              "section",
+              "media"
+            ],
+            "title": "Fidelity",
+            "type": "string"
+          },
+          "spoken_start": {
+            "default": 0,
+            "title": "Spoken Start",
+            "type": "integer"
+          },
+          "spoken_end": {
+            "default": 0,
+            "title": "Spoken End",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "document_id",
+          "utterance_id",
+          "utterance_index",
+          "anchor",
+          "fidelity"
+        ],
+        "title": "PlaybackWord",
+        "type": "object"
+      },
+      "SpeechDiff": {
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Document Id"
+          },
+          "removals": {
+            "items": {
+              "$ref": "#/$defs/DiffRemoval"
+            },
+            "title": "Removals",
+            "type": "array"
+          },
+          "replacements": {
+            "items": {
+              "$ref": "#/$defs/DiffReplacement"
+            },
+            "title": "Replacements",
+            "type": "array"
+          },
+          "transforms": {
+            "items": {
+              "$ref": "#/$defs/DiffTransform"
+            },
+            "title": "Transforms",
+            "type": "array"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "summary": {
+            "default": "",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "title": "SpeechDiff",
+        "type": "object"
+      },
+      "SttFinal": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "stt.final",
+            "default": "stt.final",
+            "title": "Type",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "recording_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Recording Id"
+          },
+          "duration_s": {
+            "default": 0.0,
+            "title": "Duration S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "session_id",
+          "text"
+        ],
+        "title": "SttFinal",
+        "type": "object"
+      },
+      "SttPartial": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "stt.partial",
+            "default": "stt.partial",
+            "title": "Type",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "text"
+        ],
+        "title": "SttPartial",
+        "type": "object"
+      },
+      "UsageAlert": {
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "usage.alert",
+            "default": "usage.alert",
+            "title": "Type",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "warn",
+              "stop"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "spent": {
+            "title": "Spent",
+            "type": "string"
+          },
+          "budget": {
+            "title": "Budget",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "spent",
+          "budget",
+          "message"
+        ],
+        "title": "UsageAlert",
+        "type": "object"
+      }
+    },
+    "discriminator": {
+      "mapping": {
+        "assistant.action": "#/$defs/AssistantAction",
+        "assistant.action_resolved": "#/$defs/AssistantActionResolved",
+        "assistant.card": "#/$defs/AssistantCard",
+        "assistant.delta": "#/$defs/AssistantDelta",
+        "assistant.done": "#/$defs/AssistantDone",
+        "assistant.turn": "#/$defs/AssistantTurn",
+        "document.updated": "#/$defs/DocumentUpdated",
+        "error": "#/$defs/ErrorMsg",
+        "hello": "#/$defs/Hello",
+        "job.progress": "#/$defs/JobProgress",
+        "playback.state": "#/$defs/PlaybackStateMsg",
+        "playback.word": "#/$defs/PlaybackWord",
+        "stt.final": "#/$defs/SttFinal",
+        "stt.partial": "#/$defs/SttPartial",
+        "usage.alert": "#/$defs/UsageAlert"
+      },
+      "propertyName": "type"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/Hello"
+      },
+      {
+        "$ref": "#/$defs/SttPartial"
+      },
+      {
+        "$ref": "#/$defs/SttFinal"
+      },
+      {
+        "$ref": "#/$defs/AssistantTurn"
+      },
+      {
+        "$ref": "#/$defs/AssistantDelta"
+      },
+      {
+        "$ref": "#/$defs/AssistantCard"
+      },
+      {
+        "$ref": "#/$defs/AssistantAction"
+      },
+      {
+        "$ref": "#/$defs/AssistantActionResolved"
+      },
+      {
+        "$ref": "#/$defs/AssistantDone"
+      },
+      {
+        "$ref": "#/$defs/PlaybackStateMsg"
+      },
+      {
+        "$ref": "#/$defs/PlaybackWord"
+      },
+      {
+        "$ref": "#/$defs/UsageAlert"
+      },
+      {
+        "$ref": "#/$defs/JobProgress"
+      },
+      {
+        "$ref": "#/$defs/DocumentUpdated"
+      },
+      {
+        "$ref": "#/$defs/ErrorMsg"
+      }
+    ]
+  }
+}
