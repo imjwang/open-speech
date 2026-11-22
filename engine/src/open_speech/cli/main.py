@@ -235,6 +235,15 @@ def read(
     """Read a file, URL or stdin aloud."""
     mode_v = {"ai": "ai_enhanced", "ai_enhanced": "ai_enhanced", "classic": "classic", None: None}.get(mode)
     with engine_client() as (client, ephemeral):
+        if voice is None and not any(v.get("available") for v in client.call("GET", "/voices")["items"]):
+            typer.secho(
+                "No voice is ready yet. Install the free local voice (106 MB, works offline):\n"
+                "  open-speech models install kokoro-82m-v1.0\n"
+                "or add an OpenAI or Gemini key:  open-speech keys set auto",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+            raise typer.Exit(1)
         if source == "-":
             text = sys.stdin.read()
             res = client.call(
@@ -440,10 +449,23 @@ def models_ls(as_json: JsonOpt = False) -> None:
 
 @models_app.command("install")
 def models_install(model_id: str) -> None:
-    """Install a local model."""
-    with engine_client(ephemeral_ok=False) as (client, _):
-        job = client.call("POST", f"/models/local/{model_id}")
-        typer.echo(f"Installing ({job['job_id']}).")
+    """Install a local model (works with or without a running engine)."""
+    with engine_client() as (client, _):
+        client.call("POST", f"/models/local/{model_id}")
+        last = ""
+        while True:
+            items = client.call("GET", "/models/local")["items"]
+            m = next((x for x in items if x["id"] == model_id), None)
+            status = (m or {}).get("status", "")
+            if status != last:
+                typer.echo(f"{model_id}: {status}")
+                last = status
+            if m is None or m.get("installed") or status.startswith("Install failed"):
+                break
+            time.sleep(1)
+        if not (m and m.get("installed")):
+            raise typer.Exit(1)
+        typer.echo("Installed. Try: open-speech read <file, URL or ->")
 
 
 @models_app.command("rm")
