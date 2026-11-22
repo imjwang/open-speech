@@ -237,6 +237,14 @@ class Engine:
         return set()
 
     async def shutdown(self) -> None:
+        # The CLI writes engine.json; remove it here (uvicorn re-raises SIGTERM after shutdown, so code after
+        # server.run() never runs) so clients don't find a stale port/token after quit.
+        with contextlib.suppress(Exception):
+            import json
+            import os
+
+            if json.loads(self.paths.engine_json.read_text()).get("pid") == os.getpid():
+                self.paths.engine_json.unlink()
         for t in self._bg:
             t.cancel()
         for t in self._bg:

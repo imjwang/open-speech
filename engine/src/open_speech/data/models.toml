@@ -58,7 +58,7 @@ voices = [
 
 [tts.kokoro."kokoro-82m-v1.0".weights]
 url = "hf://onnx-community/Kokoro-82M-v1.0-ONNX-timestamped"
-revision = "main"
+revision = "dd4401a9add81ac692d20e240d22ec9dda82cc29"  # pinned; same commit the app bundles
 quant = "q8"
 size_mb = 92
 # sha256 pins for the model and tokenizer (recorded 2026-11-21 from revision "main"). Voice files are

@@ -27,7 +27,7 @@ def test_bundled_catalog_matches_spec(catalog: ModelCatalog) -> None:
     k = catalog.tts_model("kokoro", "kokoro-82m-v1.0")
     assert k is not None and k.local and k.timestamps and k.weights is not None
     assert k.weights.base_url() == (
-        "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve/main"
+        "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve/dd4401a9add81ac692d20e240d22ec9dda82cc29"
     )
     assert "af_heart" in k.voices
     q = catalog.tts_model("qwen3", "qwen3-tts-12hz-0.6b")
