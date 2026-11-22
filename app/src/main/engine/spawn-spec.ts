@@ -36,6 +36,9 @@ export function resolveSpawnSpec(ctx: SpawnContext): SpawnSpec {
   // Never inherit Electron's own Node/Electron switches into the Python process.
   delete env.ELECTRON_RUN_AS_NODE
   delete env.NODE_OPTIONS
+  // onnxruntime (local Kokoro) otherwise keeps a device ID and an event store under ~/Library/Application
+  // Support/Microsoft and uploads usage telemetry to Microsoft. The engine is local-first: off unless overridden.
+  env.ORT_DISABLE_TELEMETRY ??= '1'
   if (ctx.extraOrigins?.length) {
     const existing = (env.OPEN_SPEECH_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
     env.OPEN_SPEECH_ALLOWED_ORIGINS = Array.from(new Set([...existing, ...ctx.extraOrigins])).join(',')
