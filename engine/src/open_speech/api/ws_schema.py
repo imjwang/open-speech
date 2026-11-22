@@ -35,6 +35,8 @@ class MicStart(_Msg):
     session_id: str
     mode: Literal["push_to_talk", "auto"] = "auto"
     context: TurnContext = Field(default_factory=TurnContext)
+    # Publish the final transcript but don't send it to the assistant (onboarding answers, dictation).
+    transcribe_only: bool = False
 
 
 class MicStop(_Msg):

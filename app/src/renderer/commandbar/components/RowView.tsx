@@ -396,16 +396,19 @@ export function RowView({ row, handlers }: { row: Row; handlers: RowHandlers }) 
     case 'now-playing': {
       const p = row.playback
       const playing = p.state === 'playing' || p.state === 'loading'
+      const finished = !playing && (p.progress ?? 0) >= 0.999
       return (
         <Item row={row} handlers={handlers}>
           {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">{playing ? 'Now playing' : 'Paused'}</span>
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">
+            {playing ? 'Now playing' : finished ? 'Finished' : 'Paused'}
+          </span>
           <span className="truncate">{p.document_title ?? 'Untitled'}</span>
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-            {[formatSpeed(p.speed), formatTimeLeft(p.time_left_s)].filter(Boolean).join(' · ')}
+            {[formatSpeed(p.speed), finished ? null : formatTimeLeft(p.time_left_s)].filter(Boolean).join(' · ')}
           </span>
           <SrHint>. Enter {playing ? 'pauses' : 'plays'}, Command-Enter opens the reader.</SrHint>
-          <Hints items={[['↵', playing ? 'pause' : 'play']]} />
+          <Hints items={[['↵', playing ? 'pause' : finished ? 'replay' : 'play']]} />
         </Item>
       )
     }

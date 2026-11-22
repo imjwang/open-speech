@@ -124,7 +124,7 @@ async def _handle(engine: Engine, msg: Any, topics: set[str]) -> None:
 
     match msg:
         case ws.MicStart():
-            await engine.voice_input.start(msg.session_id, msg.mode, msg.context)
+            await engine.voice_input.start(msg.session_id, msg.mode, msg.context, transcribe_only=msg.transcribe_only)
         case ws.MicStop():
             await engine.voice_input.stop(msg.session_id, submit=msg.submit)
         case ws.Command():

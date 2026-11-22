@@ -139,6 +139,11 @@
           },
           "context": {
             "$ref": "#/$defs/TurnContext"
+          },
+          "transcribe_only": {
+            "default": false,
+            "title": "Transcribe Only",
+            "type": "boolean"
           }
         },
         "required": [

@@ -37,6 +37,7 @@ export interface MicStart {
   session_id: string
   mode?: 'push_to_talk' | 'auto'
   context?: TurnContext
+  transcribe_only?: boolean
 }
 export interface TurnContext {
   document_id?: string | null

@@ -42,6 +42,7 @@ class MicSession:
     finished: bool = False
     provider_id: str = ""
     model: str = ""
+    transcribe_only: bool = False
 
 
 class VoiceInputService:
@@ -50,7 +51,7 @@ class VoiceInputService:
         self._active: MicSession | None = None
         self._lock = asyncio.Lock()
 
-    async def start(self, session_id: str, mode: str, context: s.TurnContext) -> None:
+    async def start(self, session_id: str, mode: str, context: s.TurnContext, *, transcribe_only: bool = False) -> None:
         async with self._lock:
             if self._active is not None and not self._active.finished:
                 await self._finish(self._active, submit=False)
@@ -64,7 +65,12 @@ class VoiceInputService:
                 self._active = None
                 return
             sess = MicSession(
-                id=session_id, mode=mode, context=context, provider_id=stt.id, model=getattr(stt, "model", "")
+                id=session_id,
+                mode=mode,
+                context=context,
+                provider_id=stt.id,
+                model=getattr(stt, "model", ""),
+                transcribe_only=transcribe_only,
             )
             self._active = sess
             sess.task = asyncio.create_task(self._run_stt(sess, stt))
@@ -131,7 +137,7 @@ class VoiceInputService:
         self.e.events.publish(
             SttFinal(session_id=sess.id, text=text, recording_id=rec_id, duration_s=round(duration, 2))
         )
-        if text:
+        if text and not sess.transcribe_only:
             await self.e.assistant.submit(
                 s.TurnRequest(text=text, source="spoken", session_id=sess.id, recording_id=rec_id, context=sess.context)
             )

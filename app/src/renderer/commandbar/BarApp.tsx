@@ -313,7 +313,8 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
           <div className="flex min-h-14 items-center gap-3 px-4">
             <MicIndicator mode={state.mode} level={state.level} error={!!state.micError} />
             <p className="flex-1 truncate text-lg text-muted-foreground" aria-live="polite">
-              {state.text || (state.mode === 'listening' ? 'Listening…' : '')}
+              {state.text ||
+                (state.prompting ? 'Speaking…' : state.mode === 'listening' ? 'Listening…' : state.canListen ? '' : 'Type or click to answer')}
             </p>
             <Kbd>esc</Kbd>
           </div>

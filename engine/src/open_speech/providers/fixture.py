@@ -17,6 +17,7 @@ Test hooks (class-level, reset with `reset()`): `FixtureTts.latency_s`, `Fixture
 from __future__ import annotations
 
 import asyncio
+import os
 import hashlib
 import math
 import re
@@ -204,7 +205,18 @@ class FixtureStt:
         return len(cls._queue)
 
     def _next(self) -> str:
-        return self._queue.popleft() if self._queue else ""
+        if self._queue:
+            return self._queue.popleft()
+        # UI automation drives the bar from outside the process: one utterance per line, consumed in order.
+        script = os.environ.get("OPEN_SPEECH_FIXTURE_STT_FILE")
+        if script and os.path.exists(script):
+            with open(script, encoding="utf-8") as f:
+                lines = f.read().splitlines()
+            if lines:
+                with open(script, "w", encoding="utf-8") as f:
+                    f.write("\n".join(lines[1:]))
+                return lines[0]
+        return ""
 
     async def stream(self, pcm: AsyncIterator[bytes], lang: str | None = None) -> AsyncIterator[SttEvent]:
         text = self._next()

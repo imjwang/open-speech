@@ -1,5 +1,5 @@
 import { Check, Play } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 
 import { unwrap, type KeysState, type Voice } from '@shared/api/client'
@@ -59,13 +59,18 @@ export function pickSampleVoices(voices: Voice[], defaultVoice: string | null): 
   return picks.slice(0, 3)
 }
 
-const WORDS: Record<string, number> = { one: 0, '1': 0, first: 0, two: 1, '2': 1, second: 1, three: 2, '3': 2, third: 2 }
+// Ordinals before cardinals: "the second one" means two, not one.
+const WORDS: Array<[string, number]> = [
+  ['first', 0], ['second', 1], ['third', 2],
+  ['one', 0], ['1', 0], ['two', 1], ['2', 1], ['three', 2], ['3', 2],
+]
 
 export function matchVoiceAnswer(step: Step, transcript: string): string | null {
   const t = transcript.toLowerCase()
-  if (step === 'keys' && /\b(skip|later|no key|none)\b/.test(t)) return 'skip'
+  if (/\bskip (setup|all|onboarding|everything)\b/.test(t)) return 'skip-all'
+  if (step === 'keys' && /\b(skip|later|no key|none|continue|without)\b/.test(t)) return 'skip'
   if (step === 'voice') {
-    for (const [word, index] of Object.entries(WORDS)) if (new RegExp(`\\b${word}\\b`).test(t)) return `voice:${index}`
+    for (const [word, index] of WORDS) if (new RegExp(`\\b${word}\\b`).test(t)) return `voice:${index}`
   }
   if (step === 'cleanup') {
     if (/\b(smart|ai|enhanced)\b/.test(t)) return 'smart'
@@ -126,19 +131,30 @@ export function Onboarding({
     const client = engine.client
     if (!client || (step === 'keys' && !keys)) return
     const text = stepPrompt(step, { canListen, hasClaude, shortcut: openBarSpoken })
-    void controller.withMicPaused(() => unwrap(client.POST('/api/v1/assistant/say', { body: { text } })))
+    // A voice dialogue: after each prompt, listen for the answer (when speech input is set up). The last
+    // step needs no answer: once it has been said, the bar is ready for the first real command.
+    const said = controller.withMicPaused(() => unwrap(client.POST('/api/v1/assistant/say', { body: { text } })), {
+      listenAfter: step !== 'done',
+    })
+    if (step === 'done') void said.then(() => finish({ listen: true }))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per step
   }, [step, keys === null])
 
   const samples = pickSampleVoices(voices, controller.store.getState().settings?.defaults?.voice ?? null)
 
-  const finish = async () => {
+  const finishing = useRef(false)
+  const finish = async (opts: { listen?: boolean } = {}) => {
+    if (finishing.current) return
+    finishing.current = true
     try {
       await unwrap(requireClient(engine).PATCH('/api/v1/settings', { body: { onboarding_completed: true } }))
     } catch {
       // Not fatal: onboarding shows again next time.
     }
+    controller.setInterceptor(null)
     onFinished()
+    const s = controller.store.getState()
+    if (opts.listen && s.open && s.canListen && s.mode === 'typing' && !s.text) controller.startListening()
   }
 
   const chooseVoice = async (index: number) => {
@@ -174,11 +190,9 @@ export function Onboarding({
       else if (answer?.startsWith('voice:')) void chooseVoice(Number(answer.slice(6)))
       else if (answer === 'smart' && !hasClaude) void cleanup('yes')
       else if (answer === 'yes' || answer === 'smart' || answer === 'no') void cleanup(answer)
-      else if (answer === 'finish' || answer === 'skip-all') {
-        void finish()
-        return 'stop'
-      }
-      return 'listen-again'
+      else if (answer === 'finish' || answer === 'skip-all') void finish()
+      // Unrecognised: keep listening. Recognised: the next step's prompt speaks, then listens itself.
+      return answer === null ? 'listen-again' : 'stop'
     })
     return () => controller.setInterceptor(null)
   })
@@ -298,7 +312,7 @@ export function Onboarding({
               Or copy text anywhere and press <Kbd>⌥⇧R</Kbd> to hear it.
             </p>
           )}
-          <Button autoFocus onClick={() => void finish()}>
+          <Button autoFocus onClick={() => void finish({ listen: true })}>
             Start
           </Button>
         </div>

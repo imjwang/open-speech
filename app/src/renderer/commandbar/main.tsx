@@ -33,6 +33,9 @@ const controller = new BarController(store, {
   now: () => performance.now(),
 })
 wireBarEvents(engine.socket, controller)
+engine.socket.onStatus((status) => {
+  if (status === 'open') controller.connected()
+})
 const actions = new BarActions(engine, controller, bridge)
 
 bridge.onBarOpened((event) => controller.open(event))

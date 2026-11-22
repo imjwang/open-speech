@@ -73,6 +73,8 @@ export class BarController {
   private viaHotkey = false
   private hotkeyHandled = false
   private interceptor: VoiceInterceptor | null = null
+  /** The bar asked to listen before the engine socket was up: listen as soon as it connects. */
+  private listenWhenConnected = false
 
   constructor(
     readonly store: BarStore,
@@ -96,7 +98,7 @@ export class BarController {
     this.openedAt = this.deps.now()
     if (this.s.open) {
       this.set({ context })
-      if (event.listen && this.s.mode === 'typing' && !this.s.text) this.startListening()
+      if (event.listen && this.s.mode === 'typing' && !this.s.text && this.s.canListen) this.startListening()
       return
     }
     this.set({
@@ -119,6 +121,7 @@ export class BarController {
 
   close(): void {
     if (!this.s.open) return
+    this.listenWhenConnected = false
     if (this.s.mode === 'listening') this.stopMic(false)
     this.deps.mic.stop()
     this.clearTimers()
@@ -140,18 +143,37 @@ export class BarController {
   }
 
   /** Speak something without hearing ourselves: the mic is off while `speak` runs, then listening resumes. */
-  async withMicPaused(speak: () => Promise<unknown>): Promise<void> {
-    const wasListening = this.s.mode === 'listening'
+  async withMicPaused(speak: () => Promise<unknown>, opts: { listenAfter?: boolean } = {}): Promise<void> {
+    const wasListening = this.s.mode === 'listening' || opts.listenAfter === true
     if (wasListening) {
       this.stopMic(false)
       this.set({ mode: 'typing', level: 0, speaking: false })
     }
+    this.set({ prompting: true })
     try {
       await speak()
     } catch {
       // Speaking is a courtesy; the prompt is also on screen.
+    } finally {
+      this.set({ prompting: false })
     }
-    if (wasListening && this.s.open && this.s.mode === 'typing' && !this.s.text && this.s.canListen) this.startListening()
+    const s = this.s
+    if ((wasListening || this.listenWhenConnected) && s.open && s.mode === 'typing' && !s.text && s.canListen) {
+      this.listenWhenConnected = false
+      this.set({ hint: null })
+      this.startListening()
+    }
+  }
+
+  /** The engine socket (re)connected. */
+  connected(): void {
+    const s = this.s
+    if (!this.listenWhenConnected || s.prompting) return // withMicPaused picks it up after the prompt
+    this.listenWhenConnected = false
+    if (s.open && s.mode === 'typing' && !s.text && s.canListen) {
+      this.set({ hint: null })
+      this.startListening()
+    }
   }
 
   setInterceptor(fn: VoiceInterceptor | null): void {
@@ -169,11 +191,15 @@ export class BarController {
       session_id: sessionId,
       mode: 'auto',
       context: { document_id: this.s.context.documentId ?? null },
+      // Onboarding answers are matched locally: transcribe them, don't send them to the assistant.
+      transcribe_only: this.interceptor !== null,
     })
     if (!ok) {
-      this.set({ mode: 'typing', micError: 'Not connected to the engine yet. Type instead, or try again.' })
+      this.listenWhenConnected = true
+      this.set({ mode: 'typing', hint: 'Connecting to the engine…' })
       return
     }
+    this.listenWhenConnected = false
     this.ownSessions.add(sessionId)
     // Listening again with the bar still open pauses reading again (07 § Ducking); idempotent on open.
     this.deps.send({ type: 'bar.state', open: true })
@@ -264,14 +290,6 @@ export class BarController {
         }
         return false
       }
-      if (this.interceptor) {
-        const transcript = s.text
-        this.submittedSession = s.sessionId
-        this.stopMic(false)
-        this.set({ mode: 'typing', level: 0, speaking: false })
-        if (this.interceptor(transcript) === 'listen-again' && this.s.open) this.startListening()
-        return true
-      }
       this.submittedSession = s.sessionId
       this.stopMic(true)
       this.set({ mode: 'finalizing', level: 0, speaking: false, idle: false })
@@ -324,6 +342,17 @@ export class BarController {
   onSttFinal(msg: SttFinal): void {
     const s = this.s
     if (msg.session_id !== s.sessionId) return
+    if (this.interceptor && (s.mode === 'listening' || s.mode === 'finalizing')) {
+      // An onboarding answer: the final transcript (not a lagging partial) goes to the interceptor.
+      this.clearTurnTimeout()
+      this.submittedSession = msg.session_id
+      this.deps.mic.stop()
+      this.deps.setListening(false)
+      this.set({ mode: 'typing', text: '', level: 0, speaking: false })
+      const next = this.interceptor(msg.text)
+      if (next === 'listen-again' && this.s.open && this.s.canListen) this.startListening()
+      return
+    }
     if (s.mode === 'listening') {
       // The engine ended the utterance itself: it submits, so we must not send mic.stop {submit: true}.
       this.submittedSession = msg.session_id
@@ -445,6 +474,9 @@ export class BarController {
       // Wait for a spoken "yes" / "no" (the engine resolves it); Enter and Esc still work.
       this.startListening()
     } else {
+      // The turn is over: reading resumes after the reply even if the bar stays open (07 § Ducking).
+      // The engine still holds reading while the spoken reply itself plays.
+      this.deps.send({ type: 'bar.state', open: false })
       this.set({ mode: 'typing', text: '' })
       this.armIdle()
     }
