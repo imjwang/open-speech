@@ -11,7 +11,7 @@ import { IPC, type WebViewState } from '../shared/ipc-channels'
 import type { HtmlBlocksMessage, WebModeRequest, WebPaint } from '../shared/ipc'
 import { WEB_PARTITION } from './security'
 
-/** Highlight styles injected as a user stylesheet (no DOM mutation in the page). */
+/** Highlight styles injected as a stylesheet (no DOM mutation in the page). */
 export const WEB_HIGHLIGHT_CSS = `
 ::highlight(open-speech-sentence) { background-color: rgba(37, 99, 235, 0.22); }
 ::highlight(open-speech-word) {
@@ -157,7 +157,8 @@ export class WebPageView {
       },
     })
     const wc = view.webContents
-    wc.on('dom-ready', () => void wc.insertCSS(WEB_HIGHLIGHT_CSS, { cssOrigin: 'user' }))
+    // Author origin: Chromium ignores ::highlight() rules in user-origin sheets. Still no DOM mutation.
+    wc.on('dom-ready', () => void wc.insertCSS(WEB_HIGHLIGHT_CSS, { cssOrigin: 'author' }))
     wc.on('did-start-loading', () => this.update({ loading: true }))
     wc.on('did-stop-loading', () => this.update({ loading: false }))
     wc.on('page-title-updated', (_e, title) => this.update({ title }))

@@ -12,6 +12,7 @@ import {
   type KeyTestResult,
   type PlaybackState,
 } from '@shared/api/client'
+import { URL_RE } from './dropped'
 import type { CardRow } from '@shared/api/ws.gen'
 import type { ClipboardContent } from '@shared/ipc-channels'
 
@@ -82,6 +83,11 @@ export class BarActions {
   async runRow(row: Row, modifier: RowModifier = 'primary'): Promise<void> {
     switch (row.kind) {
       case 'submit':
+        // A typed link reads like a pasted one: the live page in the reader (DOM highlight, your logins).
+        if (URL_RE.test(row.text.trim()) && !/\s/.test(row.text.trim())) {
+          this.controller.setText('')
+          return this.runDropped('read', { kind: 'url', url: row.text.trim() })
+        }
         this.controller.submitText(row.text)
         return
       case 'local-confirm':

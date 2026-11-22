@@ -2,7 +2,7 @@
 import type { DroppedItem } from './store'
 
 const KEY_RE = /^(sk-ant-[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,})$/
-const URL_RE = /^https?:\/\/[^\s]+$/i
+export const URL_RE = /^https?:\/\/[^\s]+$/i
 const LONG_TEXT = 160
 
 export function looksLikeApiKey(text: string): boolean {

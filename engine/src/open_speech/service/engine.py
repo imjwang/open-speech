@@ -156,7 +156,11 @@ class Engine:
             except Exception:  # noqa: BLE001
                 return anchor
             if block.dom_anchor is not None:
-                anchor.dom_anchor = block.dom_anchor
+                # The word's own range inside the block's element, not the whole block.
+                base = block.dom_anchor.start_offset
+                anchor.dom_anchor = block.dom_anchor.model_copy(
+                    update={"start_offset": base + cs, "end_offset": base + max(ce, cs)}
+                )
             boxes = [w for w in block.word_boxes if w.start < ce and w.end > cs]
             if boxes:
                 b0 = boxes[0].bbox

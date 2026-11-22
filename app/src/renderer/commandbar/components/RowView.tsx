@@ -34,7 +34,7 @@ import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
 import { formatPercent, formatSpeed, formatTimeLeft } from '@/format'
 import { cn } from '@/lib/utils'
-import { describeDropped } from '../dropped'
+import { describeDropped, URL_RE } from '../dropped'
 import { cardRowEnabled, type Row } from '../rows'
 import type { ActionModel, CardModel } from '../store'
 import { SpeechDiffExcerpt } from './SpeechDiffExcerpt'
@@ -299,14 +299,16 @@ export function RowView({ row, handlers }: { row: Row; handlers: RowHandlers }) 
           {row.isDefault && <Hints items={[['↵', '']]} />}
         </Item>
       )
-    case 'submit':
+    case 'submit': {
+      const link = URL_RE.test(row.text) && !/\s/.test(row.text)
       return (
         <Item row={row} handlers={handlers}>
-          <CornerDownLeft aria-hidden="true" />
-          <span className="truncate">{row.text}</span>
-          <Hints items={[['↵', 'ask']]} />
+          {link ? <Link2 aria-hidden="true" /> : <CornerDownLeft aria-hidden="true" />}
+          <span className="truncate">{link ? `Read ${row.text}` : row.text}</span>
+          <Hints items={[['↵', link ? 'read' : 'ask']]} />
         </Item>
       )
+    }
     case 'pending':
       return (
         <Item row={row} handlers={handlers}>
