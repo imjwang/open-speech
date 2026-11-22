@@ -4,8 +4,8 @@ As of 2026-11-21 · branch `feat/implementation` · macOS 26 on Apple M4
 
 Open Speech v0.1 runs end to end on Apple Silicon: the packaged app installs from a DMG, onboards with
 no keys, and reads PDFs, web pages and the clipboard aloud with the bundled Kokoro voice and live
-highlighting. Everything that needs a cloud key was exercised only against recorded fixtures, because
-no keys were available during the build.
+highlighting. Anthropic, OpenAI and Gemini were then tested live with real keys and the real microphone
+(see [Live providers](#live-providers)).
 
 **Legend.** *Verified*: driven by hand in the real Electron app on macOS (screenshots taken).
 *Tested*: covered by the automated suites (engine 270 tests, app 202 tests) but not driven by hand.
@@ -29,7 +29,7 @@ no keys were available during the build.
 | ID | Requirement | Status | Notes |
 |---|---|---|---|
 | FR-BAR-1 | Hotkey opens the bar listening | Partial | Opens listening when speech input is set up (verified via the app's open event). Without an OpenAI/Gemini key it opens typing by design. ⌥Space is registered but wasn't pressed physically |
-| FR-BAR-2 | Live transcript | Verified | Fixture speech-to-text partials replace in place |
+| FR-BAR-2 | Live transcript | Verified | Real microphone + OpenAI speech-to-text: interim partials about every 0.7–1 s |
 | FR-BAR-3 | Typing switches to text mode | Tested | |
 | FR-BAR-4 | Submit on release, end of speech, Enter | Verified | End of speech (energy VAD) and Enter by hand; push-to-talk in unit tests |
 | FR-BAR-5 | Results as rows | Verified | Answers, action cards with speech diff, lists, spending card |
@@ -49,19 +49,19 @@ no keys were available during the build.
 | FR-READ-12 | Speed 0.5–5x | Tested | |
 | FR-READ-14 | Resume position | Tested | Survives restart (integration test); recents show progress |
 | FR-READ-17 | Media keys, background playback | Partial | Playback is engine-owned and continues with windows closed; media keys need hardware |
-| FR-MM-1 | Images become speech | Tested | Needs an Anthropic key live |
+| FR-MM-1 | Images become speech | Verified | Live Claude vision: chart described with values in 2.5 s, $0.004 |
 | FR-VOICE-1 | One voice list | Verified | |
 | FR-VOICE-2 | Preview without switching | Verified | Real Kokoro synthesis |
 | FR-VOICE-3 | Default, per-document, assistant voice | Tested | Default set from onboarding verified |
-| FR-VOICE-4 | Style instructions | Tested | Adapter fixtures only |
+| FR-VOICE-4 | Style instructions | Tested | Adapter fixtures only (cloud voices themselves verified live) |
 | FR-VOICE-5 | Local Kokoro, offline | Verified | Bundled in the app; sha256-pinned |
-| FR-RULE-1 | Presets, Classic / AI Enhanced | Verified | Classic verified; AI Enhanced needs a key |
+| FR-RULE-1 | Presets, Classic / AI Enhanced | Verified | AI Enhanced live: Claude span ops on top of Classic, $0.009 for a 2-page paper (estimate $0.0095) |
 | FR-RULE-2 | Rules by voice or text with preview | Tested | "Stop reading the footnotes on this site" end to end with the deterministic compiler |
 | FR-RULE-3 | Markdown rule files with scopes | Tested | |
 | FR-RULE-4 | Pronunciation lexicon | Verified | By voice, with spoken confirmation |
 | FR-RULE-5 | Script view | Verified | |
 | FR-RULE-6 | `SPEECH.md` | Tested | |
-| FR-ASST-1 | One Claude agent | Tested | Tool Runner adapter against a mocked API; no live key |
+| FR-ASST-1 | One Claude agent | Verified | Live: summaries, voice change proposed as a confirmation card and confirmed |
 | FR-ASST-2 | Spoken replies; reading pauses | Verified | Reading resumes after the reply even if the bar stays open |
 | FR-ASST-3 | Voice parity for settings | Tested | |
 | FR-ASST-4 | Confirm mutating actions | Verified | |
@@ -105,6 +105,30 @@ bring-your-own OpenAI-compatible server adapter, local model manager).
 | NFR-9 Resources | Partial | See measurements below |
 | NFR-10 Licensing | Verified | 88 bundled packages, no GPL/AGPL |
 
+## Live providers
+
+Run with real keys from a local `.env` (development only; never bundled) and the MacBook microphone.
+Total spend for the session: about $0.10.
+
+| Check | Result |
+|---|---|
+| Keys | All three detected; 13 OpenAI, 60 Gemini and 27 Kokoro voices available |
+| OpenAI `gpt-4o-mini-tts` | Preview 3.3 s; reading starts in 1.41 s; about $0.0012 per short sentence |
+| Gemini `gemini-3.8-flash-tts` | Preview 2.1 s; about $0.001 |
+| Claude AI Enhanced cleanup | Span ops applied on top of Classic filters; cost within the estimate |
+| Claude vision | Chart described, values read, 2.5 s |
+| Claude assistant | Accurate two-sentence summary; "use a calmer voice for everything" → card → confirmed |
+| Microphone + OpenAI speech-to-text | Live partials as people speak; end of speech in a normal room after the VAD fix |
+| Spending answer | "About ten cents this month, estimated, mostly Claude…" |
+
+Fixed because of this run: no live partials (interim transcription was off); the end-of-speech detector
+assumed a near-silent room; Chromium's gain control changed the system input volume; noise transcribed as
+Korean or Japanese words became paid assistant turns (now: language hint plus a noise filter); the
+assistant asked in prose instead of proposing a confirmation card; preview responses misreported cost.
+
+Not yet done live: a full spoken command run (the room had other people talking, and their speech was
+being transcribed, so the microphone test was stopped), pasting a key in the bar, Gemini speech-to-text.
+
 ## Packaged app
 
 `pnpm dist:mac` builds `OpenSpeech-0.1.0-arm64.dmg` (about 290 MB; the app is 728 MB installed:
@@ -133,7 +157,7 @@ Run on this Mac from the DMG, with a fresh profile and the PATH a Finder launch 
 ## Not done yet
 
 - A run on a second, clean Mac, and the Gatekeeper path for a downloaded copy.
-- Live smoke tests with real Anthropic, OpenAI and Gemini keys (`OPEN_SPEECH_LIVE=1`).
+- A full spoken-command run with the real microphone in a quiet room, and Gemini speech-to-text.
 - VoiceOver pass; physical hotkeys and media keys; menu-bar icon states on screen.
 - Developer ID signing and notarization (open question in spec 10).
 - About 40 long-line lint warnings in the engine (`ruff check`); behavior is unaffected.
