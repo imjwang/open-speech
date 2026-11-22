@@ -52,7 +52,7 @@ max_tokens = 510                # model context minus the two pad tokens
 voices = [
   "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole", "af_nova",
   "af_river", "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam",
-  "am_michael", "am_onyx", "am_puck", "am_santa", "bf_alice", "bf_emma", "bf_isabella", "bf_lily",
+  "am_michael", "am_onyx", "am_puck", "bf_alice", "bf_emma", "bf_isabella", "bf_lily",
   "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
 ]
 
@@ -61,16 +61,15 @@ url = "hf://onnx-community/Kokoro-82M-v1.0-ONNX-timestamped"
 revision = "main"
 quant = "q8"
 size_mb = 92
-# sha256 pins: Hugging Face was unreachable from the workstation that wrote this catalog, so the pins
-# are empty. An empty pin is installed trust-on-first-use (the hash is recorded in the model's
-# manifest.json and reported as "unpinned"). Fill these in before a packaged release (03 § Supply chain).
+# sha256 pins for the model and tokenizer (recorded 2026-11-21 from revision "main"). Voice files are
+# trust-on-first-use: their hashes are recorded in the model's manifest.json (03 § Supply chain).
 sha256 = ""
 model_file = "onnx/model_quantized.onnx"
 tokenizer_file = "tokenizer.json"
 voice_file = "voices/{voice}.bin"
 files = [
-  { path = "onnx/model_quantized.onnx", sha256 = "", size_mb = 92 },
-  { path = "tokenizer.json", sha256 = "", size_mb = 0.1 },
+  { path = "onnx/model_quantized.onnx", sha256 = "c0c02b3299fd97c34ea92a98e6d41eaa1a739c8f77bf685aac34bd7b34c1132c", size_mb = 92 },
+  { path = "tokenizer.json", sha256 = "77a02c8e164413299b4b4c403b14f8e0e1c1b727db4d46a09d6327b861060a34", size_mb = 0.1 },
 ]
 voice_size_mb = 0.5
 

@@ -330,6 +330,12 @@ class TurnRequest(BaseModel):
     context: TurnContext = Field(default_factory=TurnContext)
 
 
+class SayRequest(BaseModel):
+    """Speak a short prompt in the assistant voice (onboarding, spoken hints). Returns when it has played."""
+
+    text: str = Field(min_length=1, max_length=600)
+
+
 class TurnAccepted(BaseModel):
     turn_id: str
 

@@ -273,6 +273,18 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
     }
   }
 
+  const playPause = () => {
+    const client = engine.client
+    if (!client) return
+    const p = useEngineStore.getState().playback
+    const thisDoc = !!docId && p.document_id === docId
+    if (thisDoc && (p.state === 'playing' || p.state === 'loading')) void call(() => unwrap(client.POST('/api/v1/playback/pause')))
+    else if (thisDoc && p.state === 'paused') void call(() => unwrap(client.POST('/api/v1/playback/resume')))
+    else if (docId) void call(() => unwrap(client.POST('/api/v1/playback/play', { body: { document_id: docId } })))
+  }
+  const playPauseRef = useRef(playPause)
+  playPauseRef.current = playPause
+
   const playFrom = (from: { utterance_id?: string; block_id?: string; char?: number }) => {
     const client = engine.client
     if (!client || !docId) return
@@ -301,9 +313,7 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
       const thisDoc = !!docId && p.document_id === docId
       if (e.key === ' ') {
         e.preventDefault()
-        if (thisDoc && (p.state === 'playing' || p.state === 'loading')) void call(() => unwrap(client.POST('/api/v1/playback/pause')))
-        else if (thisDoc && p.state === 'paused') void call(() => unwrap(client.POST('/api/v1/playback/resume')))
-        else if (docId) void call(() => unwrap(client.POST('/api/v1/playback/play', { body: { document_id: docId } })))
+        playPauseRef.current()
       } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && thisDoc) {
         e.preventDefault()
         const count = e.key === 'ArrowLeft' ? -1 : 1
@@ -406,9 +416,10 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
         onToggleWebMode={() => useReaderStore.setState((s) => ({ webMode: s.webMode === 'page' ? 'text' : 'page' }))}
         followReleased={followReleased && (isPlayingThis || showLivePage)}
         onBackToPlayhead={backToPlayhead}
+        onPlayPause={() => playPauseRef.current()}
         mac={mac}
       />
-      <main ref={scrollRef} className="relative flex-1 overflow-y-auto" onScroll={onScroll} tabIndex={-1} aria-label={title}>
+      <main ref={scrollRef} className="relative flex-1 overflow-y-auto" onScroll={onScroll} tabIndex={0} aria-label={title}>
         {content}
         {!showLivePage && followReleased && isPlayingThis && (
           <button

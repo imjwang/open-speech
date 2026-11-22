@@ -112,7 +112,7 @@ export class BarController {
       pendingText: null,
     })
     this.deps.send({ type: 'bar.state', open: true })
-    if (event.listen) this.startListening()
+    if (event.listen && this.s.canListen) this.startListening()
     else this.set({ mode: 'typing' })
     this.armIdle()
   }
@@ -139,6 +139,21 @@ export class BarController {
     })
   }
 
+  /** Speak something without hearing ourselves: the mic is off while `speak` runs, then listening resumes. */
+  async withMicPaused(speak: () => Promise<unknown>): Promise<void> {
+    const wasListening = this.s.mode === 'listening'
+    if (wasListening) {
+      this.stopMic(false)
+      this.set({ mode: 'typing', level: 0, speaking: false })
+    }
+    try {
+      await speak()
+    } catch {
+      // Speaking is a courtesy; the prompt is also on screen.
+    }
+    if (wasListening && this.s.open && this.s.mode === 'typing' && !this.s.text && this.s.canListen) this.startListening()
+  }
+
   setInterceptor(fn: VoiceInterceptor | null): void {
     this.interceptor = fn
   }
@@ -160,6 +175,8 @@ export class BarController {
       return
     }
     this.ownSessions.add(sessionId)
+    // Listening again with the bar still open pauses reading again (07 § Ducking); idempotent on open.
+    this.deps.send({ type: 'bar.state', open: true })
     this.set({ mode: 'listening', sessionId, text: '', level: 0, speaking: false, micError: null, hint: null })
     this.deps.setListening(true)
     void this.deps.mic.start({
@@ -440,6 +457,13 @@ export class BarController {
   onError(msg: ErrorMsg): void {
     const p = msg.problem
     const text = typeof p.detail === 'string' && p.detail ? p.detail : typeof p.title === 'string' ? p.title : 'Engine error.'
+    if (p.code === 'missing_key' && this.s.mode === 'listening') {
+      // No speech-to-text set up: not an error the user caused. Type instead; the placeholder says why.
+      this.stopMic(false)
+      this.set({ mode: 'typing', canListen: false, level: 0, speaking: false })
+      this.announce(text)
+      return
+    }
     this.notice('error', text)
     if (this.s.mode === 'finalizing' || this.s.mode === 'waiting') {
       this.clearTurnTimeout()

@@ -166,7 +166,7 @@ function PdfPage({
           {onPage(overlay.sentence).map((r, i) => (
             <div
               key={`t${i}`}
-              className="absolute rounded-[2px] bg-hl-sentence mix-blend-multiply"
+              className="absolute rounded-[2px] bg-hl-sentence-page mix-blend-multiply"
               style={bboxToCss(r.box, viewport)}
               data-current-sentence={r === firstSentence ? 'true' : undefined}
             />
@@ -184,7 +184,7 @@ function PdfPage({
             return (
               <div
                 key={`w${i}`}
-                className="absolute rounded-[2px] border-b-[3px] border-hl-word outline-2 outline-hl-word"
+                className="absolute rounded-[2px] border-b-[3px] border-hl-word-page outline-2 outline-hl-word-page"
                 style={{ ...css, top: css.top - 1, height: css.height + 3 }}
                 data-current-word="true"
               />

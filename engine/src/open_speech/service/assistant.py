@@ -162,6 +162,16 @@ class AssistantService:
         if audio is not None:
             await self.e.transport.play_clip(audio, duck=True)
 
+    async def say(self, text: str) -> None:
+        """Speak a UI prompt in the assistant voice and wait for it to finish (09 § Onboarding: spoken by
+        Kokoro). Reading pauses for it and resumes. Nothing is stored as a recording."""
+        voice = self.e.settings.get().defaults.assistant_voice
+        voices = {v.id: v for v in self.e.registry.voices()}
+        if voice not in voices or not voices[voice].available:
+            voice = self.e.registry.default_local_voice()
+        res = await self.e.synth.synth(text, voice, op="tts")
+        await self.e.transport.play_clip(res.audio, duck=True)
+
     async def _synth_reply(self, text: str, turn_id: str) -> tuple[Any, str | None]:
         voice = self.e.settings.get().defaults.assistant_voice
         voices = {v.id: v for v in self.e.registry.voices()}
@@ -339,14 +349,18 @@ class AssistantService:
         summary = self.e.usage.summary(period=period, group_by="provider")  # type: ignore[arg-type]
         rows = [
             CardRow(
-                id=f"u{i}", title=line.key, value=f"${Decimal(line.usd_estimate):.2f}", subtitle=f"{line.calls} calls"
+                id=f"u{i}",
+                title=_PROVIDER_LABELS.get(line.key, line.key),
+                value=f"${Decimal(line.usd_estimate):.2f}",
+                subtitle=f"{line.calls} calls",
             )
             for i, line in enumerate(summary.breakdown[:3])
+            if Decimal(line.usd_estimate) > 0  # free local work isn't a cost line
         ]
         card = AssistantCard(
             turn_id=turn_id,
             kind="usage",
-            title=f"Usage · {'this month' if period == 'month' else 'this week' if period == 'week' else 'today'} (estimated)",
+            title=f"Spending · {'this month' if period == 'month' else 'this week' if period == 'week' else 'today'} (estimated)",
             rows=rows,
             data=summary.model_dump(mode="json"),
         )
@@ -356,23 +370,42 @@ class AssistantService:
         if what == "voices":
             current = self.e.documents.voice_for(self.e.playback.current_document_id())
             voices = self.e.registry.voices()
-            rows = [
-                CardRow(
-                    id=v.id,
-                    title=v.name,
-                    subtitle=(
-                        f"{v.provider} · {', '.join(v.languages[:2])}"
-                        if v.available
-                        else (v.unavailable_reason or "Unavailable")
-                    ),
-                    selected=v.id == current,
-                    data={"available": v.available, "local": v.local, "provider": v.provider},
+            usable = [v for v in voices if v.available]
+            # Current voice first, then local (free, offline) voices, then cloud voices (FR-VOICE-1).
+            usable.sort(key=lambda v: (v.id != current, not v.local))
+            rows = []
+            for v in usable:
+                title, detail = voice_display(v)
+                rows.append(
+                    CardRow(
+                        id=v.id,
+                        title=title,
+                        subtitle=detail,
+                        selected=v.id == current,
+                        data={"available": True, "local": v.local, "provider": v.provider},
+                    )
                 )
-                for v in voices
-            ]
-            n = sum(1 for v in voices if v.available)
-            card = AssistantCard(turn_id=turn_id, kind="voices", title="Voices (AI-generated)", rows=rows)
-            return Reply(f"Here are {n} voices you can use. Say a name to switch, or press play to preview.", card=card)
+            # Providers without a key: one row each instead of a wall of disabled voices.
+            locked: dict[str, list[Any]] = {}
+            for v in voices:
+                if not v.available:
+                    locked.setdefault(v.provider, []).append(v)
+            for provider, vs in locked.items():
+                label = _PROVIDER_LABELS.get(provider, provider.capitalize())
+                rows.append(
+                    CardRow(
+                        id=f"provider:{provider}",
+                        title=f"{label} voices",
+                        subtitle=f"{len(vs)} more · {vs[0].unavailable_reason or 'Unavailable'}",
+                        data={"available": False, "group": True, "provider": provider},
+                    )
+                )
+            card = AssistantCard(turn_id=turn_id, kind="voices", title="Voices", rows=rows)
+            cur = next((v for v in usable if v.id == current), None)
+            lead = f"You're using {voice_display(cur)[0]}. " if cur else ""
+            return Reply(
+                f"{lead}{len(usable)} voices are ready. Say a name to switch, or press play to preview.", card=card
+            )
         if what == "rules":
             listing = self.e.rules.list(document_id=self.e.playback.current_document_id())
             rows = [
@@ -594,3 +627,26 @@ def _scope_text(scope: s.RuleScope) -> str:
     if scope.types:
         return ", ".join(scope.types)
     return "everywhere"
+
+
+_PROVIDER_LABELS = {
+    "anthropic": "Claude",
+    "openai": "OpenAI",
+    "gemini": "Gemini",
+    "kokoro": "Kokoro",
+    "fixture": "Test",
+    "openai_compatible": "Your server",
+}
+
+
+def voice_display(v: Any) -> tuple[str, str]:
+    """("Heart", "Kokoro · American English · free, offline") from a catalog voice named
+    "Heart (Kokoro, American English)". Names stay unique in the API; this is only how a row reads."""
+    name: str = v.name
+    title, _, rest = name.partition(" (")
+    parts = [p.strip() for p in rest.rstrip(")").split(",") if p.strip()] if rest else []
+    label = _PROVIDER_LABELS.get(v.provider, v.provider.capitalize())
+    if not parts or parts[0].lower() != label.lower():
+        parts.insert(0, label)
+    parts.append("free, offline" if v.local else "cloud")
+    return title, " · ".join(dict.fromkeys(parts))

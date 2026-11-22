@@ -451,6 +451,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assistant/say": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assistant Say */
+        post: operations["assistant_say_api_v1_assistant_say_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/actions": {
         parameters: {
             query?: never;
@@ -1645,6 +1662,14 @@ export interface components {
             /** Proposal Id */
             proposal_id?: string | null;
             rule?: components["schemas"]["RuleOut"] | null;
+        };
+        /**
+         * SayRequest
+         * @description Speak a short prompt in the assistant voice (onboarding, spoken hints). Returns when it has played.
+         */
+        SayRequest: {
+            /** Text */
+            text: string;
         };
         /** ScriptOut */
         ScriptOut: {
@@ -2912,6 +2937,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TurnAccepted"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_say_api_v1_assistant_say_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

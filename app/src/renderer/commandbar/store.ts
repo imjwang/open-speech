@@ -90,6 +90,8 @@ export interface BarState {
   keyEntry: boolean
   selected: string
   settings: UserSettings | null
+  /** False when no speech-to-text provider is set up (no OpenAI/Gemini key): the bar opens typing. */
+  canListen: boolean
   busy: string | null
   /** Text for the polite live region (transcript, replies, action cards with key hints). */
   announcement: { id: number; text: string } | null
@@ -116,6 +118,7 @@ export const initialBarState: BarState = {
   keyEntry: false,
   selected: '',
   settings: null,
+  canListen: true,
   busy: null,
   announcement: null,
 }

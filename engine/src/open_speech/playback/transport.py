@@ -211,6 +211,11 @@ class Transport:
     async def resume(self) -> None:
         if self._script is None or not self._script.utterances:
             raise EngineError("invalid_request", "Nothing is loaded to play.")
+        # An explicit play/resume (from the bar, a hotkey or a command) is the user changing playback: it
+        # isn't held back by the open bar (07 § Ducking: "...unless the command changed playback").
+        if "duck" in self._holds:
+            self._holds.discard("duck")
+            self._apply_hold()
         if self._intent == "playing" and self._error is None:
             return
         self._ensure_ticker()

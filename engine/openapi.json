@@ -1289,6 +1289,40 @@
         }
       }
     },
+    "/api/v1/assistant/say": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Assistant Say",
+        "operationId": "assistant_say_api_v1_assistant_say_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/actions": {
       "get": {
         "tags": [
@@ -4530,6 +4564,22 @@
         },
         "type": "object",
         "title": "SaveRuleRequest"
+      },
+      "SayRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "SayRequest",
+        "description": "Speak a short prompt in the assistant voice (onboarding, spoken hints). Returns when it has played."
       },
       "ScriptOut": {
         "properties": {

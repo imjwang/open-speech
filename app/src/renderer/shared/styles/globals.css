@@ -27,15 +27,18 @@
   /* One accent for listening and highlight (09 § Visual design). */
   --listen: #1d4ed8;
   --listen-foreground: #ffffff;
-  /* Reader highlight. Sentence and word backgrounds are ≥ 3:1 against the page and keep text ≥ 4.5:1
-     (see highlight-colors.test.ts). The current word is also underlined: never colour alone. */
+  /* Reader highlight (09 § Reader): the sentence is a soft tint, the current word is strong (≥ 3:1 against
+     the page) and underlined, so position is never colour alone. Text keeps ≥ 4.5:1 on both. PDF pages are
+     always white, so they use the *-page variants in every theme. */
   --page: #ffffff;
   --page-foreground: #0a0a0a;
-  --hl-sentence: #5b8fd8;
+  --hl-sentence: #dbe7fd;
   --hl-sentence-foreground: #0a0a0a;
   --hl-word: #1d4ed8;
   --hl-word-foreground: #ffffff;
   --hl-outline: #1d4ed8;
+  --hl-sentence-page: #d3e2fd;
+  --hl-word-page: #1d4ed8;
   --skipped: #6b7280;
 }
 
@@ -62,7 +65,7 @@
   --listen-foreground: #0b1220;
   --page: #0b0b0d;
   --page-foreground: #f4f4f5;
-  --hl-sentence: #2b5fae;
+  --hl-sentence: #1c2f4f;
   --hl-sentence-foreground: #f4f4f5;
   --hl-word: #93c5fd;
   --hl-word-foreground: #0b1220;
@@ -84,6 +87,8 @@
   --hl-word: #00e5ff;
   --hl-word-foreground: #000000;
   --hl-outline: #ffff00;
+  --hl-sentence-page: #ffff00;
+  --hl-word-page: #000000;
   --skipped: #bdbdbd;
 }
 
@@ -119,6 +124,8 @@
   --color-hl-word: var(--hl-word);
   --color-hl-word-foreground: var(--hl-word-foreground);
   --color-hl-outline: var(--hl-outline);
+  --color-hl-sentence-page: var(--hl-sentence-page);
+  --color-hl-word-page: var(--hl-word-page);
   --color-skipped: var(--skipped);
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
 }

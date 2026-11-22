@@ -50,7 +50,7 @@ export interface RowHandlers {
 /** Key hints are shown and also read (visually hidden prefix) so screen readers get them too. */
 function Hints({ items }: { items: Array<[string, string]> }) {
   return (
-    <CommandShortcut>
+    <CommandShortcut className="hidden group-data-[selected=true]/item:flex">
       {items.map(([key, label]) => (
         <span key={key + label} className="flex items-center gap-1">
           <Kbd>{key}</Kbd>
@@ -71,7 +71,7 @@ function Item({ row, handlers, className, children }: { row: Row; handlers: RowH
       value={row.value}
       onSelect={() => handlers.onSelect(row)}
       disabled={row.kind === 'pending'}
-      className={className}
+      className={cn('group/item', className)}
       data-row-kind={row.kind}
     >
       {children}
@@ -148,7 +148,7 @@ function CardHeader({ card }: { card: CardModel }) {
   return (
     <div className="flex w-full items-baseline justify-between gap-2 text-xs text-muted-foreground">
       <span className="font-medium text-foreground">{card.title}</span>
-      {card.kind === 'voices' && <span>Voices are AI-generated.</span>}
+      {card.kind === 'voices' && <span>AI-generated</span>}
       {card.kind === 'keys' && <span>Keys stay on this Mac.</span>}
     </div>
   )
@@ -165,6 +165,20 @@ function CardRowBody({ card, row, handlers, item }: { card: CardModel; row: Card
   const subtitle = row.subtitle ? <span className="truncate text-xs text-muted-foreground">{row.subtitle}</span> : null
   switch (card.kind) {
     case 'voices': {
+      if (row.data?.group === true) {
+        // A provider without a key: one row; Enter opens the key field.
+        return (
+          <>
+            <KeyRound aria-hidden="true" className="text-muted-foreground" />
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate text-muted-foreground">{row.title}</span>
+              {subtitle}
+            </span>
+            <SrHint>. Enter adds a key.</SrHint>
+            <Hints items={[['↵', 'add key']]} />
+          </>
+        )
+      }
       const unavailable = row.data?.available === false
       const reason = typeof row.data?.unavailable_reason === 'string' ? row.data.unavailable_reason : null
       return (
@@ -188,7 +202,7 @@ function CardRowBody({ card, row, handlers, item }: { card: CardModel; row: Card
           </span>
           {row.selected && (
             <>
-              <Check aria-hidden="true" className="text-listen" />
+              <Check aria-hidden="true" className="ml-auto text-listen" />
               <SrHint>, current voice</SrHint>
             </>
           )}

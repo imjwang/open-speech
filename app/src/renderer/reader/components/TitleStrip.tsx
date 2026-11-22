@@ -1,4 +1,4 @@
-import { ArrowDown, FileText, Globe, ScrollText } from 'lucide-react'
+import { ArrowDown, FileText, Globe, Pause, Play, ScrollText } from 'lucide-react'
 
 import type { PlaybackState } from '@shared/api/client'
 
@@ -21,6 +21,7 @@ export function TitleStrip({
   onToggleWebMode,
   followReleased,
   onBackToPlayhead,
+  onPlayPause,
   mac,
 }: {
   title: string
@@ -34,8 +35,10 @@ export function TitleStrip({
   onToggleWebMode(): void
   followReleased: boolean
   onBackToPlayhead(): void
+  onPlayPause(): void
   mac: boolean
 }) {
+  const playingThis = isPlayingThis && (playback.state === 'playing' || playback.state === 'loading')
   const page = isPlayingThis ? playback.page : null
   const pages = (isPlayingThis ? playback.page_count : null) ?? pageCount
   const parts = [
@@ -50,6 +53,22 @@ export function TitleStrip({
         mac ? 'pl-20' : 'pl-3',
       )}
     >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            className="shrink-0 [-webkit-app-region:no-drag]"
+            aria-label={playingThis ? 'Pause' : 'Play'}
+            onClick={onPlayPause}
+          >
+            {playingThis ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {playingThis ? 'Pause' : 'Play'} <Kbd className="ml-1">Space</Kbd>
+        </TooltipContent>
+      </Tooltip>
       <h1 className="min-w-0 truncate font-medium">{title}</h1>
       {parts.length > 0 && (
         <p className="shrink-0 text-muted-foreground tabular-nums" aria-label="Position">

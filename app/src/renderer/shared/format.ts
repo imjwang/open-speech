@@ -38,3 +38,20 @@ export function formatPercent(fraction: number | null | undefined): string {
   if (fraction == null || !Number.isFinite(fraction)) return ''
   return `${Math.round(Math.max(0, Math.min(1, fraction)) * 100)}%`
 }
+
+const PROVIDER_LABELS: Record<string, string> = { kokoro: 'Kokoro', openai: 'OpenAI', gemini: 'Gemini', fixture: 'Test' }
+
+/** "Heart" from a catalog name like "Heart (Kokoro, American English)". */
+export function voiceTitle(name: string): string {
+  return name.split(' (')[0] ?? name
+}
+
+/** "Kokoro · American English · free, offline" */
+export function voiceDetail(v: { name: string; provider: string; local?: boolean }): string {
+  const inner = /\((.*)\)\s*$/.exec(v.name)?.[1]
+  const parts = inner ? inner.split(',').map((s) => s.trim()).filter(Boolean) : []
+  const label = PROVIDER_LABELS[v.provider] ?? v.provider
+  if (parts[0]?.toLowerCase() !== label.toLowerCase()) parts.unshift(label)
+  parts.push(v.local ? 'free, offline' : 'cloud')
+  return [...new Set(parts)].join(' · ')
+}

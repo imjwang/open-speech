@@ -187,6 +187,10 @@ export class BarActions {
   async runCardRow(card: CardModel, row: CardRow, modifier: RowModifier): Promise<void> {
     switch (card.kind) {
       case 'voices': {
+        if (row.data?.group === true) {
+          this.controller.store.setState({ keyEntry: true })
+          return
+        }
         const voiceId = rowString(row, 'voice_id') ?? row.id
         if (modifier === 'tertiary') return this.previewVoice(voiceId)
         return this.setVoice(voiceId, modifier === 'secondary' ? 'default' : 'document')
@@ -228,10 +232,20 @@ export class BarActions {
     }
   }
 
-  setVoice(voiceId: string, scope: 'document' | 'default'): Promise<void> {
+  setVoice(voiceId: string, scope: 'document' | 'default', opts: { quiet?: boolean } = {}): Promise<void> {
     return this.run('Changing voice…', async () => {
       await unwrap(this.client().PUT('/api/v1/playback/voice', { body: { voice_id: voiceId, scope } }))
-      this.controller.notice('info', scope === 'default' ? 'Default voice changed.' : 'Voice changed for this document.')
+      // Move the ✓ in any voices list on screen.
+      this.controller.store.setState((s) => ({
+        turns: s.turns.map((t) => ({
+          ...t,
+          cards: t.cards.map((c) =>
+            c.kind === 'voices' ? { ...c, rows: c.rows.map((r) => ({ ...r, selected: r.id === voiceId })) } : c,
+          ),
+        })),
+      }))
+      if (!opts.quiet)
+        this.controller.notice('info', scope === 'default' ? 'Default voice changed.' : 'Voice changed for this document.')
     })
   }
 
@@ -283,6 +297,7 @@ export class BarActions {
       result = await unwrap(this.client().PUT('/api/v1/keys/{provider}', { params: { path: { provider: 'auto' } }, body: { key } }))
     })
     const r = result as KeyTestResult | null
+    if (r?.ok && (r.provider === 'openai' || r.provider === 'gemini')) this.controller.store.setState({ canListen: true })
     if (r) this.controller.notice(r.ok ? 'info' : 'error', r.ok ? `Saved your ${r.provider} key. ${r.detail}`.trim() : r.detail)
     return r
   }

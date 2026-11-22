@@ -217,6 +217,11 @@ async def assistant_turn(body: s.TurnRequest, engine: E) -> s.TurnAccepted:
     return await engine.assistant.submit(body)
 
 
+@router.post("/assistant/say", status_code=204, tags=["assistant"])
+async def assistant_say(body: s.SayRequest, engine: E) -> None:
+    await engine.assistant.say(body.text)
+
+
 @router.get("/actions", response_model=list[s.ActionOut], tags=["assistant"])
 async def pending_actions(engine: E) -> list[s.ActionOut]:
     return engine.assistant.pending_actions()

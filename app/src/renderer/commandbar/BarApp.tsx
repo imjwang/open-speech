@@ -57,7 +57,7 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
   const [recents, setRecents] = useState<DocumentOut[]>([])
   const [search, setSearch] = useState<DocumentOut[] | null>(null)
   const [partialAnnouncement, setPartialAnnouncement] = useState('')
-  const rootRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const mac = bridge.platform === 'darwin'
@@ -79,6 +79,14 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
     )
     void unwrap(client.GET('/api/v1/documents', { params: { query: { limit: 10 } } })).then(
       (list) => !cancelled && setRecents(list.items),
+      () => undefined,
+    )
+    void Promise.all([unwrap(client.GET('/api/v1/keys')), unwrap(client.GET('/api/v1/health'))]).then(
+      ([keys, health]) => {
+        if (cancelled) return
+        const canListen = keys.openai === 'configured' || keys.gemini === 'configured' || health.fixture_providers === true
+        store.setState({ canListen })
+      },
       () => undefined,
     )
     return () => {
@@ -179,7 +187,7 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
     close()
   }
 
-  const onRootKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+  const onRootKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     const s = store.getState()
     if (e.key === 'Escape') {
       e.preventDefault()
@@ -257,7 +265,7 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
     store.setState({ dropped: classified, selected: 'dropped:read' })
   }
 
-  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+  const onDrop = (e: DragEvent<HTMLElement>) => {
     const item = itemFromDataTransfer(e.dataTransfer)
     if (!item) return
     e.preventDefault()
@@ -272,20 +280,23 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
         ? 'Got it…'
         : state.mode === 'waiting'
           ? 'Working…'
-          : state.hint ?? 'Type a command, or press Tab to talk'
+          : state.hint ??
+            (state.canListen ? 'Type a command, or press Tab to talk' : 'Type what to read, or a command')
 
   const announcement = state.announcement?.text ?? ''
   const shortcutLabel = displayShortcut(state.settings?.shortcuts?.open_bar, mac)
 
   return (
-    <div
+    <main
       ref={rootRef}
+      aria-label="Open Speech"
       data-open={state.open}
       data-mode={state.mode}
       className="overflow-hidden rounded-xl border bg-background/90 shadow-2xl backdrop-blur-xl supports-[backdrop-filter]:bg-background/80"
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
     >
+      <h1 className="sr-only">Open Speech</h1>
       <div className="sr-only" aria-live="polite" aria-atomic="true" data-testid="announcer">
         {announcement}
       </div>
@@ -309,7 +320,8 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
           <Onboarding
             controller={controller}
             actions={actions}
-            openBarShortcut={mac ? 'Option-Space' : shortcutLabel}
+            openBarShortcut={shortcutLabel}
+            openBarSpoken={mac ? 'Option-Space' : shortcutLabel}
             onFinished={() =>
               store.setState((s) => ({ settings: s.settings ? { ...s.settings, onboarding_completed: true } : s.settings }))
             }
@@ -365,7 +377,18 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
             ) : (
               <>
                 <span><Kbd>↵</Kbd> run</span>
-                <span><Kbd>tab</Kbd> talk</span>
+                {state.canListen ? (
+                  <span><Kbd>tab</Kbd> talk</span>
+                ) : (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="underline-offset-2 hover:text-foreground hover:underline"
+                    onClick={() => store.setState({ keyEntry: true })}
+                  >
+                    Add an OpenAI or Gemini key to talk
+                  </button>
+                )}
               </>
             )}
             <span><Kbd>esc</Kbd> {latestPendingAction(state) ? 'cancel' : 'close'}</span>
@@ -374,6 +397,6 @@ export function BarApp({ controller, actions, bridge }: BarAppProps) {
         </Command>
       )}
       <input ref={fileRef} type="file" className="hidden" tabIndex={-1} aria-hidden="true" />
-    </div>
+    </main>
   )
 }
