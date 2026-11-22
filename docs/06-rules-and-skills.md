@@ -36,7 +36,7 @@ subject ("Smith et al. (2020) showed…"), keep the name and drop only the year.
 
 **Scope keys** (all optional; an empty scope means global):
 - `sites`: hostnames with `*` wildcards (web sources, and PDFs downloaded from them)
-- `types`: `pdf | web | docx | text | image | video | audio`
+- `types`: `pdf | web | docx | text | image | audio`
 - `docs`: document IDs (created when the user says "for this document only")
 - `languages`: BCP-47 codes
 
@@ -159,7 +159,7 @@ Announce section headings as "Section 3: Methods".
 
 - **Progressive disclosure:** only `name` + `description` are in the assistant's context; the body and bundled rules load when the skill is applied.
 - **Suggestion:** when a document matches `open-speech-detect`, the bar offers "This looks like a paper — use Academic Paper?" (spoken if listening).
-- **Bundled skills:** academic-paper, legal-document, news-article, code-heavy-docs, math-text, slides-and-lectures (video/P1).
+- **Bundled skills:** academic-paper, legal-document, news-article, code-heavy-docs, math-text.
 - Applying a skill activates its rules with `created_by: skill:<name>`. Removing the skill removes them.
 
 ## Worked examples

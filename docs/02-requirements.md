@@ -15,7 +15,7 @@ IDs are stable. Never renumber; deprecate instead.
 - *Ruth (low vision):* "I ask 'what's on my clipboard?' and it describes the chart I copied." → FR-MM-1
 - *Ruth:* "I ask 'how much did I spend this month?' and hear the answer, broken down by provider." → FR-ASST-6, FR-COST-2
 - *Sam (developer):* "I `curl` the engine to read a file, or call it from Claude Code over MCP." → FR-API-1, FR-API-3, FR-API-4
-- *Sam:* "I run Qwen3-TTS locally and never pay for audio." → FR-VOICE-6, FR-VOICE-7
+- *Sam:* "I point it at my own local TTS server and never pay for audio." → FR-VOICE-7
 
 ## Functional requirements
 
@@ -63,9 +63,9 @@ IDs are stable. Never renumber; deprecate instead.
 |---|---|---|---|---|---|
 | FR-MM-1 | P0 | Images become speech | Open, paste, drop or clipboard; Claude chooses *transcribe* (text-heavy) or *describe* (visual), overridable by command or rule; cost logged | 05 | M1 |
 | FR-MM-2 | P1 | Describe figures and charts inside PDFs and pages | A rule such as "describe figures in one sentence" produces utterances anchored to the figure block | 05, 06 | — |
-| FR-MM-3 | P1 | Local video files | Keyframes + audio transcript → time-anchored script; the reader seeks the video to the playing segment; estimate first | 05 | — |
+| FR-MM-3 | P2 | Local video files (**deferred**, out of scope for now) | — | 05 | — |
 | FR-MM-4 | P1 | Local audio files | Transcript → rules → re-voiced or summarized | 05 | — |
-| FR-MM-5 | P2 | Videos in web pages | — | 05 | — |
+| FR-MM-5 | P2 | Videos in web pages (**deferred**) | — | 05 | — |
 
 ### Voices (VOICE)
 
@@ -76,7 +76,7 @@ IDs are stable. Never renumber; deprecate instead.
 | FR-VOICE-3 | P0 | Default voice, per-document override, separate assistant voice | Precedence: document > default; the assistant voice is independent | 08 | M1 |
 | FR-VOICE-4 | P0 | Style instructions where supported | Free-text style passed to OpenAI `instructions` / Gemini `speech_metadata.style`; ignored with a notice elsewhere | 08 | M1 |
 | FR-VOICE-5 | P0 | Local Kokoro voice, offline | Works with no network or keys; automatic fallback when offline or over budget; exact word timestamps | 08 | M0 |
-| FR-VOICE-6 | P1 | Local Qwen3-TTS | Offered only on capable hardware; managed install with size and RAM disclosed | 08 | — |
+| FR-VOICE-6 | P2 | Local Qwen3-TTS, preset voices only (no cloning) | Offered only on capable Apple Silicon Macs; managed install with size and RAM disclosed | 08 | — |
 | FR-VOICE-7 | P1 | Bring-your-own OpenAI-compatible server | Base URL + key + model + voice; tested against Kokoro-FastAPI and mlx-audio | 08 | — |
 | FR-VOICE-8 | P1 | Per-language voice pinning | Language-detected blocks use the pinned voice | 08 | — |
 
@@ -162,7 +162,7 @@ IDs are stable. Never renumber; deprecate instead.
 | NFR-3 | Privacy | No telemetry. All data stays local. Only configured providers receive content, and a "what gets sent where" page lists exactly what each provider receives |
 | NFR-4 | Security | Per `03` § Security: loopback-only API with token and Host/Origin checks; keys only in the engine and keychain; hardened Electron |
 | NFR-5 | Accessibility | WCAG 2.2 AA; full keyboard operation; VoiceOver labels and live regions; reduced motion; high contrast; **every P0 flow completable by voice alone** |
-| NFR-6 | Portability | macOS 14+ on Apple Silicon is the MVP target; Intel macOS, Windows and Linux are best-effort builds |
+| NFR-6 | Platform | macOS 14+ on Apple Silicon is the **only** target until verification is complete. Windows, Linux and Intel Macs are out of scope for now: the engine stays portable Python, but nothing is built, packaged or tested for them |
 | NFR-7 | Extensibility | A new TTS/STT provider = one adapter implementing the protocol + one `models.toml` entry + recorded test fixtures |
 | NFR-8 | Cost safety | No paid call without an explicit user action, a confirmed plan, or a running read. Every paid call appears in the ledger |
 | NFR-9 | Resources | Engine idle ≤ 300 MB RSS without local models; Kokoro adds ≤ 1.3 GB while loaded and unloads after 10 idle minutes |

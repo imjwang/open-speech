@@ -16,7 +16,7 @@ a 300-page book starts in seconds and stopping early costs almost nothing.
 
 | Kind | Source id | Notes |
 |---|---|---|
-| File (pdf, docx, txt, md, image, video, audio) | `sha256(bytes)` | Same file anywhere = same document |
+| File (pdf, docx, txt, md, image, audio) | `sha256(bytes)` | Same file anywhere = same document |
 | URL (headless) | `sha256(url + normalized extracted text)` | Re-fetch detects changed content |
 | `html_blocks` (from the shell) | `sha256(url + normalized block text)` | Logged-in/paywalled pages work because extraction happens in the user's session |
 | Text / clipboard text | `sha256(normalized text)` | |
@@ -87,7 +87,7 @@ For rules that need judgment ("skip author-year citations but keep the author na
 
 ### Tier 3: Transform (generative)
 For rules that change *what* is said: "summarize each section in two sentences", "read only the abstract
-and conclusions", "explain equations in words", "describe figures", image descriptions, video narration.
+and conclusions", "explain equations in words", "describe figures", image descriptions.
 - Config: `claude-sonnet-5-5`, adaptive thinking, `effort: "medium"`, streaming.
 - Output utterances carry **block-, section- or media-level anchors** (fidelity `block`/`section`/`media`). The reader outlines the region instead of highlighting words. Listening-first means this is fine.
 - Always estimated first for whole-document transforms.
@@ -102,10 +102,9 @@ Every utterance records which rule changed what (`rule_trace`). This powers **Sc
 |---|---|---|---|
 | Image (open/paste/clipboard/screenshot) | Downscale to ≤ 1280 px long edge → Claude vision with a transcribe-or-describe instruction, plus active rules | Text-heavy → verbatim transcript as blocks; visual → 1–5 sentence description; mixed → both | ≈ $0.005 per image (~1.2k input tokens) |
 | Figure inside PDF/web (P1) | Crop the figure region → vision | Description utterance anchored to the figure block | ≈ $0.005 per figure |
-| Video file (P1) | PyAV: scene-change keyframes (cap 1 per 5 s, max 120, 720p) + audio track → STT → Claude composes a time-anchored script | Narration of slides and visuals interleaved with what's said | ≈ $0.30 per 10 min (frames dominate) + STT |
 | Audio file (P1) | STT (cloud or local) → transcript blocks → rules | Re-voiced or summarized transcript | STT only, unless transformed |
 
-The vision and transform calls **have no tools**. Their output is validated and treated as content.
+Video is **deferred** (out of scope for now). The vision and transform calls **have no tools**. Their output is validated and treated as content.
 
 ## 6. Chunk
 
@@ -121,7 +120,7 @@ to minimize time-to-first-audio.
 | OpenAI | `audio.speech` streaming, `gpt-4o-mini-tts`, `instructions` for style | Opus (`response_format="opus"`) | Ogg/Opus as received |
 | Gemini | **Interactions API** `client.interactions.create(..., stream=True, response_format={"type":"audio"})` with `generation_config.speech_config=[{"voice": ...}]`; style via a `speech_metadata` annotation | Headerless L16 PCM, 24 kHz mono | Encoded to Ogg/Opus |
 | Kokoro (local) | onnxruntime, timestamped ONNX export | PCM + per-token durations | Ogg/Opus + timings |
-| Qwen3-TTS (local, P1) | mlx-audio / faster-qwen3-tts / qwentts.cpp server | PCM | Ogg/Opus |
+| Qwen3-TTS (local, P2) | mlx-audio / faster-qwen3-tts / qwentts.cpp server | PCM | Ogg/Opus |
 | OpenAI-compatible (P1) | `POST {base}/v1/audio/speech` | As configured | Ogg/Opus |
 
 *Measured first audio for a one-sentence utterance (2026-11-21):* OpenAI `gpt-4o-mini-tts` 1.38 s;

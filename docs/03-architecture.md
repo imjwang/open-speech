@@ -35,9 +35,11 @@ flowchart LR
   MCP --> MCPS
   OAI --> API
   PRV -- HTTPS --> Cloud["Anthropic · OpenAI · Gemini"]
-  LOC --> Weights["Kokoro · Qwen3-TTS · STT weights"]
+  LOC --> Weights["Kokoro · STT weights"]
   PLY --> Speakers(("audio out"))
 ```
+
+**Target platform:** macOS 14+ on Apple Silicon only, for now (NFR-6).
 
 **Rules of the shape**
 1. All behavior lives in `service/`. The three surfaces (`api/`, `mcp/`, `cli/`) are thin adapters with no logic of their own.
@@ -62,7 +64,7 @@ flowchart LR
 | PDF | pypdfium2 + pdfplumber | Char boxes, fonts, layout. **Not PyMuPDF (AGPL)** |
 | Web (headless) | trafilatura | Used when no shell provides DOM blocks |
 | DOCX | python-docx | |
-| Media | PyAV | Video keyframes, audio-track decode (P1) |
+| Media | PyAV | Audio-file decode (P1) |
 | Audio I/O | sounddevice + soundfile | Playback, recording, Ogg/Opus |
 | Speed | audiotsm (WSOLA) | Pitch-preserving time-stretch in the transport |
 | Secrets | keyring | OS keychain in packaged builds |
@@ -72,7 +74,7 @@ flowchart LR
 
 **Optional extras** (installed on demand by the model manager):
 - `local-kokoro`: onnxruntime + Kokoro timestamped ONNX. In the default install for packaged builds.
-- `local-qwen`: mlx-audio on Apple Silicon. The NVIDIA path is faster-qwen3-tts or vLLM-Omni; the cross-platform path is the qwentts.cpp `tts-server` binary.
+- `local-qwen` (P2): mlx-audio on Apple Silicon, preset voices only.
 - `local-stt`: sherpa-onnx with Moonshine v2 / Parakeet TDT v3.
 - `local-align`: Qwen3-ForcedAligner-0.6B (v1.1).
 
@@ -84,13 +86,13 @@ engine/src/open_speech/
   mcp/          server.py (P1)
   cli/          main.py (Typer)
   service/      documents.py, playback.py, rules.py, assistant.py, usage.py, voices.py, settings.py, models.py
-  ingest/       pdf.py, html_blocks.py, url.py, docx.py, text.py, image.py, video.py (P1), audio.py (P1)
+  ingest/       pdf.py, html_blocks.py, url.py, docx.py, text.py, image.py, audio.py (P1)
   document/     model.py (Block, Mark, Document), segment.py (sentences, words, offsets)
   rules/        files.py (load/watch), presets/, compiler.py, filters.py, lexicon.py, skills.py
   plan/         planner.py, annotate.py (Claude span ops), transform.py, script.py (Utterance)
   agent/        core.py (tool runner), tools/, intents.py (fast path), prompts/
   playback/     transport.py, stretch.py, output.py, timing.py
-  providers/    base.py (protocols), openai_tts.py, gemini_tts.py, kokoro.py, qwen3.py,
+  providers/    base.py (protocols), openai_tts.py, gemini_tts.py, kokoro.py, qwen3.py (P2),
                 openai_compatible.py, openai_stt.py, gemini_stt.py, anthropic_llm.py
   local/        manager.py (download, sha256, hardware probe, remove), catalog.py
   usage/        ledger.py, pricing.py, budget.py, estimate.py
@@ -111,13 +113,13 @@ engine/src/open_speech/
 | Engine client | `openapi-typescript` + `openapi-fetch` generated from the committed OpenAPI; typed WS client generated from the event schema |
 | PDF render | pdf.js (`pdfjs-dist`) |
 | Web render | `WebContentsView` with partition `persist:web` |
-| Packaging | electron-builder |
+| Packaging | electron-builder, macOS arm64 only |
 | Tests | Vitest, Playwright `_electron` |
 
-**Windows (3, nothing else):**
+**App windows (3, nothing else):**
 1. **Tray / menu bar.** Always present; reflects state.
 2. **Command bar.** Frameless, transparent, vibrancy on macOS, centered; created hidden at startup so it appears ≤ 150 ms after the hotkey.
-3. **Reader.** Opens on demand for PDF, web, images and video. Content only, plus a thin title strip.
+3. **Reader.** Opens on demand for PDFs, web pages and images. Content only, plus a thin title strip.
 
 **Main-process duties:** register global shortcuts and media keys; supervise the engine; route OS file and URL opens to the engine; set permissions (mic only for the command bar renderer); open external links in the OS browser.
 
@@ -137,7 +139,7 @@ engine/src/open_speech/
 | Web page (headless) | Engine (trafilatura) | `{blockId, charStart, charEnd}` | Reader shows extracted text; no live-page highlight |
 | DOCX / TXT / MD / paste | Engine | `{blockId, charStart, charEnd}` | Reader renders blocks as text and highlights spans |
 | Image | Engine → Claude vision | `{imageId, bbox?}` or none | Optional region outline; otherwise the image plus transcript |
-| Video (P1) | Engine (PyAV + STT + Claude) | `{mediaTime: [t0, t1]}` | Reader seeks and plays the video in sync |
+| Audio file (P1) | Engine (PyAV decode + STT) | `{mediaTime: [t0, t1]}` | Reader shows the transcript and seeks the audio |
 
 Fidelity degrades gracefully: `exact` → `block` → `section` → `media`. The reader always shows *something*: at minimum the current block or section is outlined.
 
@@ -152,7 +154,7 @@ Fidelity degrades gracefully: `exact` → `block` → `section` → `media`. The
 
 ## Storage (app data)
 
-macOS: `~/Library/Application Support/OpenSpeech/`; equivalent per-OS paths via `platformdirs`. Override with `OPEN_SPEECH_HOME`.
+`~/Library/Application Support/OpenSpeech/` (paths come from `platformdirs`, so other OSes remain possible later). Override with `OPEN_SPEECH_HOME`.
 
 ```
 db.sqlite                 documents, blocks, plans, utterances, ledger, settings, recents, positions

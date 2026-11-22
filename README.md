@@ -5,12 +5,13 @@ a PDF, a web page, your clipboard, an image. It reads aloud in the voice you cho
 rules you write in plain language.
 
 > **Status:** specification phase. No runnable code yet. Start with [`docs/`](docs/README.md).
+> **Platform:** macOS on Apple Silicon.
 
 ## What makes it different
 
 - **Voice-first.** The command bar opens listening. Change voices, speed, rules and budgets by talking. You never have to read a settings screen.
 - **Your rules.** "Skip the citations." "Say SQL as sequel." "Describe figures in one sentence." Rules are plain Markdown files, previewed before they're saved.
-- **Your keys, your costs.** Use OpenAI, Gemini, or free local voices (Kokoro, Qwen3-TTS). Every call is logged with an estimated cost, and you can ask "how much have I spent this month?"
+- **Your keys, your costs.** Use OpenAI, Gemini, or the free local Kokoro voice, which works offline. Every call is logged with an estimated cost, and you can ask "how much have I spent this month?"
 - **Claude in the loop.** Claude cleans text before it's spoken, describes images, and runs the assistant.
 - **Headless engine with an API.** Everything the app does is available over a local REST/WebSocket API and a CLI, with MCP to follow.
 - **Local and private.** No accounts, no telemetry. Audio is cached by content hash, so replays are free.

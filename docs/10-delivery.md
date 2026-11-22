@@ -2,6 +2,8 @@
 
 Status: Draft v0.1 · 2026-11-21
 
+**Platform:** macOS 14+ on Apple Silicon only. CI runs on macOS arm64 runners; verification runs on local builds.
+
 ## Repository layout
 
 ```
@@ -37,13 +39,13 @@ The shell must not ship a feature the engine doesn't expose. CI enforces the gen
 | **M2** | Shell | electron-vite + React Compiler + shadcn; tray; command bar (listening first, live STT partials via OpenAI/Gemini, typed mode, recordings and replay, rows, fast-path commands); reader for PDF and text with highlight and follow; clipboard hotkey; media keys; generated client | Hotkey → speak "read clipboard" → audio + highlight in ≤ 3 s; VoiceOver can operate the bar |
 | **M3** | Web, DOCX, AI Enhanced rules | `WebContentsView` reader with Readability blocks + Custom Highlight; DOCX; annotate tier (quote-anchored span ops); rule files, watcher, compiler, speech diff, Script view; `SPEECH.md` | Logged-in article reads with in-page highlight; "stop reading footnotes on this site" works end to end with preview |
 | **M4** | Assistant and cost | Claude agent with the full tool catalog, confirmations, spoken replies and ducking; usage summaries; budgets; pre-flight estimates; key paste; onboarding | Every P0 flow completes by voice alone; budget hard stop falls back to Kokoro; estimate within ±25% |
-| **M5** | Hardening and packaging | a11y audit, e2e suite, error paths, packaging (electron-builder + uv-managed Python runtime + bundled Kokoro), macOS signing | Fresh Mac: install → onboarding → read a PDF, no terminal needed |
+| **M5** | Hardening and packaging | a11y audit, e2e suite, error paths, macOS arm64 packaging (electron-builder + uv-managed Python runtime + bundled Kokoro) | Fresh Mac: install → onboarding → read a PDF, no terminal needed |
 
-**Post-MVP (P1, in rough order):** Qwen3-TTS + model manager UI rows · BYO OpenAI-compatible server · MCP
+**Post-MVP (P1, in rough order):** model manager rows · BYO OpenAI-compatible server · MCP
 server · OpenAI-compatible facade · local alignment (v1.1 word sync) · read selection / screenshot ·
-document Q&A and summaries · transforms and skills · video/audio sources · local STT + hands-free + barge-in
+document Q&A and summaries · transforms and skills · audio-file sources · local STT + hands-free + barge-in
 · export audio · folders · auto-ramp speed.
-**P2:** EPUB, notes and bookmarks, sleep timer, web-page video, provider usage reconciliation, Message
+**P2:** Qwen3-TTS (preset voices), video sources, EPUB, notes and bookmarks, sleep timer, provider usage reconciliation, Message
 Batches pre-processing, sync via a user folder.
 
 ## Testing strategy
@@ -78,19 +80,17 @@ Batches pre-processing, sync via a user folder.
 | R11 | Packaging Python inside Electron | Install size, first-run failures | uv-managed runtime; locked deps; local extras on demand; M5 dedicated to packaging |
 | R12 | Python 3.14 wheel availability (onnxruntime, mlx, sherpa-onnx, PyAV) | Build breaks | Choose the newest Python with wheels for all pins at scaffold time |
 | R13 | espeak-ng (GPL) in some Kokoro phonemizer paths | License conflict | English G2P without espeak by default; espeak only as an optional, labelled extra |
-| R14 | Qwen3-TTS below real time on CPU-only machines | Stutter | Hardware gate; render ahead; fall back to Kokoro |
+| R14 | Qwen3-TTS (P2) speed on base M-series Macs | Stutter | Gate by chip and memory; render ahead; fall back to Kokoro |
 | R15 | Echo cancellation for hands-free barge-in | False triggers | Push-to-talk in P0; engine-side AEC or renderer playback for P1 |
 | R16 | macOS permissions (Accessibility, Screen Recording) | Friction | P1 only; spoken explanation before the OS prompt |
-| R17 | Signing and notarization | Gatekeeper warnings | Unsigned dev builds; signing set up in M5 |
+| R17 | Signing and notarization | Gatekeeper warnings | Verification uses local ad-hoc-signed builds; Developer ID signing and notarization before any public download |
 | R18 | Prosody seams between chunks | Choppy audio | 1–3 sentence units; consistent style instructions; crossfade 10 ms |
 | R19 | Storage growth | Disk use | 5 GB LRU cap, recording retention, "clear cache" |
 | R20 | Speed above ~3x degrades WSOLA quality | Harsher audio | Tune WSOLA window; document limits; optional provider-side speed for exports |
 
 ## Open questions
 
-1. **Distribution:** signed DMG from GitHub Releases at M5, or source-only until P1?
-2. **Windows timing:** best-effort builds in CI from M2, or a committed target date?
-3. **Sync:** user-owned folder (iCloud Drive / Dropbox) for rules and positions, or skip entirely?
-4. **Video:** Claude frame-sampling (current plan) only, or also Gemini native video understanding as an optional provider?
-5. **Default assistant voice:** Kokoro (fast, $0) or the user's reading voice?
-6. **Speed above 3x:** acceptable with WSOLA, or worth a higher-quality stretcher (Rubber Band is GPL; look for permissive options)?
+1. **Distribution:** verification runs on local macOS builds. When do we add Developer ID signing and a public DMG?
+2. **Sync:** user-owned folder (iCloud Drive / Dropbox) for rules and positions, or skip entirely?
+3. **Default assistant voice:** Kokoro (fast, $0) or the user's reading voice?
+4. **Speed above 3x:** acceptable with WSOLA, or worth a higher-quality stretcher (Rubber Band is GPL; look for permissive options)?

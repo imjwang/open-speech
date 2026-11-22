@@ -66,21 +66,15 @@ license = "Apache-2.0"
 languages = ["en-US","en-GB"]   # more via optional phonemizer extras
 timestamps = true
 
-[tts.qwen3."qwen3-tts-12hz-0.6b"]            # P1
+[tts.qwen3."qwen3-tts-12hz-0.6b"]            # P2, preset voices only (no cloning)
 local = true
-runtimes = ["mlx-audio", "faster-qwen3-tts", "qwentts.cpp"]
+runtimes = ["mlx-audio"]         # Apple Silicon
 size_gb = 1.3                    # GGUF Q8; ~2.5 GB bf16
 ram_gb = 3
 license = "Apache-2.0"
 languages = ["zh","en","ja","ko","de","fr","ru","pt","es","it"]
-requires = "apple-silicon | nvidia-gpu"      # below real time on CPU-only machines
+requires = "apple-silicon"
 timestamps = false
-
-[tts.qwen3."qwen3-tts-12hz-1.7b"]            # P1, voice design and cloning
-inherit = "qwen3-tts-12hz-0.6b"
-size_gb = 2.4
-ram_gb = 4
-requires = "ram>=16 & (apple-silicon | nvidia-gpu)"
 
 [stt.openai]
 streaming = ["gpt-realtime-whisper", "gpt-live-transcribe"]   # (verify streaming semantics)
@@ -117,20 +111,21 @@ options = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-f
 | Tier | Model | Runtime | Download / RAM | Speed | Word timing | Status |
 |---|---|---|---|---|---|---|
 | Default local | **Kokoro-82M v1.0** (Apache-2.0) | onnxruntime (CPU) | ~92 MB q8 / ≤ 1.3 GB | ~10x real time on CPU | Exact (timestamped export) | **P0**, included in packaged builds |
-| High quality | **Qwen3-TTS 0.6B** (Apache-2.0) | mlx-audio (Apple Silicon), faster-qwen3-tts / vLLM-Omni (NVIDIA), qwentts.cpp `tts-server` (Metal/CUDA/Vulkan, no Python) | ~1.3 GB Q8 / 2–3 GB | ~1.3–1.8x real time on M-series (MLX, third-party); ~2x on RTX 4060 | Via alignment | P1 |
-| High quality+ | **Qwen3-TTS 1.7B** (voice design, cloning) | same | ~2.4 GB / ~4 GB | slower | Via alignment | P1, 16 GB+ or NVIDIA |
+| Later | **Qwen3-TTS 0.6B** (Apache-2.0), preset voices only | mlx-audio (Apple Silicon) | ~1.3 GB Q8 / 2–3 GB | ~1.3–1.8x real time on M-series (MLX, third-party) | Via alignment | P2 |
 | BYO server | Kokoro-FastAPI, mlx-audio server, vLLM-Omni, Speaches, qwentts.cpp | `openai_compatible` adapter | — | — | Via alignment (Kokoro-FastAPI `/dev/captioned_speech` optional) | P1 |
 | Local STT | Moonshine v2 (streaming, EN), Parakeet TDT v3 (25 langs, CC-BY-4.0) | sherpa-onnx | 0.1–0.6 GB | real time+ | — | P1 |
 | Local alignment | Qwen3-ForcedAligner-0.6B (Apache-2.0) or whisper.cpp DTW | Python / mlx-audio / whisper.cpp | ~0.6–1 GB | background | — | v1.1 |
+
+**Voice cloning and custom voices are out of scope**: catalog entries expose preset voices only, and the larger Qwen3-TTS 1.7B (voice design, cloning) is not included.
 
 Excluded from the bundled catalog for license or hardware reasons (users can still add them via BYO
 server): F5-TTS (CC-BY-NC), Fish/OpenAudio (non-commercial), IndexTTS-2 (restricted), Voxtral TTS
 (CC-BY-NC), VibeVoice (repos withdrawn), Piper (GPL engine), and 1.6B+ GPU-only models.
 
 **Model manager** (`local/manager.py`):
-- Hardware probe: CPU arch, Apple Silicon generation, RAM, NVIDIA GPU and VRAM. Marks each catalog entry `fits | slow | unsupported`.
+- Hardware probe: Apple Silicon generation and unified memory. Marks each catalog entry `fits | slow | unsupported`.
 - Installs show size, RAM and expected speed **before** confirming (by voice too).
-- Downloads resume, verify sha256 and land in `models/`. Optional Python extras install into the engine environment with `uv pip install open-speech[local-qwen]`.
+- Downloads resume, verify sha256 and land in `models/`. Optional Python extras install into the engine environment with `uv pip install open-speech[local-stt]`.
 - Idle models unload after 10 minutes (NFR-9).
 - **License note:** some Kokoro phonemizer paths fall back to espeak-ng (GPL). The default install uses the English G2P without espeak. Espeak-backed languages are an optional, clearly-labelled extra.
 
@@ -213,7 +208,7 @@ reports is labelled **estimated**.
 - **Monthly budget** (`settings.toml` `[budget] monthly_usd`, `warn_at = 0.8`, `hard_stop = true`).
   - At 80%: a spoken notice and a bar row, once per threshold crossing.
   - At 100%: paid calls are refused with `budget_exceeded`. Reading continues on Kokoro and Classic rules. The user can override ("raise my budget to $20", confirmed).
-- **Pre-flight estimate** when a single operation is estimated above `estimate_threshold_usd` (default `0.50`). Applies to large documents in AI Enhanced mode, whole-document exports, transforms, keep-offline pins and video.
+- **Pre-flight estimate** when a single operation is estimated above `estimate_threshold_usd` (default `0.50`). Applies to large documents in AI Enhanced mode, whole-document exports, transforms and keep-offline pins.
   - **Estimator:** extracted chars → TTS chars after Classic filters, minus cached utterances; annotate tokens ≈ block tokens × 1.1 + output allowance; vision per image/frame. Target ±25% for text documents (FR-COST-3).
 - **P2:** "prepare whole document" through the Claude Message Batches API (50% cheaper, minutes to hours) for books queued in advance.
 
@@ -225,5 +220,4 @@ reports is labelled **estimated**.
 | 300-page book, OpenAI TTS (~11 h audio) | ~$10 |
 | Same book on Kokoro | $0 |
 | One image described | ~$0.005 |
-| 10-minute video narrated (P1) | ~$0.30 + STT |
 | One assistant turn | ~$0.002–0.01 |

@@ -27,10 +27,11 @@ Status: **Draft v0.1** · 2026-11-21 · Spec only; no code yet.
 | Shape | Headless Python (FastAPI) engine with a local REST/WS API; Electron shell is a thin client; CLI now, MCP next |
 | UI | Voice-first command bar (opens listening, live transcript, replay) + menu bar + on-demand reader. No settings screens |
 | Cloud voices | OpenAI `gpt-4o-mini-tts`; Gemini `gemini-3.8-flash-tts` / `-lite-tts` (Interactions API) |
-| Local voices | Kokoro-82M default (offline, $0, exact word timing); Qwen3-TTS (P1); any OpenAI-compatible server (P1) |
+| Local voices | Kokoro-82M (offline, $0, exact word timing); any OpenAI-compatible server (P1); Qwen3-TTS later (P2). Preset voices only, no cloning |
 | LLM | Claude only: `claude-sonnet-5-5` by default. Annotate with thinking off and quote-anchored span ops; transforms at medium effort; assistant at low effort |
 | Cleanup | Rules as files: Speechify-named presets (Classic = free filters, AI Enhanced = Claude span ops), lexicon, chat- or voice-authored rules with preview |
-| Multimodal | Images → Claude vision (P0); video/audio files (P1) |
+| Multimodal | Images → Claude vision (P0); audio files (P1); video deferred |
+| Platform | macOS 14+ on Apple Silicon only, for now |
 | Cost | Local ledger in dollars, editable pricing, budgets with hard stop, pre-flight estimates, all answerable by voice |
 | Cache | Content-addressed extract / plan / audio caches; replays are free |
 | Privacy | Local-only, no telemetry, BYOK |

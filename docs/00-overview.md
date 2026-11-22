@@ -8,7 +8,7 @@ Open Speech is an open-source, bring-your-own-key alternative to Speechify. It i
 engine with a local API**. You reach it through a desktop shell that stays almost invisible: a menu-bar
 icon, a voice-first **command bar**, and a reader window that opens only for PDFs and web pages.
 
-You point it at something: a PDF, a web page, a Word document, the clipboard, an image, or later a video.
+You point it at something: a PDF, a web page, a Word document, the clipboard, or an image.
 It reads that aloud in a voice you choose, following **speech rules you write in plain language**
 ("skip the citations", "say SQL as sequel", "describe the figures in one sentence"). Claude turns those
 rules into a cleaned or transformed script before any audio is generated. Audio is cached by content
@@ -53,7 +53,10 @@ for it out loud: "How much have I spent this month?"
 ## Non-goals (MVP)
 
 - Accounts, payments, cloud library, cross-device sync, mobile apps, browser extension.
-- Podcasts, meeting notes, voice cloning, dubbing, audiobook store.
+- Podcasts, meeting notes, dubbing, audiobook store.
+- Voice cloning or custom/self voices. Preset voices only.
+- Video sources (deferred).
+- Windows, Linux and Intel Mac builds. macOS on Apple Silicon is the only target until verification is complete.
 - Rich document editing or annotation.
 - Running non-Claude LLMs for rules or the assistant.
 
@@ -72,7 +75,7 @@ for it out loud: "How much have I spent this month?"
 | **Engine** | The Python service that does all the work (`engine/`). Headless; exposes REST, WS, CLI and later MCP |
 | **Shell** | The Electron app (`app/`): menu bar, command bar, reader. A client of the engine |
 | **Command bar** | Global-hotkey floating bar. Opens listening, shows the live transcript, takes typed commands |
-| **Source** | A thing to read: file, URL, clipboard content, image, video |
+| **Source** | A thing to read: file, URL, clipboard content, image |
 | **Document** | A source extracted into typed **blocks** (paragraph, heading, footnote, …) with stable IDs |
 | **Rule** | A Markdown file with a scope and an instruction that changes what is spoken |
 | **Skill** | A reusable pack of rules and instructions in Agent Skills format |

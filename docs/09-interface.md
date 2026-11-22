@@ -52,7 +52,7 @@ Summoned by a global hotkey from anywhere. It opens **already listening**.
 
 ## 3. Reader
 
-Opens only for content worth seeing: PDFs, web pages, images, video (P1), and long text.
+Opens only for content worth seeing: PDFs, web pages, images, and long text.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -99,7 +99,7 @@ All are remappable in `settings.toml` under `[shortcuts]`.
 ## 5. Visual design
 
 - shadcn/ui with Tailwind v4 tokens; follows the OS light/dark setting; system font (SF Pro on macOS).
-- The command bar uses native vibrancy on macOS and a solid surface elsewhere. Radius 12 px, generous spacing, one accent color for listening and highlight.
+- The command bar uses native macOS vibrancy. Radius 12 px, generous spacing, one accent color for listening and highlight.
 - Highlight colors meet 3:1 contrast against both themes. The current word is never conveyed by color alone (it's also underlined).
 - Reader options (by voice or `settings.toml`): font size, line spacing, a dyslexia-friendly font (e.g. OpenDyslexic or Atkinson Hyperlegible), high contrast.
 - Motion is minimal and disabled under reduced motion.

@@ -53,7 +53,7 @@ Status: Draft v0.1 · 2026-11-21 · Research snapshot; claims cite Speechify's h
 3. **No billing disputes**: BYOK, no subscription, a local ledger in dollars, budgets you set.
 4. **Paywalled and logged-in pages** read through your own session in the in-app browser (Speechify's URL import cannot).
 5. **Pinned voices** can't drift into another language after a vendor update.
-6. **Multimodal sources**: images now, video and audio files next. Claude turns them into a script worth listening to.
+6. **Multimodal sources**: images now, audio files next. Claude turns them into a script worth listening to.
 7. **Local voices** at $0, offline, with exact word timing.
 8. **An API**: anything the app does is scriptable.
 
