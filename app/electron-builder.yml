@@ -2,8 +2,9 @@
 # `pnpm engine:bundle` (engine-runtime/, see scripts/bundle-engine.sh) first.
 #
 # Signing: ad-hoc ("-"); no Developer ID, no notarization yet (10 § R17). A copy downloaded from the internet
-# is blocked by Gatekeeper until the user allows it (right-click → Open, or System Settings → Privacy &
-# Security → Open Anyway). Locally built copies are not quarantined and open normally.
+# is quarantined and blocked by Gatekeeper until the user allows it: System Settings → Privacy & Security →
+# Open Anyway (macOS 15+; right-click → Open also works on 14). Locally built or copied DMGs are not
+# quarantined and open normally. Ad-hoc signatures change every build, so macOS asks for the microphone again.
 appId: org.openspeech.app # CFBundleIdentifier: macOS keys the microphone permission (TCC) on it
 productName: Open Speech
 
