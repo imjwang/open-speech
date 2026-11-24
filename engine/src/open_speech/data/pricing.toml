@@ -10,8 +10,15 @@
 #   per_audio_minute                       × audio minutes (STT)
 #   per_mchars                             × characters
 #   per_image                              × images (only for providers that bill images separately)
+#   free_chars_per_month                   characters each billing month that cost nothing; the ledger prices only
+#                                          the characters beyond it (cache hits don't count), FreeTierGuard
+#                                          stops there unless the user chose to keep paying (usage/free_tier.py)
+#   free_period_tz                         the time zone of that billing month (default America/Los_Angeles)
+#   [<model>.long_context]                 a second rate card for long prompts: when a call's prompt (input +
+#                                          cache-read + cache-write tokens) is over `above_tokens`, its keys
+#                                          replace the ones above for that whole call
 
-version = "2026-11-21"
+version = "2026-11-22"
 currency = "USD"
 chars_per_token = 4
 
@@ -31,10 +38,18 @@ cache_read_per_mtok = "0.20"
 cache_write_per_mtok = "5.00"
 
 [anthropic."claude-haiku-5-5"]
+# Prompts up to 100K tokens; cache reads 0.1x input, 5-minute cache writes 1.25x.
 input_per_mtok = "0.10"
 output_per_mtok = "0.50"
 cache_read_per_mtok = "0.01"
 cache_write_per_mtok = "0.125"
+
+[anthropic."claude-haiku-5-5".long_context]
+above_tokens = 100_000
+input_per_mtok = "0.50"
+output_per_mtok = "2.50"
+cache_read_per_mtok = "0.05"
+cache_write_per_mtok = "0.625"
 
 # ---------------------------------------------------------------------------------------- OpenAI
 
@@ -81,6 +96,16 @@ per_audio_minute = "0.002"        # (verify)
 
 [gemini."gemini-3.8-live"]
 per_audio_minute = "0.002"        # (verify)
+
+# ---------------------------------------------------------------------------------------- Google
+
+[google."chirp3-hd"]
+# Cloud Text-to-Speech, Chirp 3 HD voices (verify): the first 1,000,000 characters each month are free, then
+# $30 per million characters (spaces count). The allowance belongs to the Google billing account, so other use of
+# the same account isn't visible here: "remaining" is an estimate and FreeTierGuard keeps a 2 % reserve.
+per_mchars = "30.00"
+free_chars_per_month = 1_000_000
+free_period_tz = "America/Los_Angeles"   # (verify) the billing month is assumed to follow Pacific time
 
 # ----------------------------------------------------------------------------- fixture (test-only)
 # Deterministic test providers bill like their real counterparts so the ledger, budget and estimates

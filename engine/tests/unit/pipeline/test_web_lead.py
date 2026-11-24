@@ -59,9 +59,14 @@ def _headless() -> Document:
 async def _script(doc: Document, tmp_path: Path, **presets: bool) -> SpeechScript:
     store = RuleStore(Paths(tmp_path).ensure())
     store.ensure_defaults()
-    for name, enabled in presets.items():
-        store.set_preset(name, enabled)
-    ctx = PlanContext(document=doc, rules=store.rules_for(doc), lexicon=store.lexicon(), speech_md=store.speech_md())
+    if presets:
+        from open_speech.rules.prompt import prompt_from_presets
+
+        store.paths.speech_md.write_text(prompt_from_presets(presets), "utf-8")
+        store.reload()
+    ctx = PlanContext(
+        document=doc, rules=store.plan_rules(doc), lexicon=store.lexicon(), speech_md=store.plan_speech_md()
+    )
     return (await Planner(None).plan(ctx, None)).script
 
 
@@ -211,13 +216,13 @@ async def test_posted_page_speaks_the_lead_first(tmp_path: Path) -> None:
     script = await _script(_posted(), tmp_path)
     assert script.utterances[0].text.startswith("Augusta Ada King, Countess of Lovelace")
     spoken = _spoken(script)
-    # With the default presets the infobox is still read, after the first paragraph and before the second.
+    # With the default reading instructions the infobox is still read, after the first paragraph and before the second.
     assert spoken.index("Augusta Ada King") < spoken.index(INFOBOX_CAPTION) < spoken.index(SECOND)
     assert spoken.index("Augusta Ada King") < spoken.index("Byron King-Noel") < spoken.index(SECOND)
     assert "[edit]" not in spoken and "edit" not in {u.text.strip(" .").lower() for u in script.utterances}
 
 
-async def test_tables_and_captions_presets_remove_the_whole_infobox(tmp_path: Path) -> None:
+async def test_skipping_tables_and_captions_removes_the_whole_infobox(tmp_path: Path) -> None:
     doc = _posted()
     script = await _script(doc, tmp_path, tables=True, captions=True)
     spoken = _spoken(script)
@@ -226,8 +231,8 @@ async def test_tables_and_captions_presets_remove_the_whole_infobox(tmp_path: Pa
         assert text not in spoken
     assert spoken.index("Augusta Ada King") < spoken.index(SECOND)
     dropped = {h.block_id: h.rule_name for h in script.removed if h.action == "drop_block"}
-    assert {dropped[f"blk_{n}"] for n in range(1, 17)} == {"tables", "captions"}
-    assert dropped["blk_2"] == "captions" and dropped["blk_23"] == "captions"
+    assert {dropped[f"blk_{n}"] for n in range(1, 17)} == {"Don't read tables", "Don't read captions"}
+    assert dropped["blk_2"] == "Don't read captions" and dropped["blk_23"] == "Don't read captions"
 
     # Tables alone leaves the two captions, read after the lead.
     tables_only = _spoken(await _script(doc, tmp_path / "tables-only", tables=True))

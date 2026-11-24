@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any, Literal
 
+from open_speech.config import DEFAULT_LLM
 from open_speech.document.model import Block
 from open_speech.plan.script import SpanOp
 from open_speech.providers.base import (
@@ -43,7 +44,7 @@ class FakeLlm:
         annotate: AnnotateFn | None = None,
         transform: TransformFn | None = None,
         compile_draft: CompiledRuleDraft | dict[str, Any] | None = None,
-        model: str = "claude-sonnet-5-5",
+        model: str = DEFAULT_LLM,
     ) -> None:
         self._annotate = annotate or (lambda _b, _r, _s: [])
         self._transform = transform or (lambda blocks, _i, _s: TransformOutput(utterances=[], anchor_block_ids=[]))
@@ -87,4 +88,4 @@ class FakeVision:
         mode: Literal["auto", "transcribe", "describe"] = "auto",
     ) -> LlmCall:
         self.seen.append((image, media_type, mode))
-        return LlmCall(output=self.blocks, units=Units(in_tok=1200, out_tok=60, images=1), model="claude-sonnet-5-5")
+        return LlmCall(output=self.blocks, units=Units(in_tok=1200, out_tok=60, images=1), model=DEFAULT_LLM)

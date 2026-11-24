@@ -10,6 +10,6 @@ H What changes
 ¶ The budget takes effect in January.
 
 --- removed (3)
-citations skip blk_1: [3]
-citations skip blk_2: (Diaz, 2021)
-urls skip blk_5: https://example-news.com/budget-table
+Don't read citations skip blk_1: [3]
+Don't read citations skip blk_2: (Diaz, 2021)
+Don't read URLs skip blk_5: https://example-news.com/budget-table

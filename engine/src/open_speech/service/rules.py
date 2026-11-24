@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from open_speech.api import schemas as s
 from open_speech.errors import EngineError, NotFound
-from open_speech.i18n import has, t
+from open_speech.i18n import t
 
 if TYPE_CHECKING:
     from open_speech.document.model import Document
@@ -40,23 +40,8 @@ class RuleService:
         rules = self.e.rule_store.rules_for(doc) if doc is not None else self.e.rule_store.all()
         return s.RuleList(items=[r.to_out() for r in rules], conflicts=self.e.rule_store.conflicts(rules))
 
-    def presets(self) -> s.PresetsState:
-        from open_speech.rules.presets import preset_out
-
-        out = [preset_out(r) for r in self.e.rule_store.presets()]
-        overrides = [s.ModeOverride(scope=sc, mode=m) for sc, m in self.e.rule_store.mode_overrides()]  # type: ignore[arg-type]
-        return s.PresetsState(mode=self.e.settings.get().defaults.mode, overrides=overrides, presets=out)
-
-    @staticmethod
-    def preset_noun(title: str) -> str:
-        return _noun(title)
-
     @staticmethod
     def _label(rule: Rule) -> str:
-        if rule.preset:
-            from open_speech.rules.presets import preset_out
-
-            return t("action.skip", what=_noun(preset_out(rule).name))
         return rule.description or rule.name
 
     @staticmethod
@@ -80,7 +65,7 @@ class RuleService:
     def _rule_file(self, rule: Rule) -> s.RuleFile:
         return s.RuleFile(
             id=rule.id,
-            kind="preset" if rule.preset else "rule",
+            kind="rule",
             name=rule.name,
             path=str(rule.path or self.e.paths.rules / f"{rule.name}.md"),
             description=rule.description,
@@ -101,13 +86,11 @@ class RuleService:
         return None
 
     def files(self) -> s.RuleFileList:
-        """Every text file behind the rules: preferences first, pronunciations, the user's rules, presets."""
-        rules = self.e.rule_store.all()
-        own = sorted((r for r in rules if not r.preset), key=lambda r: r.name)
-        presets = sorted((r for r in rules if r.preset), key=lambda r: r.name)
+        """Every text file behind cleanup: the reading instructions first, pronunciations, then the rule files."""
+        own = sorted(self.e.rule_store.all(), key=lambda r: r.name)
         items = [self._special_file("preferences"), self._special_file("lexicon")]
         return s.RuleFileList(
-            items=[f for f in items if f is not None] + [self._rule_file(r) for r in (*own, *presets)],
+            items=[f for f in items if f is not None] + [self._rule_file(r) for r in own],
             errors=self.e.rule_store.errors(),
         )
 
@@ -209,7 +192,7 @@ class RuleService:
                 "instruction": body.strip(),
                 "tier": compiled.tier,
                 "compiled": compiled.compiled,
-                "description": existing.description if existing.preset else compiled.description,
+                "description": compiled.description,
             }
         )
 
@@ -244,14 +227,14 @@ class RuleService:
         diff = s.SpeechDiff(summary="")
         conflicts: list[str] = []
         if doc is not None:
-            current = self.e.rule_store.rules_for(doc)
+            current = self.e.rule_store.plan_rules(doc)
             llm = self.e.registry.llm() if rule.tier != "filter" and self.e.budget.allow_paid() else None
             diff, calls = await speech_diff(
                 doc,
                 current=current,
                 proposed=rule,
                 lexicon=self.e.rule_store.lexicon(),
-                speech_md=self.e.rule_store.speech_md(),
+                speech_md=self.e.rule_store.plan_speech_md(),
                 llm=llm,
             )
             for op, c in calls:
@@ -263,7 +246,6 @@ class RuleService:
         payload = {"rule": rule.model_dump(mode="json"), **(extra or {})}
         action_id = self.e.assistant.create_action(
             kind=kind,
-            # A built-in preset is named in the user's language; a rule the user wrote, in their own words.
             summary=f"{self._label(rule)} · {self.scope_text(rule.scope)}",
             spoken=summary,
             payload=payload,
@@ -324,26 +306,6 @@ class RuleService:
             raise NotFound("that rule") from e
         await self.rules_changed("rule deleted")
 
-    async def update_presets(self, u: s.PresetsUpdate) -> s.PresetsState:
-        for name, enabled in u.presets.items():
-            try:
-                self.e.rule_store.set_preset(name, enabled)
-            except KeyError as e:
-                raise NotFound(f"a preset called {name}") from e
-        if u.mode is not None:
-            if u.scope is None:
-                await self.e.settings.set_key("defaults.mode", u.mode)
-            else:
-                self.e.rule_store.set_mode_override(u.scope, u.mode)
-        await self.rules_changed("presets changed")
-        return self.presets()
-
-    async def set_preset(self, name: str, enabled: bool) -> None:
-        await self.update_presets(s.PresetsUpdate(presets={name: enabled}))
-
-    async def set_mode(self, mode: str, scope: s.RuleScope | None = None) -> None:
-        await self.update_presets(s.PresetsUpdate(mode=mode, scope=scope))  # type: ignore[arg-type]
-
     async def add_lexicon(self, entry: s.LexiconEntry) -> s.LexiconList:
         if not entry.term.strip() or not entry.spoken.strip():
             raise EngineError("invalid_request", t("error.pronunciation_incomplete"))
@@ -371,48 +333,6 @@ class RuleService:
             except EngineError as err:
                 log.warning("re-plan after %s failed: %s", reason, err.detail)
 
-    # ------------------------------------------------------------------ preset proposals (fast path)
-
-    def find_preset(self, name_or_id: str) -> Rule | None:
-        from open_speech.rules.presets import preset_spec
-
-        spec = preset_spec(name_or_id)
-        key = spec.name if spec else name_or_id
-        return next((r for r in self.e.rule_store.presets() if key in (r.name, r.id)), None)
-
-    async def propose_preset(self, preset_name: str, enabled: bool, *, turn_id: str | None = None) -> s.RuleProposal:
-        from open_speech.rules.presets import preset_out
-
-        target = self.find_preset(preset_name)
-        if target is None:
-            raise NotFound(f"a preset called {preset_name}")
-        title = preset_out(target).name
-        doc = self._doc(None)
-        proposed = target.model_copy(update={"enabled": enabled})
-        if enabled:
-            prop = await self._proposal_for(
-                proposed, doc, turn_id=turn_id, kind="set_preset", extra={"preset": target.name, "enabled": True}
-            )
-            if not prop.diff.summary:
-                prop.summary = t("ask.skip", what=_noun(title))
-        else:
-            action_id = self.e.assistant.create_action(
-                kind="set_preset",
-                summary=t("action.read_again", what=_noun(title)),
-                spoken=t("ask.read_again", what=_noun(title)),
-                payload={"preset": target.name, "enabled": False},
-                preview=None,
-                turn_id=turn_id,
-            )
-            prop = s.RuleProposal(
-                proposal_id=action_id,
-                rule=proposed.to_out(),
-                diff=s.SpeechDiff(),
-                summary=t("ask.read_again", what=_noun(title)),
-            )
-        return prop
-
-
 def _first_line(text: str) -> str:
     line = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
     return line if len(line) <= 120 else line[:117].rsplit(" ", 1)[0] + "…"
@@ -432,10 +352,3 @@ def _scope_summary(rule: Rule) -> str:
     what = (rule.description or rule.name).rstrip(".")
     return t("ask.save_rule", what=what, scope=describe_scope(rule.scope))
 
-
-def _noun(title: str) -> str:
-    """How a preset is said mid-sentence, in the user's language: "page numbers", but "URLs"."""
-    key = f"preset.{title.lower().replace(' ', '_')}"
-    if has(key):
-        return t(key)
-    return title if any(c.isupper() for c in title[1:]) else title.lower()

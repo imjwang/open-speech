@@ -1,9 +1,11 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { memo, useMemo, type CSSProperties, type ReactNode } from 'react'
 
 import type { Block } from '@shared/api/client'
 
+import { useRenderCount } from '@/debug'
 import { cn } from '@/lib/utils'
-import { segmentText, type BlockMarks, type Segment } from '../highlight'
+import { EMPTY_MARKS, involvesBlock, liveMarks, segmentText, type BlockMarks, type Segment } from '../highlight'
+import { useReaderStore } from '../store'
 
 const MUTED_TYPES = new Set(['header', 'footer', 'page_number', 'footnote', 'toc', 'reference_entry'])
 
@@ -42,17 +44,23 @@ function SegmentSpan({ seg, firstSentence, onStart }: { seg: Segment; firstSente
   )
 }
 
-export function TextBlock({
+/**
+ * One block of text. It follows the playing word itself: only the block the word (or its sentence) is in
+ * re-renders as reading moves, plus the one it just left — never the whole document.
+ */
+export const TextBlock = memo(function TextBlock({
   block,
-  marks,
-  outlined,
+  base,
   onStart,
 }: {
   block: Block
-  marks: BlockMarks
-  outlined: boolean
+  /** Static marks: rule removals, replacements, utterance ranges (recomputed only with the script). */
+  base: BlockMarks
   onStart(utteranceId: string): void
 }) {
+  useRenderCount('TextBlock')
+  const word = useReaderStore((s) => (involvesBlock(s.word, block.id) ? s.word : null))
+  const { marks, outlined } = useMemo(() => liveMarks(block.id, block.text, base, word), [block, base, word])
   const segments = segmentText(block.text, marks)
   const firstSentence = segments.findIndex((s) => s.sentence || s.word)
   const children: ReactNode = segments.map((seg, i) => (
@@ -103,20 +111,19 @@ export function TextBlock({
     default:
       return <p {...common}>{children}</p>
   }
-}
+})
 
 /** Blocks as semantic text in reading order (DOM order = reading order, 09 § Accessibility). */
 export function TextView({
   blocks,
-  marksFor,
-  outlined,
+  marks,
   onStart,
   style,
   className,
 }: {
   blocks: readonly Block[]
-  marksFor(blockId: string): BlockMarks
-  outlined: ReadonlySet<string>
+  /** Static marks per block id (see `TextBlock`); the live highlight is each block's own. */
+  marks: ReadonlyMap<string, BlockMarks>
   onStart(utteranceId: string): void
   style?: CSSProperties
   className?: string
@@ -131,13 +138,13 @@ export function TextView({
       out.push(
         <ul key={`list-${block.id}`} className="my-3 list-disc space-y-1 pl-6">
           {items.map((b) => (
-            <TextBlock key={b.id} block={b} marks={marksFor(b.id)} outlined={outlined.has(b.id)} onStart={onStart} />
+            <TextBlock key={b.id} block={b} base={marks.get(b.id) ?? EMPTY_MARKS} onStart={onStart} />
           ))}
         </ul>,
       )
       continue
     }
-    out.push(<TextBlock key={block.id} block={block} marks={marksFor(block.id)} outlined={outlined.has(block.id)} onStart={onStart} />)
+    out.push(<TextBlock key={block.id} block={block} base={marks.get(block.id) ?? EMPTY_MARKS} onStart={onStart} />)
     i++
   }
   return (

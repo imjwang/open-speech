@@ -38,6 +38,31 @@ inherit = "gemini-3.8-flash-tts"
 name = "Gemini Flash Lite TTS"
 languages = 101                 # count only; the API auto-detects the language
 
+# Google Cloud Text-to-Speech, Chirp 3 HD (providers/google_tts.py; plain HTTPS, no Google SDK). The default
+# voice for reading and replies ("auto" = `default_star` in the language's first locale) while the month's free
+# characters last (pricing.toml). Key: GOOGLE_TTS_API_KEY, else GEMINI_API_KEY (Cloud Text-to-Speech must be an
+# enabled, allowed API for it). Voice ids: "google:chirp3-hd:<locale>-Chirp3-HD-<star>", e.g.
+# google:chirp3-hd:en-US-Chirp3-HD-Zephyr. At startup the engine lists the live voices (free) and offers only
+# catalog voices the API also lists.
+[tts.google."chirp3-hd"]
+name = "Chirp 3 HD"
+api = "texttospeech-v1"          # POST /v1/text:synthesize, header X-Goog-Api-Key; GET /v1/voices for the check
+voice_template = "{locale}-Chirp3-HD-{star}"
+locales = ["en-US", "en-GB", "es-US", "es-ES"]   # the first locale of a language is the one "auto" uses
+stars = [
+  "Achernar", "Achird", "Algenib", "Algieba", "Alnilam", "Aoede", "Autonoe", "Callirrhoe", "Charon",
+  "Despina", "Enceladus", "Erinome", "Fenrir", "Gacrux", "Iapetus", "Kore", "Laomedeia", "Leda", "Orus",
+  "Puck", "Pulcherrima", "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar", "Sulafat", "Umbriel",
+  "Vindemiatrix", "Zephyr", "Zubenelgenubi",
+]
+default_star = "Zephyr"          # same name as the owner's earlier Gemini voice; also its Spanish voice (es-US)
+format = "l16"                   # LINEAR16 WAV, decoded to PCM; no speakingRate (speed stays in the transport)
+sample_rate = 24000
+max_input_chars = 5000           # the API's limit is 5,000 bytes of UTF-8 per request; longer text is split
+stream = false
+timestamps = false               # word timing is estimated (playback/timing.py, pause-anchored)
+voices_endpoint = true
+
 [tts.kokoro."kokoro-82m-v1.0"]
 name = "Kokoro"
 local = true
@@ -63,8 +88,8 @@ url = "hf://onnx-community/Kokoro-82M-v1.0-ONNX-timestamped"
 revision = "dd4401a9add81ac692d20e240d22ec9dda82cc29"  # pinned; same commit the app bundles
 quant = "q8"
 size_mb = 92
-# sha256 pins for the model and tokenizer (recorded 2026-11-21 from revision "main"). Voice files are
-# trust-on-first-use: their hashes are recorded in the model's manifest.json (03 § Supply chain).
+# sha256 pins for every file at the pinned revision: the model and tokenizer (recorded 2026-11-21) and each voice
+# (Hugging Face's LFS hashes). app/scripts/bundle-engine.sh bundles exactly these (03 § Supply chain).
 sha256 = ""
 model_file = "onnx/model_quantized.onnx"
 tokenizer_file = "tokenizer.json"
@@ -74,20 +99,82 @@ files = [
   { path = "tokenizer.json", sha256 = "77a02c8e164413299b4b4c403b14f8e0e1c1b727db4d46a09d6327b861060a34", size_mb = 0.1 },
 ]
 voice_size_mb = 0.5
+[tts.kokoro."kokoro-82m-v1.0".weights.voice_sha256]
+af_heart = "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b"
+af_alloy = "c4a6b876047fd7fb472edf4ebd63cfac7c3b958a7cae7c106e8f038ca6308c45"
+af_aoede = "4a004c33430762e2461eedb2013fad808ef4ab3121f5300f554476caf58d8361"
+af_bella = "f69d836209b78eb8c66e75e3cda491e26ea838a3674257e9d4e5703cbaf55c8b"
+af_jessica = "a240a5e3c15b43563d6e923bdca8ef5613a23471d9b77653694012435df23bd8"
+af_kore = "9be5221b6a941c04b561959b8ff0b06e809444dcc4ab7e75a7b23606f691819e"
+af_nicole = "cd2191ab31b914ed7b318416b0e4440fdf392ddad9106a060819aa600a64f59a"
+af_nova = "18778272caa0d0eebaea251c35fd635f038434f9eee5e691d02a174bd328414f"
+af_river = "00a2bcf82b1d86e8f19902ede58c65ccf6c0e43b44b7d74fad54e5d8933c9c30"
+af_sarah = "4409fbc125afabacc615d94db5398d847006a737b0247d6892b7a9a0007a2f0a"
+af_sky = "4435255c9744f3f31659e0d714ab7689bf65d9e77ec1cce060f083912614f0b9"
+am_adam = "162b035ed91cfc48b6046982184c645f72edcdd1b82843347f605d7bf7b15716"
+am_echo = "3968b92c3c4cd1c4416dbded36c13eaa388a90d5788d02a13e4d781f5f8cf3c3"
+am_eric = "e8b5be17edd1e3636901ce7598baafe2dc8dd8ff707a0c23bf9e461add7e2832"
+am_fenrir = "c27989f741f7ee34d273a39d8a595cc0837d35f5ced9a29b7cc162614616df43"
+am_liam = "52403be32fd047c6a44517cb0bcd6b134f2a18baa73e70ef41651e0eab921ade"
+am_michael = "1d1f21dd8da39c30705cd4c75d039d265e9bc4a2a93ed09bc9e1b1225eb95ba1"
+am_onyx = "da5d135b424164916d75a68ffb4c2abce3d7d5ccc82dd1ee6cf447ce286145e6"
+am_puck = "fcf73c989033e9233e0b98713eca600c8c74dcc1614b37009d5450ff4a2274a0"
+bf_alice = "08afa6ba24da61ea5e8efa139e5aadc938d83f0a6da5a900adaf763ac1da5573"
+bf_emma = "669fe0647f9dd04fcab92f1439a40eeb4c8b4ab1f82e4996fe3d918ce4a63b73"
+bf_isabella = "3754352c4aaa46d17f27654ab7518d65b62ad6163a0f55a5f4330c2da2c4e94f"
+bf_lily = "5e0ee32ebe64a467124976b14e69590746f1c4ce41a12b587a50c862edfea335"
+bm_daniel = "6b3194bbceffb746733cbc22c8f593dd44e401a71d53895a2dca891bc595a1e8"
+bm_fable = "f889083196807b4adb15e9204252165f503b8d33d3982e681c52443c49d798f1"
+bm_george = "c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc"
+bm_lewis = "b8f671cef828c30e66fdf0b0756a76bba58f6bb3398cbbf27058642acbcedb97"
+ef_dora = "f66ec66bd295acb18372e37008533a9a3228483ccd294e7538d5d9294ac9a532"
+em_alex = "27809e9eafdcbcfff90a3016c697568676531de2a2c39cee29c96c7bd6b83e95"
+em_santa = "ad43b774e1ca24d05c6161297d8aeb770ac3d29bb95daf516727af5f7d543683"
 
-[tts.qwen3."qwen3-tts-12hz-0.6b"]            # P2, preset voices only (no cloning)
+# Qwen3-TTS (Apache-2.0), local on Apple Silicon through MLX (providers/qwen3.py; generation runs in its own process,
+# providers/qwen3_worker.py). One voice list, whatever weights read it: the size and precision come from the settings
+# `qwen3.size` / `qwen3.precision` ("auto" = the measured defaults below) and resolve to one of the
+# `[local_weights.qwen3."…"]` variants generated at the end of this file. Voice ids: "qwen3:qwen3-tts:<Speaker>" for
+# the preset speakers (CustomVoice weights), "qwen3:clone:<slug>" for cloned voices (Base weights). Weights are
+# downloaded on demand, never bundled.
+[tts.qwen3."qwen3-tts"]
 name = "Qwen3-TTS"
 local = true
-status = "later"                 # listed by the model manager, never offered as a voice yet
-runtimes = ["mlx-audio"]         # Apple Silicon
-size_gb = 1.3                    # GGUF Q8; ~2.5 GB bf16
-ram_gb = 3
-speed = "~1.3–1.8x real time on M-series"
 license = "Apache-2.0"
-languages = ["zh", "en", "ja", "ko", "de", "fr", "ru", "pt", "es", "it"]
 requires = "apple-silicon"
-timestamps = false
-voices = []
+runtimes = ["mlx-audio"]
+timestamps = false               # word timing is estimated from the audio (playback/timing.py, pause-anchored)
+sample_rate = 24000
+max_input_chars = 2000
+# The preset speakers (CustomVoice), in the order the voice list shows them; each speaks every language below, its
+# own most naturally. `speakers.<name>` gives its native language and the model card's description.
+voices = ["Ryan", "Aiden", "Serena", "Vivian", "Uncle_Fu", "Dylan", "Eric", "Ono_Anna", "Sohee"]
+languages = ["en", "es", "zh", "ja", "ko", "de", "fr", "ru", "pt", "it"]
+# Defaults by measurement on an Apple M4 MacBook Air, 16 GB (docs/08 § Local models): the size and precision that
+# sound best while still generating at least 1.3x faster than real time over 10 minutes of continuous reading.
+default_size = "0.6b"
+default_precision = "8bit"
+small_memory_gb = 8              # at or below this much memory, "auto" means the 0.6B size
+small_memory_size = "0.6b"
+stream_interval_s = 0.5          # audio per streamed chunk: first audio after ~0.3 s on 0.6B, ~0.4 s on 1.7B
+# Sampling (the model's generation_config.json defaults). Changing any of these changes the audio: bump
+# params_version so cached Qwen audio is made again.
+params_version = 1
+temperature = 0.9
+top_k = 50
+top_p = 1.0
+repetition_penalty = 1.05
+
+[tts.qwen3."qwen3-tts".speakers]
+Ryan = { language = "en", description = "Dynamic male voice with a strong sense of rhythm" }
+Aiden = { language = "en", description = "Sunny American male voice with a clear midrange" }
+Serena = { language = "zh", description = "Warm, gentle young female voice" }
+Vivian = { language = "zh", description = "Bright, slightly edgy young female voice" }
+Uncle_Fu = { language = "zh", description = "Seasoned male voice with a low, mellow timbre" }
+Dylan = { language = "zh", description = "Youthful Beijing male voice" }
+Eric = { language = "zh", description = "Lively Chengdu male voice (Sichuan accent)" }
+Ono_Anna = { language = "ja", description = "Playful Japanese female voice" }
+Sohee = { language = "ko", description = "Warm Korean female voice" }
 
 # Deterministic test voices (providers/fixture.py). Only surfaced when OPEN_SPEECH_FIXTURE_PROVIDERS=1;
 # never in packaged builds. "tone-v1" stands in for the free local voice, "tone-paid-v1" simulates a
@@ -184,14 +271,753 @@ files = [
 # ------------------------------------------------------------------------------------------- LLM
 
 [llm.anthropic]
-default = "claude-sonnet-5-5"
-options = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-2"]
+default = "claude-haiku-5-5"
+options = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-2"]
 annotate_max_tokens = 4096
 transform_max_tokens = 16000
 compile_max_tokens = 2048
 vision_max_tokens = 4096
+thinking_reserve_tokens = 4096   # added to a call's max_tokens whenever the model may think (thinking counts)
+
+# Per-model request traits (05 § Tier 2, 07 § Agent core). A model without an entry gets the safe defaults:
+# the thinking parameter left out (each model's own default, adaptive on every current model) and no
+# server-side refusal fallback.
+#   thinking_off       how this model turns thinking off for the tool-less calls (annotate, compile, vision):
+#                      "disabled" | "between_tools" | "omit" (can't be turned off: leave the parameter out)
+#   server_fallback    send `fallbacks = "default"` with the server-side-fallback beta on agent turns
+#   annotate_thinking  "off" (the thinking_off form) or "adaptive", chosen by the AI Enhanced accuracy gate
+#                      (tests/live/test_annotate_eval.py)
+[llm.anthropic.models."claude-haiku-5-5"]
+thinking_off = "disabled"        # accepted at effort low/medium/high; `between_tools` is a 400 here
+server_fallback = false          # Haiku 5.5 has no server-side refusal fallback
+# Accuracy gate, 2026-11-22 (3 runs, 47 must-keep / 9 must-drop labels): with thinking disabled Haiku dropped
+# kept text 5 times; adaptive at low effort matched Sonnet (0 violations, 100 % recall) at a tenth of the cost.
+annotate_thinking = "adaptive"
+
+[llm.anthropic.models."claude-sonnet-5-5"]
+thinking_off = "between_tools"   # `disabled` is a 400 on Sonnet 5.5
+server_fallback = true
+annotate_thinking = "off"
+
+[llm.anthropic.models."claude-opus-5-5"]
+thinking_off = "omit"            # `disabled` is a 400 at every effort: low effort is the only lever
+server_fallback = true
+annotate_thinking = "adaptive"
+
+[llm.anthropic.models."claude-fable-5-2"]
+thinking_off = "omit"            # thinking is always on
+server_fallback = true
+annotate_thinking = "adaptive"
 
 [llm.fixture]
 test_only = true
 default = "fixture-llm"
 options = ["fixture-llm"]
+
+# ------------------------------------------------------------------------------------------- local weights
+
+# Downloadable weight variants behind a user-facing model (local/catalog.py `WeightsVariant`, installed by the model
+# manager into models/<provider>/<id>/). ram_gb = memory while generating (weights + the codec decoder's working set).
+# BEGIN GENERATED qwen3 (engine/tools/pin_hf_weights.py qwen3 --write, 2026-11-22).
+# Do not edit by hand: re-run the tool. Pins: commit + sha256 of every file (LFS hashes for weights).
+
+[local_weights.qwen3."qwen3-tts-0.6b-base-bf16"]
+family = "base"
+size = "0.6b"
+precision = "bf16"
+ram_gb = 3.6
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-0.6b-base-bf16".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-0.6B-Base-bf16"
+revision = "1eccf1cb2519b5a4e8a95b5f0544f3303568164f"
+quant = "bf16"
+size_mb = 2400.3
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "ee1871ab778c89645f8806df736cb35958619c40276598a41aeaa014615656a4", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "d7c7ed3e3464e3e59de0f955b3755891fa8319ff061c3f0307fe2e1343bc122d", size_mb = 1744.6 },
+  { path = "model.safetensors.index.json", sha256 = "e02433c97b2894586e8842af2b40381c5bb644bc1c6bf71a6a52a727efe92313", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-0.6b-base-8bit"]
+family = "base"
+size = "0.6b"
+precision = "8bit"
+ram_gb = 3.0
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-0.6b-base-8bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit"
+revision = "50f45ef0047cde7e84c2ef04326acb8ada2436a7"
+quant = "8bit"
+size_mb = 1899.7
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "b404fb6f99dac6f7a81f3a03af5675b131ecf9936ac75a7c9d75e54044600044", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "9488e7005cc0cf44f8804eb543668d0763bb1c649ce6f1eddc663519524b3182", size_mb = 1244.0 },
+  { path = "model.safetensors.index.json", sha256 = "7829f1cc24f5cbd7d7a3ba888bb08c7cf52d82ba79a4f0f3756d41f8bf5e52b4", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-0.6b-base-6bit"]
+family = "base"
+size = "0.6b"
+precision = "6bit"
+ram_gb = 2.9
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-0.6b-base-6bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-0.6B-Base-6bit"
+revision = "4e44ed4bcee28a0f89a493e07bde16e6dccd43eb"
+quant = "6bit"
+size_mb = 1766.2
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "ebd89bea756c7f75734a759ee2cb31ee06ae8bd22eca7694bac156280a34e58b", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "e88c0b15e76e3848ca040121880a974f417317bb2a021ab9ce5c656770e26693", size_mb = 1110.5 },
+  { path = "model.safetensors.index.json", sha256 = "7defea2f7ccfaaf74e22adaf3f1e44f4a37785d1dc5651ccb0f3122aebb6734f", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-0.6b-base-5bit"]
+family = "base"
+size = "0.6b"
+precision = "5bit"
+ram_gb = 2.8
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-0.6b-base-5bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-0.6B-Base-5bit"
+revision = "440299a22d5150c6027574742ad413c1182a7f70"
+quant = "5bit"
+size_mb = 1699.5
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "889698bc806a19226fab4907ee11189059fed415cb7cff2393493907347404c4", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "1918f384ff3b79c13c8514af3f93e708e10bb809d97256c22a1db8cf09ce851e", size_mb = 1043.8 },
+  { path = "model.safetensors.index.json", sha256 = "fc99226d4bcc373e5ca28861597caf79fe2aa3ae51499ef53e61c49d29189674", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-0.6b-base-4bit"]
+family = "base"
+size = "0.6b"
+precision = "4bit"
+ram_gb = 2.8
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-0.6b-base-4bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit"
+revision = "0d6bb6fe33f92d47a507e23b9148940e8366ab5b"
+quant = "4bit"
+size_mb = 1632.7
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "ba59b8d2d47746e844f6a96e2232a969d8d89dcc34450fbad94d912bb9ee2e27", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "07dcb37b323614af64624af687876edd5c9a8b442da2a7b549d62f9ba2770ec1", size_mb = 977.0 },
+  { path = "model.safetensors.index.json", sha256 = "86f65f69204f3fb9dc5ec22ed94da4865594c901b45d2508c60a5931d12787d4", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-0.6b-customvoice-bf16"]
+family = "customvoice"
+size = "0.6b"
+precision = "bf16"
+ram_gb = 3.5
+speakers = ["serena", "vivian", "uncle_fu", "ryan", "aiden", "ono_anna", "sohee", "eric", "dylan"]
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-0.6b-customvoice-bf16".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16"
+revision = "6415d95f88be018ff9e46813119dc3bc12261328"
+quant = "bf16"
+size_mb = 2383.4
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "69c1b78421a5e408b5e91a74a9995213546613ffe2a1d87a00c7743900ead6ee", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "e6eb20e645c5a28ee66bf8434edb5b67a5f151530dab63afe22787d71bcf5382", size_mb = 1727.7 },
+  { path = "model.safetensors.index.json", sha256 = "1b1e10fb201a65a1b24991cf8f6800d785441ad9ca0ad83828d6bf00f6d5e8ec", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-0.6b-customvoice-8bit"]
+family = "customvoice"
+size = "0.6b"
+precision = "8bit"
+ram_gb = 3.1
+speakers = ["serena", "vivian", "uncle_fu", "ryan", "aiden", "ono_anna", "sohee", "eric", "dylan"]
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-0.6b-customvoice-8bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit"
+revision = "049ef77fe8816b536193c0c25f9a214d17921282"
+quant = "8bit"
+size_mb = 1882.8
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "2eea3665564268139c3beb8d497fd3c2e4524e9eed5452836cdf1de96ed3cdbd", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "3bcb2c4a127e6243e81a30b7126c7865f686d3559de4f938e5d3b150c6a9560d", size_mb = 1227.1 },
+  { path = "model.safetensors.index.json", sha256 = "0c92041960fa189cf35ae538c8d9ca07c468edddd0c9bb52274c5d4d287a860b", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-0.6b-customvoice-6bit"]
+family = "customvoice"
+size = "0.6b"
+precision = "6bit"
+ram_gb = 2.9
+speakers = ["serena", "vivian", "uncle_fu", "ryan", "aiden", "ono_anna", "sohee", "eric", "dylan"]
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-0.6b-customvoice-6bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-6bit"
+revision = "7dc92af14613355896fcab13b268c19ede233139"
+quant = "6bit"
+size_mb = 1749.3
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "7dade4f4e681c4fd8e1c3b1f4720f432bfb8417258617599b9003d06caaa1ce7", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "77f20155cf00cc7cbafeb6f51863e27bda9051603557d815f0f24e95a5a79513", size_mb = 1093.6 },
+  { path = "model.safetensors.index.json", sha256 = "7db080082c3f2808807cfbbfc0da7adeda0145e7a797dc57efc7b740179ced53", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-0.6b-customvoice-5bit"]
+family = "customvoice"
+size = "0.6b"
+precision = "5bit"
+ram_gb = 2.8
+speakers = ["serena", "vivian", "uncle_fu", "ryan", "aiden", "ono_anna", "sohee", "eric", "dylan"]
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-0.6b-customvoice-5bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-5bit"
+revision = "ea57eb1094e142071162f79568581c9315dfd2e7"
+quant = "5bit"
+size_mb = 1682.6
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "d59252e3359ee07b54d31b2c3c244ea5b59a374b34c6953a00a181a072210b61", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "689f91e4a4a5825945820c30f039d68227890649103267904fe6518bc597c5f3", size_mb = 1026.9 },
+  { path = "model.safetensors.index.json", sha256 = "38e4b502d4894b424ab77dcc987c1290a63c7f42a744a0e13cc2076e032c0aa8", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-0.6b-customvoice-4bit"]
+family = "customvoice"
+size = "0.6b"
+precision = "4bit"
+ram_gb = 2.7
+speakers = ["serena", "vivian", "uncle_fu", "ryan", "aiden", "ono_anna", "sohee", "eric", "dylan"]
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-0.6b-customvoice-4bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-4bit"
+revision = "08c72cad5e2fd0f41730c8bd1f28149585e46361"
+quant = "4bit"
+size_mb = 1615.8
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "612cb591b44547319e5c68a78c0e93e4defb57882a4aa9ef5f06cc2f071ed036", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "4ab02a20be381700f6e73dbb5efdc424cadf9f1d0652cbffd662872ea41e296a", size_mb = 960.1 },
+  { path = "model.safetensors.index.json", sha256 = "f3b84ec5c1b38220008c3a300b8a73502f7d4ec67b232e0193d9376909fc4e3e", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-base-bf16"]
+family = "base"
+size = "1.7b"
+precision = "bf16"
+ram_gb = 5.6
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-base-bf16".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
+revision = "a6eb4f68e4b056f1215157bb696209bc82a6db48"
+quant = "bf16"
+size_mb = 4334.4
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "39ffdadc03c1a7c7f8116ee8830d6a577ac87039edcbd88759b4fcc4db272070", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "81fb76175ff74e69be25fef2cc3e54f016df3034f1514c8e1c89da06a3510cff", size_mb = 3678.7 },
+  { path = "model.safetensors.index.json", sha256 = "f5bb337c2f77c5046024c7342ed8d6ade28fdfbab862baf9f13269743b920005", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-base-8bit"]
+family = "base"
+size = "1.7b"
+precision = "8bit"
+ram_gb = 4.2
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-base-8bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit"
+revision = "e7dd0585652209fa0d7783659aad4e8a324de11c"
+quant = "8bit"
+size_mb = 2961.0
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "b14fba6bfd391968876248b843b095696b0188187a3d774a3bddc32544d15627", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "b965c581ccf6aa852a4124feeb7a8a111542ee7b213139368b4cc7ba7fd4728b", size_mb = 2305.3 },
+  { path = "model.safetensors.index.json", sha256 = "9592a7c0ac3261a6211978416ef1796d3841225ac0ff0f9d6bfb5d1a6b49e5e9", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-base-6bit"]
+family = "base"
+size = "1.7b"
+precision = "6bit"
+ram_gb = 3.8
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-base-6bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-Base-6bit"
+revision = "34ff5318365b59cba9c03ff729f2eee0814caf72"
+quant = "6bit"
+size_mb = 2594.8
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "8aca8f809e990d7366e15a34e6a9086818782054731e958f7d8eed530475acba", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "b043693cb63f38f4e0ae5fe39a5cfdb466ef199dc5a767991a4a46235ac27e67", size_mb = 1939.1 },
+  { path = "model.safetensors.index.json", sha256 = "64ee2320faa62f4faa10f31b9e915f9949a41e4bdc76b660a18d1b7ec854232d", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-base-5bit"]
+family = "base"
+size = "1.7b"
+precision = "5bit"
+ram_gb = 3.6
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-base-5bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-Base-5bit"
+revision = "18103d58b04c292bfd53c4d65013b38487efa411"
+quant = "5bit"
+size_mb = 2411.7
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "e5f743a6e0e93032f43b5cb82a782bbc5a35622dc62332668f0de917d0e30c3b", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "99aa23e3324e4b948a038e8f221c9d5d8c2877feed356392a0b00df00c0d4a05", size_mb = 1756.0 },
+  { path = "model.safetensors.index.json", sha256 = "1d33a68fbbc6278f443d031a9e69f87c48a5620a63b5637adad3a7df5dc4d959", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-base-4bit"]
+family = "base"
+size = "1.7b"
+precision = "4bit"
+ram_gb = 3.4
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-base-4bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-Base-4bit"
+revision = "37e955a1deb861c088ae5f3a67043185f3d1a60c"
+quant = "4bit"
+size_mb = 2228.5
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "36477d07e2ac89f79c1410a9782ed69860fbfcc871edea1728624389072e25fd", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "ac973aa38ec79d4b4b52bf858948f0d47dd909aa4bcd383f5b900e277410fdb5", size_mb = 1572.8 },
+  { path = "model.safetensors.index.json", sha256 = "2b71cbd2c84cb59d0d71383cc55166ad7108180bfd7e47d2e3a6698f3721abfb", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-customvoice-bf16"]
+family = "customvoice"
+size = "1.7b"
+precision = "bf16"
+ram_gb = 5.6
+speakers = ["serena", "vivian", "uncle_fu", "ryan", "aiden", "ono_anna", "sohee", "eric", "dylan"]
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-customvoice-bf16".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16"
+revision = "52f4770fd9726457eae3d3b6aa92047a25a10776"
+quant = "bf16"
+size_mb = 4311.5
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "9c0f62abb48c432361fdcd54da1fd9fe00a993c0acccef5d45c2d3edd5932fb1", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "3a791fb8250fc32ab0259b679d834159d3c8516af62f033ff2b9f42913e3fab6", size_mb = 3655.8 },
+  { path = "model.safetensors.index.json", sha256 = "abf019e063dcc595d7aef7c9554d2806ffdc58746a7ac6238cb26177af8d431f", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-customvoice-8bit"]
+family = "customvoice"
+size = "1.7b"
+precision = "8bit"
+ram_gb = 4.2
+speakers = ["serena", "vivian", "uncle_fu", "ryan", "aiden", "ono_anna", "sohee", "eric", "dylan"]
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-customvoice-8bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit"
+revision = "41d3337e8b7f2843a75841595fc14e4b9a7a4b96"
+quant = "8bit"
+size_mb = 2938.1
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "43f29f9ab55cf387bd2ce1d07e9d95a5ca8974fa2fda4e2b45c13ae64aad3bfa", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "b696f4bf45f54497b6de758981e76f1410bd68af05a657477dee466b0202df1a", size_mb = 2282.4 },
+  { path = "model.safetensors.index.json", sha256 = "2551ed02dc288b90cd6b7ec98652433f08ef2ae98fb3eda5248a4b9e5b47d08b", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-customvoice-6bit"]
+family = "customvoice"
+size = "1.7b"
+precision = "6bit"
+ram_gb = 3.7
+speakers = ["serena", "vivian", "uncle_fu", "ryan", "aiden", "ono_anna", "sohee", "eric", "dylan"]
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-customvoice-6bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-6bit"
+revision = "1c6c0ff58c43afa8df571facde2efa077efd85e2"
+quant = "6bit"
+size_mb = 2571.9
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "25ec849dd2502e11f66accb903e9c069e49724925f4755c52deaa5134b44d5a9", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "097b66a8c63570b88abc2fb393d1dc2360394ca7741c818455ba9da257ac2f3b", size_mb = 1916.2 },
+  { path = "model.safetensors.index.json", sha256 = "4665ebf9c3566d4072268b265de621342ad3c1676cc344dfdb63f7a173bd0bd6", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-customvoice-5bit"]
+family = "customvoice"
+size = "1.7b"
+precision = "5bit"
+ram_gb = 3.6
+speakers = ["serena", "vivian", "uncle_fu", "ryan", "aiden", "ono_anna", "sohee", "eric", "dylan"]
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-customvoice-5bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-5bit"
+revision = "ed2cd4cf499c2d0de6f37554de62a207639e8f4d"
+quant = "5bit"
+size_mb = 2388.8
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "fe6f42625f29c1e42c1e23f5d276455f54a9cdd9e21183f4c07a74522080b2d1", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "2846fa6b8a3d7ad9c80ee1c714aa6f130032f06006930714f62ae708d8cff506", size_mb = 1733.1 },
+  { path = "model.safetensors.index.json", sha256 = "900ff238d50ff1fecfc7a9cfada19068aeb48dde854ac221f5907ca8b8e327fe", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-customvoice-4bit"]
+family = "customvoice"
+size = "1.7b"
+precision = "4bit"
+ram_gb = 3.4
+speakers = ["serena", "vivian", "uncle_fu", "ryan", "aiden", "ono_anna", "sohee", "eric", "dylan"]
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-customvoice-4bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-4bit"
+revision = "f35faf19b0cc2160865af64ecf0f22f83d335135"
+quant = "4bit"
+size_mb = 2205.6
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "5a1dd8d7c9f4d04d5bdac309e9e748f16a96b0724d9c4de4974982dd84078715", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "45a5b5ccd3cc473b9d3890ea922937036b56b948e8bd8c678e725329abdd1d00", size_mb = 1549.9 },
+  { path = "model.safetensors.index.json", sha256 = "8ea3f7115ca2b729e5af4e83b2580d1be97dd54d80e8ef7aa27257c04d84d325", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-voicedesign-bf16"]
+family = "voicedesign"
+size = "1.7b"
+precision = "bf16"
+ram_gb = 5.6
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-voicedesign-bf16".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
+revision = "7d3824abff87e49756bb0f83fb5411de75d160c4"
+quant = "bf16"
+size_mb = 4311.5
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "8a9be83c045ee9ab9d2e6609655f547b9291a070f5acae3428c3ff07a365de40", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "96ae28bec2205ec0b5e0c750bea2b8a5deac4f14d33a8a25a5f753299486b70e", size_mb = 3655.8 },
+  { path = "model.safetensors.index.json", sha256 = "abf019e063dcc595d7aef7c9554d2806ffdc58746a7ac6238cb26177af8d431f", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-voicedesign-8bit"]
+family = "voicedesign"
+size = "1.7b"
+precision = "8bit"
+ram_gb = 4.1
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-voicedesign-8bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit"
+revision = "f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee"
+quant = "8bit"
+size_mb = 2938.1
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "b91c47798e77e259e6b86987e48d7a5eca8e703205e00afb63fe08ec5251f983", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "1a84179d87c972353ccdd9b48f3c4422509b3d1b11030d32358312fb0f3800d7", size_mb = 2282.4 },
+  { path = "model.safetensors.index.json", sha256 = "2551ed02dc288b90cd6b7ec98652433f08ef2ae98fb3eda5248a4b9e5b47d08b", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-voicedesign-6bit"]
+family = "voicedesign"
+size = "1.7b"
+precision = "6bit"
+ram_gb = 3.7
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-voicedesign-6bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-6bit"
+revision = "ffc6545dc9cb086950aa46c6cd3db490e6ece3e1"
+quant = "6bit"
+size_mb = 2571.9
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "d4f2a4660fdc93e26dae802fadfaf7f5460304f9808715aa3fe2bb4823a6a7bf", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "fb3c35f8ca4165f8824ddfd3f4ba97266bd699b3fb003e3a39084f9d3664ce87", size_mb = 1916.2 },
+  { path = "model.safetensors.index.json", sha256 = "4665ebf9c3566d4072268b265de621342ad3c1676cc344dfdb63f7a173bd0bd6", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-voicedesign-5bit"]
+family = "voicedesign"
+size = "1.7b"
+precision = "5bit"
+ram_gb = 3.6
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-voicedesign-5bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-5bit"
+revision = "6e936cfb98d95b707bd1f85351874a377230fe83"
+quant = "5bit"
+size_mb = 2388.8
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "4b91a08c5da0a649ee3012d4ff8ce6bad68a37cd487947db6960fea0e68d0e4f", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "7d85a4ae18cb164f9f4c543c308b2cbf5aa5ab5d53463265224152b2634c3bb4", size_mb = 1733.1 },
+  { path = "model.safetensors.index.json", sha256 = "900ff238d50ff1fecfc7a9cfada19068aeb48dde854ac221f5907ca8b8e327fe", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+
+[local_weights.qwen3."qwen3-tts-1.7b-voicedesign-4bit"]
+family = "voicedesign"
+size = "1.7b"
+precision = "4bit"
+ram_gb = 3.4
+speakers = []
+languages = ["chinese", "english", "german", "italian", "portuguese", "spanish", "japanese", "korean", "french", "russian"]
+[local_weights.qwen3."qwen3-tts-1.7b-voicedesign-4bit".weights]
+url = "hf://mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-4bit"
+revision = "5c390979e4b93af5f2932f90742ca99c7dd04687"
+quant = "4bit"
+size_mb = 2205.6
+model_file = "model.safetensors"
+files = [
+  { path = "config.json", sha256 = "37e4e0d7b2b10b8f9946734ec808eab6045a435b5ec35219b5c07a153444675d", size_mb = 0.1 },
+  { path = "generation_config.json", sha256 = "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa", size_mb = 0.1 },
+  { path = "merges.txt", sha256 = "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3", size_mb = 1.6 },
+  { path = "model.safetensors", sha256 = "d8627de7ef411f6775182925059e140a9e1edb1fde8feeb540b4fba0edee1e58", size_mb = 1549.9 },
+  { path = "model.safetensors.index.json", sha256 = "8ea3f7115ca2b729e5af4e83b2580d1be97dd54d80e8ef7aa27257c04d84d325", size_mb = 0.1 },
+  { path = "preprocessor_config.json", sha256 = "efdde1022ea9d76928bf7a9cd53139138f5ba2e466e837f08f6105ab1af1c119", size_mb = 0.1 },
+  { path = "speech_tokenizer/config.json", sha256 = "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167", size_mb = 0.1 },
+  { path = "speech_tokenizer/configuration.json", sha256 = "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd", size_mb = 0.1 },
+  { path = "speech_tokenizer/model.safetensors", sha256 = "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258", size_mb = 650.7 },
+  { path = "speech_tokenizer/preprocessor_config.json", sha256 = "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb", size_mb = 0.1 },
+  { path = "tokenizer_config.json", sha256 = "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670", size_mb = 0.1 },
+  { path = "vocab.json", sha256 = "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", size_mb = 2.6 },
+]
+# END GENERATED qwen3

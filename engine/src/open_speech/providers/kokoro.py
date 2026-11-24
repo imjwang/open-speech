@@ -46,11 +46,33 @@ SessionFactory = Callable[[Path], Any]
 _ACCENTS = {"a": ("American English", "en-US"), "b": ("British English", "en-GB"), "e": ("Spanish", "es")}
 
 
-def _default_session_factory(path: Path) -> Any:
+# Measured with `python -m tools.audiolab threads` on an M4 (docs/05 § 9): RTF 0.197 with 1 thread, 0.125 with 2,
+# 0.100 with 3, 0.092 with 4, 0.086 with 6; onnxruntime's defaults (spinning threads) 0.099. The audio callback's
+# lateness didn't change with any of them (sess.run releases the GIL). Four is the fastest within 2–4 and leaves
+# cores for the render and audio threads. Two syntheses at once only delay the one the listener waits for (runs
+# are serialized; per-sentence time doubled, throughput unchanged), so one at a time.
+INTRA_OP_THREADS = 4
+MAX_CONCURRENCY = 1  # syntheses at once (transport scheduling); `sess.run` itself is serialized below
+
+
+def session_options(intra_op_threads: int | None = None) -> Any:
     import onnxruntime as ort
 
     opts = ort.SessionOptions()
     opts.log_severity_level = 3
+    opts.intra_op_num_threads = intra_op_threads or INTRA_OP_THREADS
+    opts.inter_op_num_threads = 1
+    opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    # Idle onnxruntime threads otherwise spin for a while after each run, burning the cores the audio path needs.
+    opts.add_session_config_entry("session.intra_op.allow_spinning", "0")
+    opts.add_session_config_entry("session.inter_op.allow_spinning", "0")
+    return opts
+
+
+def _default_session_factory(path: Path, *, intra_op_threads: int | None = None) -> Any:
+    import onnxruntime as ort
+
+    opts = session_options(intra_op_threads)
     return ort.InferenceSession(str(path), sess_options=opts, providers=["CPUExecutionProvider"])
 
 
@@ -69,6 +91,7 @@ def voice_language(voice: str) -> str:
 class KokoroTts:
     id = "kokoro"
     timestamps = True
+    max_concurrency = MAX_CONCURRENCY
 
     def __init__(
         self,
@@ -87,6 +110,7 @@ class KokoroTts:
         self._session_factory = session_factory
         self._idle_unload_s = idle_unload_s
         self._lock = threading.Lock()
+        self._run_lock = threading.Lock()  # one `sess.run` at a time: two would only fight over the same cores
         self._sessions: dict[str, Any] = {}
         self._vocab: dict[str, dict[str, int]] = {}
         self._styles: dict[tuple[str, str], np.ndarray] = {}
@@ -209,6 +233,13 @@ class KokoroTts:
 
     def price_units(self, req: TtsRequest, audio_sec: float) -> Units:
         return Units(chars=len(req.text), audio_sec=round(audio_sec, 3))
+
+    def cache_identity(self, req: TtsRequest) -> str:
+        """The model as recorded in audio cache keys: `<model>/<quant>` ("kokoro-82m-v1.0/q8"), so switching the
+        shipped precision re-synthesizes Kokoro audio (free) and nothing else."""
+        m = self._models.get(req.model)
+        quant = m.weights.quant if m is not None and m.weights is not None else None
+        return f"{req.model}/{quant}" if quant else req.model
 
     # ------------------------------------------------------------------ model state
 
@@ -360,7 +391,8 @@ class KokoroTts:
             else:
                 feeds[inp.name] = input_ids
         names = [o.name for o in sess.get_outputs()]
-        results = sess.run(None, feeds)
+        with self._run_lock:
+            results = sess.run(None, feeds)
         by_name = dict(zip(names, results, strict=False))
         wave = None
         durations = None

@@ -2,14 +2,20 @@
 
 Every call here is tool-less and returns schema-validated JSON through structured outputs
 (`output_config.format = json_schema`). Units come from `response.usage`, including prompt-cache reads
-and writes, and `stop_reason` is always checked.
+and writes, content is read by block type (a response can start with thinking blocks), and `stop_reason`
+is always checked. No sampling parameters are ever sent (current models reject them).
 
 | Call | Thinking | Effort | Notes |
 |---|---|---|---|
-| annotate | `between_tools` (off; no tools are present) | settings (default low) | quote-anchored span ops |
+| annotate | the model's `annotate_thinking` trait: off or adaptive | settings (default low) | quote-anchored span ops |
 | transform | adaptive | medium | streamed |
-| compile_rule | `between_tools` | low | → `CompiledRuleDraft` |
-| vision | `between_tools` | low | transcribe / describe / auto; the caller downscales the image |
+| compile_rule | off | low | → `CompiledRuleDraft` |
+| vision | off | low | transcribe / describe / auto; the caller downscales the image |
+
+"Off" is per model (`LlmTraits.thinking_off` in the catalog): `{"type": "disabled"}` on Haiku 5.5,
+`{"type": "between_tools"}` on Sonnet 5.5 (the only model that accepts it), and the parameter left out on
+models whose thinking can't be turned off (Opus 5.5, Fable), where low effort keeps it short. Whenever a
+call may think, `max_tokens` gets the catalog's thinking reserve on top, since thinking counts toward it.
 
 The system prompt, rules and SPEECH.md form a stable prefix with `cache_control` breakpoints, so batches
 of the same document read the prefix from the prompt cache.
@@ -24,8 +30,9 @@ from typing import Any, Literal
 
 from pydantic import ValidationError
 
+from open_speech.config import DEFAULT_LLM
 from open_speech.document.model import Block, BlockType, MarkKind
-from open_speech.local.catalog import ModelCatalog
+from open_speech.local.catalog import LlmTraits, ModelCatalog
 from open_speech.plan.script import CUT_CLOSE, CUT_OPEN, SPEECH_MD_RULE_ID, SpanOp
 from open_speech.providers.base import (
     CompiledRuleDraft,
@@ -42,8 +49,8 @@ _CACHE = {"type": "ephemeral"}
 
 ANNOTATE_SYSTEM = f"""\
 You prepare documents to be read aloud by a speech engine. You receive a batch of document blocks, each \
-with an id, a type and its text, plus the user's active reading rules and their general speech \
-preferences. Return span operations that apply the rules to these blocks.
+with an id, a type and its text, plus the user's reading instructions and the rules active for this \
+document. Return span operations that apply them to these blocks.
 
 What the text has already been through:
 The user's deterministic filters ran before you. Wherever a filter removed something (a citation marker, \
@@ -63,7 +70,7 @@ is only a marker does nothing.
 instead of the quote.
 - When skipping a span would leave a double space, include the leading space in the quote.
 - rule_id is the id of the active rule that asks for the op, or "{SPEECH_MD_RULE_ID}" when only the user's \
-speech preferences ask for it. If neither asks for a change, make no op.
+reading instructions ask for it. If neither asks for a change, make no op.
 - Return {{"ops": []}} when nothing needs to change.
 
 How far an op reaches:
@@ -227,7 +234,7 @@ def _rules_text(rules: Sequence[RuleBrief]) -> str:
 
 def _speech_md_text(speech_md: str) -> str:
     body = speech_md.strip() or "(none)"
-    return f"User speech preferences (SPEECH.md):\n{body}"
+    return f"The user's reading instructions (SPEECH.md), in their own words:\n{body}"
 
 
 def _blocks_payload(blocks: Sequence[Block]) -> str:
@@ -245,7 +252,7 @@ class AnthropicLlm:
         catalog: ModelCatalog,
         api_key: str,
         *,
-        model: Callable[[], str] | str | None = None,
+        model: Callable[[], str | None] | str | None = None,
         annotate_effort: Callable[[], str] | str = "low",
         client: Any | None = None,
         http_client: Any | None = None,
@@ -254,8 +261,9 @@ class AnthropicLlm:
         max_retries: int = 2,
     ) -> None:
         entry = catalog.llm_for(self.id)
-        self._default_model = entry.default if entry else "claude-sonnet-5-5"
+        self._default_model = entry.default if entry else DEFAULT_LLM
         self._limits = entry
+        self._catalog = catalog
         self._model = model
         self._effort = annotate_effort
         if client is None:
@@ -280,24 +288,41 @@ class AnthropicLlm:
     def _max(self, kind: str, default: int) -> int:
         return int(getattr(self._limits, f"{kind}_max_tokens", default)) if self._limits else default
 
+    def traits(self, model: str | None = None) -> LlmTraits:
+        return self._catalog.llm_traits(model or self.model, self.id)
+
+    def _shape(self, params: dict[str, Any], kind: str, default_max: int, *, adaptive: bool = False) -> dict[str, Any]:
+        """Set `thinking` and `max_tokens` for a tool-less call: thinking off in the model's own way unless
+        `adaptive`, and room for thinking whenever the model may think."""
+        traits = self.traits(params["model"])
+        thinking = {"type": "adaptive"} if adaptive else traits.thinking_off_param()
+        may_think = adaptive or thinking is None
+        max_tokens = self._max(kind, default_max)
+        if may_think:
+            max_tokens += self._limits.thinking_reserve_tokens if self._limits else 4096
+        params["max_tokens"] = max_tokens
+        if thinking is not None:
+            params["thinking"] = thinking
+        return params
+
     # ------------------------------------------------------------------ request shaping
 
     def annotate_params(self, blocks: Sequence[Block], rules: Sequence[RuleBrief], speech_md: str) -> dict[str, Any]:
-        return {
-            "model": self.model,
-            "max_tokens": self._max("annotate", 4096),
+        model = self.model
+        params: dict[str, Any] = {
+            "model": model,
             "system": [
                 {"type": "text", "text": ANNOTATE_SYSTEM},
                 {"type": "text", "text": _speech_md_text(speech_md), "cache_control": _CACHE},
                 {"type": "text", "text": _rules_text(rules), "cache_control": _CACHE},
             ],
             "messages": [{"role": "user", "content": _blocks_payload(blocks)}],
-            "thinking": {"type": "between_tools"},
             "output_config": {
                 "effort": self._annotate_effort(),
                 "format": {"type": "json_schema", "schema": SPAN_OPS_SCHEMA},
             },
         }
+        return self._shape(params, "annotate", 4096, adaptive=self.traits(model).annotate_thinking == "adaptive")
 
     def transform_params(self, blocks: Sequence[Block], instruction: str, speech_md: str) -> dict[str, Any]:
         return {
@@ -319,9 +344,8 @@ class AnthropicLlm:
 
     def compile_params(self, instruction: str, context: dict[str, Any]) -> dict[str, Any]:
         ctx = {k: v for k, v in context.items() if v is not None}
-        return {
+        params: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": self._max("compile", 2048),
             "system": [{"type": "text", "text": COMPILE_SYSTEM, "cache_control": _CACHE}],
             "messages": [
                 {
@@ -332,16 +356,15 @@ class AnthropicLlm:
                     ),
                 }
             ],
-            "thinking": {"type": "between_tools"},
             "output_config": {"effort": "low", "format": {"type": "json_schema", "schema": COMPILE_SCHEMA}},
         }
+        return self._shape(params, "compile", 2048)
 
     def vision_params(
         self, image: bytes, media_type: str, rules: Sequence[RuleBrief], mode: str
     ) -> dict[str, Any]:
-        return {
+        params: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": self._max("vision", 4096),
             "system": [
                 {"type": "text", "text": VISION_SYSTEM},
                 {"type": "text", "text": _rules_text(rules), "cache_control": _CACHE},
@@ -362,9 +385,9 @@ class AnthropicLlm:
                     ],
                 }
             ],
-            "thinking": {"type": "between_tools"},
             "output_config": {"effort": "low", "format": {"type": "json_schema", "schema": VISION_SCHEMA}},
         }
+        return self._shape(params, "vision", 4096)
 
     # ------------------------------------------------------------------ calls
 
@@ -421,8 +444,9 @@ class AnthropicLlm:
             raise err from exc
 
     async def annotate(self, blocks: Sequence[Block], rules: Sequence[RuleBrief], speech_md: str) -> LlmCall:
-        resp = await self._create(self.annotate_params(blocks, rules, speech_md), "annotate")
-        call = LlmCall(output=[], units=self.units(resp), model=self.model,
+        params = self.annotate_params(blocks, rules, speech_md)
+        resp = await self._create(params, "annotate")
+        call = LlmCall(output=[], units=self.units(resp), model=params["model"],
                        stop_reason=getattr(resp, "stop_reason", None))
         if call.stop_reason == "refusal":
             return call  # degrade to Classic for this batch; the units are still billed
@@ -440,8 +464,9 @@ class AnthropicLlm:
         return call
 
     async def transform(self, blocks: Sequence[Block], instruction: str, speech_md: str) -> LlmCall:
-        resp = await self._stream(self.transform_params(blocks, instruction, speech_md), "transform")
-        call = LlmCall(output=None, units=self.units(resp), model=self.model,
+        params = self.transform_params(blocks, instruction, speech_md)
+        resp = await self._stream(params, "transform")
+        call = LlmCall(output=None, units=self.units(resp), model=params["model"],
                        stop_reason=getattr(resp, "stop_reason", None))
         data = self._json(resp, "transform", call)
         try:
@@ -455,8 +480,9 @@ class AnthropicLlm:
         return call
 
     async def compile_rule(self, instruction: str, context: dict[str, Any]) -> LlmCall:
-        resp = await self._create(self.compile_params(instruction, context), "rule")
-        call = LlmCall(output=None, units=self.units(resp), model=self.model,
+        params = self.compile_params(instruction, context)
+        resp = await self._create(params, "rule")
+        call = LlmCall(output=None, units=self.units(resp), model=params["model"],
                        stop_reason=getattr(resp, "stop_reason", None))
         data = self._json(resp, "rule", call)
         try:
@@ -492,10 +518,11 @@ class AnthropicLlm:
         rules: Sequence[RuleBrief],
         mode: Literal["auto", "transcribe", "describe"] = "auto",
     ) -> LlmCall:
-        resp = await self._create(self.vision_params(image, media_type, rules, mode), "image")
+        params = self.vision_params(image, media_type, rules, mode)
+        resp = await self._create(params, "image")
         units = self.units(resp)
         units.images = 1
-        call = LlmCall(output=[], units=units, model=self.model,
+        call = LlmCall(output=[], units=units, model=params["model"],
                        stop_reason=getattr(resp, "stop_reason", None))
         data = self._json(resp, "image", call)
         blocks: list[VisionBlock] = []

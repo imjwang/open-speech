@@ -1,0 +1,75 @@
+{
+  "pairs": [
+    {
+      "n": 1,
+      "title": "Qwen voice Ryan, English: Qwen 0.6B 8-bit or Qwen 0.6B bf16?",
+      "listen_for": "Clarity, natural rhythm, no slurred or skipped words, hiss or buzz in the pauses.",
+      "A": "Qwen 0.6B 8-bit",
+      "B": "Qwen 0.6B bf16"
+    },
+    {
+      "n": 2,
+      "title": "Qwen voice Ryan, Spanish: Qwen 0.6B 8-bit or Qwen 0.6B bf16?",
+      "listen_for": "Pronunciation and accent; which would you listen to?",
+      "A": "Qwen 0.6B 8-bit",
+      "B": "Qwen 0.6B bf16"
+    },
+    {
+      "n": 3,
+      "title": "Qwen voice Ryan, English: Qwen 0.6B 8-bit or Qwen 1.7B 6-bit?",
+      "listen_for": "Clarity, natural rhythm, no slurred or skipped words, hiss or buzz in the pauses.",
+      "A": "Qwen 0.6B 8-bit",
+      "B": "Qwen 1.7B 6-bit"
+    },
+    {
+      "n": 4,
+      "title": "Qwen voice Ryan, Spanish: Qwen 0.6B 8-bit or Qwen 1.7B 6-bit?",
+      "listen_for": "Pronunciation and accent; which would you listen to?",
+      "A": "Qwen 1.7B 6-bit",
+      "B": "Qwen 0.6B 8-bit"
+    },
+    {
+      "n": 5,
+      "title": "Qwen voice Ryan, English: Qwen 0.6B 8-bit or Qwen 1.7B 8-bit?",
+      "listen_for": "Clarity, natural rhythm, no slurred or skipped words, hiss or buzz in the pauses.",
+      "A": "Qwen 0.6B 8-bit",
+      "B": "Qwen 1.7B 8-bit"
+    },
+    {
+      "n": 6,
+      "title": "Qwen voice Ryan, Spanish: Qwen 0.6B 8-bit or Qwen 1.7B 8-bit?",
+      "listen_for": "Pronunciation and accent; which would you listen to?",
+      "A": "Qwen 1.7B 8-bit",
+      "B": "Qwen 0.6B 8-bit"
+    },
+    {
+      "n": 7,
+      "title": "Qwen voice Ryan, English: Qwen 0.6B 8-bit or Qwen 1.7B 4-bit?",
+      "listen_for": "Clarity, natural rhythm, no slurred or skipped words, hiss or buzz in the pauses.",
+      "A": "Qwen 0.6B 8-bit",
+      "B": "Qwen 1.7B 4-bit"
+    },
+    {
+      "n": 8,
+      "title": "Qwen voice Ryan, Spanish: Qwen 0.6B 8-bit or Qwen 1.7B 4-bit?",
+      "listen_for": "Pronunciation and accent; which would you listen to?",
+      "A": "Qwen 1.7B 4-bit",
+      "B": "Qwen 0.6B 8-bit"
+    },
+    {
+      "n": 9,
+      "title": "Qwen Ryan (Qwen 0.6B 8-bit) or Kokoro Heart (female)?",
+      "listen_for": "Which voice would you rather read a long article with?",
+      "A": "Kokoro Heart (female)",
+      "B": "Qwen Ryan (Qwen 0.6B 8-bit)"
+    },
+    {
+      "n": 10,
+      "title": "Qwen Ryan (Qwen 0.6B 8-bit) or Kokoro Michael (male)?",
+      "listen_for": "Which voice would you rather read a long article with?",
+      "A": "Qwen Ryan (Qwen 0.6B 8-bit)",
+      "B": "Kokoro Michael (male)"
+    }
+  ],
+  "out": "/Users/jeff/Downloads/open-speech-listening/qwen"
+}

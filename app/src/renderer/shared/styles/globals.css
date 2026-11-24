@@ -212,46 +212,72 @@
 
 /* ------------------------------------------------------------------ the voice orb
    One control for the microphone: idle, listening (it breathes with the level in --level, 0..1), thinking,
-   speaking. Shape and motion carry the state; the icon inside says which one for people who can't see motion. */
+   speaking. Shape and motion carry the state; the icon inside says which one for people who can't see motion.
+   The disc is ::after and the glow behind it is ::before. The glow moves with transform and opacity only, on its
+   own compositor layer, so a breathing orb never repaints the rest of the bar (box-shadow would). */
 .orb {
   --level: 0;
   position: relative;
+  isolation: isolate;
   display: grid;
   place-items: center;
   border-radius: 9999px;
-  background: var(--muted);
   color: var(--muted-foreground);
   transition:
-    background-color 160ms ease,
     color 160ms ease,
     transform 160ms ease;
+}
+.orb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--muted);
+  transition: background-color 160ms ease;
 }
 .orb::before {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: -2;
   border-radius: inherit;
-  box-shadow: 0 0 0 calc(2px + var(--level) * 9px) var(--glow);
+  background: var(--glow);
   opacity: 0;
+  transform: scale(calc(1.1 + var(--level) * 0.45));
   transition:
-    box-shadow 90ms linear,
+    transform 90ms linear,
     opacity 160ms ease;
+  will-change: transform, opacity;
   pointer-events: none;
 }
 .orb[data-state='listening'] {
-  background: var(--listen);
   color: var(--listen-foreground);
+}
+.orb[data-state='listening']::after {
+  background: var(--listen);
 }
 .orb[data-state='listening']::before {
   opacity: 1;
 }
-.orb[data-state='thinking'] {
-  background: color-mix(in oklab, var(--listen) 22%, var(--muted));
+/* Recording a voice to clone: the recording red, breathing with the level like listening. */
+.orb[data-state='recording'] {
+  color: white;
+}
+.orb[data-state='recording']::after {
+  background: var(--destructive);
+}
+.orb[data-state='recording']::before {
+  opacity: 1;
+  background: color-mix(in oklab, var(--destructive) 35%, transparent);
+}
+.orb[data-state='thinking'],
+.orb[data-state='speaking'] {
   color: var(--listen);
 }
-.orb[data-state='speaking'] {
+.orb[data-state='thinking']::after,
+.orb[data-state='speaking']::after {
   background: color-mix(in oklab, var(--listen) 22%, var(--muted));
-  color: var(--listen);
 }
 .orb[data-state='speaking']::before {
   opacity: 1;
@@ -260,10 +286,10 @@
 @keyframes orb-speak {
   0%,
   100% {
-    box-shadow: 0 0 0 2px var(--glow);
+    transform: scale(1.1);
   }
   50% {
-    box-shadow: 0 0 0 8px var(--glow);
+    transform: scale(1.4);
   }
 }
 

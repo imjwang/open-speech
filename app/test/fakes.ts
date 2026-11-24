@@ -46,26 +46,54 @@ export class FakeSocket implements SocketLike {
   }
 }
 
+/**
+ * A microphone for tests: `prepare()` builds nothing, `open()` "opens" the stream (unless `deny` says it fails),
+ * `feed()` pushes audio through whatever handlers are installed. `live` is the stream being open.
+ */
 export class FakeMic implements MicSource {
   handlers: MicHandlers | null = null
-  starts = 0
-  stops = 0
-  get active(): boolean {
+  prepared = 0
+  opens = 0
+  closes = 0
+  /** Make the next `open()` fail with this error (permission denied, no device). */
+  deny: Error | null = null
+  get live(): boolean {
     return this.handlers !== null
   }
-  async start(handlers: MicHandlers): Promise<void> {
-    this.starts++
+  /** Compatibility with older tests: how many times the stream was opened. */
+  get starts(): number {
+    return this.opens
+  }
+  /** The stream is open (alias of `live`). */
+  get active(): boolean {
+    return this.live
+  }
+  async prepare(): Promise<void> {
+    this.prepared++
+  }
+  async open(handlers: MicHandlers): Promise<void> {
+    if (this.handlers) {
+      this.handlers = handlers
+      return
+    }
+    this.opens++
+    if (this.deny) {
+      const err = this.deny
+      this.deny = null
+      handlers.onError(err)
+      return
+    }
     this.handlers = handlers
   }
-  stop(): void {
-    this.stops++
+  close(): void {
+    if (this.handlers) this.closes++
     this.handlers = null
   }
-  /** Feed `ms` of audio at an RMS level, in 32 ms chunks. */
-  feed(level: number, ms: number): void {
+  /** Feed `ms` of audio at an RMS level, in 32 ms chunks (512 samples at 16 kHz each). */
+  feed(level: number, ms: number, fill = 0): void {
     for (let t = 0; t < ms; t += 32) {
       if (!this.handlers) return
-      this.handlers.onPcm(new Int16Array(512))
+      this.handlers.onPcm(new Int16Array(512).fill(fill))
       this.handlers.onLevel(level, 32)
     }
   }

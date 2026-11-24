@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Open Speech WebSocket protocol",
-  "protocol": 2,
+  "protocol": 3,
   "binary_frames": "Mic audio: 16-bit LE PCM, 16 kHz mono, between mic.start and mic.stop",
   "client": {
     "$defs": {
@@ -86,7 +86,7 @@
         "type": "object"
       },
       "BarState": {
-        "description": "The bar tells the engine it opened or closed, for ducking (07 \u00a7 Ducking).",
+        "description": "The bar tells the engine a conversation is active (listening, thinking or speaking) or over, so reading\npauses while the user and the assistant talk and resumes afterwards (07 \u00a7 Ducking).",
         "properties": {
           "ts": {
             "title": "Ts",
@@ -287,6 +287,47 @@
         "title": "MicStop",
         "type": "object"
       },
+      "SpeechStop": {
+        "description": "Stop what the engine is saying right now (a reply, a prompt, a preview or a recording replay), with a\nshort fade, and drop the rest of that reply. The bar sends it when the user interrupts by key.",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "speech.stop",
+            "default": "speech.stop",
+            "title": "Type",
+            "type": "string"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Turn Id"
+          }
+        },
+        "title": "SpeechStop",
+        "type": "object"
+      },
       "Subscribe": {
         "properties": {
           "ts": {
@@ -371,6 +412,7 @@
         "command": "#/$defs/Command",
         "mic.start": "#/$defs/MicStart",
         "mic.stop": "#/$defs/MicStop",
+        "speech.stop": "#/$defs/SpeechStop",
         "subscribe": "#/$defs/Subscribe"
       },
       "propertyName": "type"
@@ -390,6 +432,9 @@
       },
       {
         "$ref": "#/$defs/BarState"
+      },
+      {
+        "$ref": "#/$defs/SpeechStop"
       }
     ]
   },
@@ -665,10 +710,10 @@
               "recents",
               "models",
               "where",
-              "presets",
               "settings",
               "queue",
-              "info"
+              "info",
+              "design"
             ],
             "title": "Kind",
             "type": "string"
@@ -739,6 +784,7 @@
         "type": "object"
       },
       "AssistantDone": {
+        "description": "The reply's text is complete; it is sent as soon as it is, usually while the reply is still being said\n(its first sentences may have been heard already: `assistant.speech` started can come before this). When\n`speaks` is true an `assistant.speech` ended (kind \"reply\", this turn) is guaranteed to follow: the bar waits\nfor it before listening again. The reply recording arrives with that event, not here.\n\n`audible_effect`: the answer is reading audio, which resumes when the conversation ends (\"faster\" while\nreading, \"read my clipboard\", an agent turn that started reading). End the conversation once anything\nstill being said has been heard, instead of listening for a follow-up.",
         "properties": {
           "ts": {
             "title": "Ts",
@@ -805,12 +851,127 @@
             ],
             "default": null,
             "title": "Error"
+          },
+          "speaks": {
+            "default": false,
+            "title": "Speaks",
+            "type": "boolean"
+          },
+          "audible_effect": {
+            "default": false,
+            "title": "Audible Effect",
+            "type": "boolean"
           }
         },
         "required": [
           "turn_id"
         ],
         "title": "AssistantDone",
+        "type": "object"
+      },
+      "AssistantSpeech": {
+        "description": "The engine started or finished saying something. It plays through CoreAudio, where the bar's echo\ncancellation can't hear it, so the bar keeps its microphone closed from `started` until `ended` (which is\nsent once the last sample has left the speakers, plus a short echo tail).",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "assistant.speech",
+            "default": "assistant.speech",
+            "title": "Type",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "started",
+              "ended"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "reply",
+              "say",
+              "preview",
+              "recording"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Turn Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "finished",
+                  "stopped",
+                  "superseded",
+                  "error"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "recording_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Recording Id"
+          },
+          "played_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Played Ms"
+          }
+        },
+        "required": [
+          "state",
+          "kind"
+        ],
+        "title": "AssistantSpeech",
         "type": "object"
       },
       "AssistantTurn": {
@@ -999,6 +1160,46 @@
         "title": "Budget",
         "type": "object"
       },
+      "BudgetState": {
+        "properties": {
+          "monthly_usd": {
+            "title": "Monthly Usd",
+            "type": "string"
+          },
+          "warn_at": {
+            "title": "Warn At",
+            "type": "number"
+          },
+          "hard_stop": {
+            "title": "Hard Stop",
+            "type": "boolean"
+          },
+          "spent_usd": {
+            "title": "Spent Usd",
+            "type": "string"
+          },
+          "pct": {
+            "title": "Pct",
+            "type": "number"
+          },
+          "free_tiers": {
+            "items": {
+              "$ref": "#/$defs/FreeTierState"
+            },
+            "title": "Free Tiers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "monthly_usd",
+          "warn_at",
+          "hard_stop",
+          "spent_usd",
+          "pct"
+        ],
+        "title": "BudgetState",
+        "type": "object"
+      },
       "CacheSettings": {
         "properties": {
           "max_gb": {
@@ -1149,13 +1350,18 @@
       "Defaults": {
         "properties": {
           "voice": {
-            "default": "kokoro:kokoro-82m-v1.0:af_heart",
+            "default": "auto",
             "title": "Voice",
             "type": "string"
           },
           "assistant_voice": {
-            "default": "kokoro:kokoro-82m-v1.0:af_heart",
+            "default": "auto",
             "title": "Assistant Voice",
+            "type": "string"
+          },
+          "local_voice": {
+            "default": "kokoro:kokoro-82m-v1.0:af_heart",
+            "title": "Local Voice",
             "type": "string"
           },
           "voices": {
@@ -1171,15 +1377,6 @@
             "minimum": 0.5,
             "title": "Speed",
             "type": "number"
-          },
-          "mode": {
-            "default": "classic",
-            "enum": [
-              "classic",
-              "ai_enhanced"
-            ],
-            "title": "Mode",
-            "type": "string"
           },
           "style": {
             "anyOf": [
@@ -1384,6 +1581,46 @@
         "title": "ErrorMsg",
         "type": "object"
       },
+      "FreeTierState": {
+        "description": "A provider allowance that costs nothing until it is used up (e.g. Google's free voice characters).\nCounted from this app's own use only, so it is an estimate.",
+        "properties": {
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "unit": {
+            "const": "chars",
+            "default": "chars",
+            "title": "Unit",
+            "type": "string"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "resets_on": {
+            "title": "Resets On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "label",
+          "used",
+          "limit",
+          "resets_on"
+        ],
+        "title": "FreeTierState",
+        "type": "object"
+      },
       "Hello": {
         "properties": {
           "ts": {
@@ -1409,7 +1646,7 @@
             "type": "string"
           },
           "protocol": {
-            "default": 2,
+            "default": 3,
             "title": "Protocol",
             "type": "integer"
           },
@@ -1459,6 +1696,23 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "install",
+                  "clone",
+                  "design"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Kind"
           }
         },
         "required": [
@@ -1472,7 +1726,7 @@
       "LlmSettings": {
         "properties": {
           "model": {
-            "default": "claude-sonnet-5-5",
+            "default": "claude-haiku-5-5",
             "title": "Model",
             "type": "string"
           },
@@ -1525,6 +1779,27 @@
             "minimum": 10,
             "title": "Max Ahead Seconds",
             "type": "integer"
+          },
+          "beyond_free_tier": {
+            "default": "local",
+            "enum": [
+              "local",
+              "pay"
+            ],
+            "title": "Beyond Free Tier",
+            "type": "string"
+          },
+          "beyond_free_tier_month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Beyond Free Tier Month"
           }
         },
         "title": "PlaybackSettings",
@@ -1828,6 +2103,36 @@
           "title"
         ],
         "title": "QueueItem",
+        "type": "object"
+      },
+      "Qwen3Settings": {
+        "description": "Which Qwen3-TTS weights read the Qwen voices (providers/qwen3.py `resolve_variant`). The voices stay the same;\n\"auto\" is the size and precision measured best on this kind of Mac (the catalog's defaults; 0.6B with 8 GB).",
+        "properties": {
+          "size": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "0.6b",
+              "1.7b"
+            ],
+            "title": "Size",
+            "type": "string"
+          },
+          "precision": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "bf16",
+              "8bit",
+              "6bit",
+              "5bit",
+              "4bit"
+            ],
+            "title": "Precision",
+            "type": "string"
+          }
+        },
+        "title": "Qwen3Settings",
         "type": "object"
       },
       "ReaderSettings": {
@@ -2292,6 +2597,41 @@
         "title": "UsageAlert",
         "type": "object"
       },
+      "UsageChanged": {
+        "description": "Month-to-date spend, the budget or a free allowance changed (debounced; sent only on a real change).",
+        "properties": {
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "type": {
+            "const": "usage.changed",
+            "default": "usage.changed",
+            "title": "Type",
+            "type": "string"
+          },
+          "budget": {
+            "$ref": "#/$defs/BudgetState"
+          }
+        },
+        "required": [
+          "budget"
+        ],
+        "title": "UsageChanged",
+        "type": "object"
+      },
       "UserSettings": {
         "properties": {
           "language": {
@@ -2331,6 +2671,9 @@
           "playback": {
             "$ref": "#/$defs/PlaybackSettings"
           },
+          "qwen3": {
+            "$ref": "#/$defs/Qwen3Settings"
+          },
           "onboarding_completed": {
             "default": false,
             "title": "Onboarding Completed",
@@ -2366,6 +2709,13 @@
             ],
             "title": "Stt Provider",
             "type": "string"
+          },
+          "echo_tail_ms": {
+            "default": 150,
+            "maximum": 2000,
+            "minimum": 0,
+            "title": "Echo Tail Ms",
+            "type": "integer"
           }
         },
         "title": "VoiceInput",
@@ -2379,6 +2729,7 @@
         "assistant.card": "#/$defs/AssistantCard",
         "assistant.delta": "#/$defs/AssistantDelta",
         "assistant.done": "#/$defs/AssistantDone",
+        "assistant.speech": "#/$defs/AssistantSpeech",
         "assistant.turn": "#/$defs/AssistantTurn",
         "capabilities.changed": "#/$defs/CapabilitiesChanged",
         "document.updated": "#/$defs/DocumentUpdated",
@@ -2392,7 +2743,8 @@
         "stt.final": "#/$defs/SttFinal",
         "stt.partial": "#/$defs/SttPartial",
         "ui.open": "#/$defs/UiOpen",
-        "usage.alert": "#/$defs/UsageAlert"
+        "usage.alert": "#/$defs/UsageAlert",
+        "usage.changed": "#/$defs/UsageChanged"
       },
       "propertyName": "type"
     },
@@ -2425,6 +2777,9 @@
         "$ref": "#/$defs/AssistantDone"
       },
       {
+        "$ref": "#/$defs/AssistantSpeech"
+      },
+      {
         "$ref": "#/$defs/PlaybackStateMsg"
       },
       {
@@ -2432,6 +2787,9 @@
       },
       {
         "$ref": "#/$defs/UsageAlert"
+      },
+      {
+        "$ref": "#/$defs/UsageChanged"
       },
       {
         "$ref": "#/$defs/JobProgress"

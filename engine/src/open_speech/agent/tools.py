@@ -3,9 +3,9 @@ the provider adapter turns them into Claude tools.
 
 Three rules shape every tool:
 
-- **Changes that last go on a card.** Rules, pronunciations, preferences, the default voice, budgets, the
-  cleanup mode and local models are never changed by the model: the tool creates a confirmation card and says it
-  is pending (07 § Injection boundary). Playback, the reading queue, per-document voices and a short list of
+- **Changes that last go on a card.** Rules, pronunciations, the reading instructions, the default voice, budgets
+  and local models are never changed by the model: the tool creates a confirmation card and says it is pending
+  (07 § Injection boundary). Playback, the reading queue, per-document voices and a short list of
   instantly visible, instantly reversible settings (`INSTANT_SETTINGS`) apply at once.
 - **Content is data.** Document and web text comes back inside `<document_content>` tags.
 - **Links are followed on the user's behalf, not the page's.** Until a turn has read document or web content,
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -28,8 +29,8 @@ from open_speech.api import schemas as s
 from open_speech.api.ws_schema import UiOpen
 from open_speech.config import UserSettings
 from open_speech.errors import EngineError
-from open_speech.i18n import say, t
-from open_speech.service.commands import _source_request, voice_display
+from open_speech.i18n import current_language, say, t
+from open_speech.service.commands import _source_request, shortlist_voices, voice_display
 from open_speech.store.pages import host_of
 
 if TYPE_CHECKING:
@@ -89,6 +90,65 @@ def _content(text: str) -> str:
     return f"<document_content>{text}</document_content>"
 
 
+_SECTION = re.compile(r"^##\s+(.+?)\s*$")
+
+
+def _add_to_section(text: str, section: str, line: str) -> str:
+    """`text` with `line` added at the end of its `## <section>` (matched without regard to case), before the next
+    `## ` heading: after the section's last line, not after the blank lines and the notes for the reader
+    (`<!-- … -->`) that close it, so a new bullet joins the others. A missing section is added at the end."""
+    lines = text.splitlines()
+    wanted = section.casefold()
+    headings = [i for i, ln in enumerate(lines) if (m := _SECTION.match(ln)) and m.group(1).casefold() == wanted]
+    start = headings[0] if headings else None
+    if start is None:
+        return f"{text.rstrip()}\n\n## {section}\n{line}\n".lstrip()
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    at = end
+    while at > start + 1:
+        last = lines[at - 1].strip()
+        if not last:
+            at -= 1
+        elif last.endswith("-->"):
+            opens = next((k for k in range(at - 1, start, -1) if "<!--" in lines[k]), None)
+            if opens is None:
+                break
+            at = opens
+        else:
+            break
+    lines.insert(at, line)
+    return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+
+
+_NOTE = re.compile(r"<!--.*?-->", re.S)
+
+
+def _find_once(text: str, old: str) -> tuple[int | None, int]:
+    """Where `old` occurs in `text` if it does once, and how many times it occurs. An occurrence inside a note for
+    the reader (`<!-- … -->`, never sent to Claude) doesn't count when there is exactly one outside the notes: the
+    default file's notes list lines like "- Skip captions." that the user may also have added."""
+    found = [m.start() for m in re.finditer(re.escape(old), text)] if old else []
+    if len(found) == 1:
+        return found[0], 1
+    notes = [m.span() for m in _NOTE.finditer(text)]
+    outside = [i for i in found if not any(a <= i < b for a, b in notes)]
+    return (outside[0] if len(outside) == 1 else None), len(found)
+
+
+def _replace_once(text: str, old: str, new: str, at: int | None = None) -> str:
+    """`text` with the occurrence of `old` at `at` (default: the first) replaced by `new`. Deleting all of a line's
+    text (or all but its bullet) deletes the line."""
+    i = text.index(old) if at is None else at
+    j = i + len(old)
+    if not new:
+        start = text.rfind("\n", 0, i) + 1
+        end = text.find("\n", j)
+        end = len(text) if end < 0 else end + 1
+        if (text[start:i] + text[j:end]).strip() in ("", "-", "*", "+"):
+            return text[:start] + text[end:]
+    return text[:i] + new + text[j:]
+
+
 def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]:  # noqa: C901
     e = engine
     turn_id = turn.id
@@ -136,8 +196,8 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
             "playback": snap.model_dump(mode="json"),
             "where": where,
             "selection": context.selection,
-            "default_voice": e.settings.get().defaults.voice,
-            "mode": e.settings.get().defaults.mode,
+            "default_voice": e.settings.get().defaults.voice,  # "auto" = Chirp Zephyr while free, else local
+            "default_voice_now": e.voices.current_default(),
         }
         did = doc_id()
         if did:
@@ -290,31 +350,37 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
 
     # ------------------------------------------------------------------ voices
 
-    async def list_voices(provider: str | None = None, language: str | None = None) -> str:
+    async def list_voices(provider: str | None = None, language: str | None = None, all: bool = False) -> str:
         """List voices. Each has an id like provider:model:voice. A voice with no languages listed speaks any
-        language.
+        language. By default: the short list the voices card shows (the current voice, a few Google voices, the
+        best local voices and the user's clones, in the reply language) and how many more there are.
 
         Args:
-            provider: Optional filter: openai, gemini, kokoro.
+            provider: Optional filter: google, kokoro, openai, gemini, or another provider id. Lists all of its voices.
             language: Optional language code such as en or es.
+            all: Every available voice instead of the short list (at most 60).
         """
-        voices = e.voices.list(provider=provider, lang=language).items
         current = e.documents.voice_for(doc_id())
-        return _j(
-            [
-                {
-                    "id": v.id,
-                    "name": voice_display(v)[0],
-                    "provider": v.provider,
-                    "languages": v.languages[:3],
-                    "local": v.local,
-                    "styles": v.styles,
-                    "current": v.id == current,
-                }
-                for v in voices
-                if v.available
-            ][:60]
-        )
+
+        def item(v: Any) -> dict[str, Any]:
+            return {
+                "id": v.id,
+                "name": voice_display(v)[0],
+                "provider": v.provider,
+                "languages": v.languages[:3],
+                "local": v.local,
+                "styles": v.styles,
+                "current": v.id == current,
+            }
+
+        if not all and not provider:
+            sl = shortlist_voices(e, language or current_language(), current)
+            more: dict[str, int] = {}
+            for v in sl.rest:
+                more[v.provider] = more.get(v.provider, 0) + 1
+            return _j({"voices": [item(v) for v in sl.short], "more_by_provider": more})
+        voices = e.voices.list(provider=provider, lang=language).items
+        return _j([item(v) for v in voices if v.available][:60])
 
     async def preview_voice(voice_id: str) -> str:
         """Play a short sample of a voice without switching to it.
@@ -322,7 +388,7 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
         Args:
             voice_id: The voice id from list_voices.
         """
-        res = await e.voices.preview(voice_id, play=True)
+        res = await e.voices.preview(voice_id, play=True, turn_id=turn_id)
         return _j({"played": True, "recording_id": res.recording_id})
 
     async def set_voice(voice_id: str, scope: Literal["document", "default", "assistant"] = "document") -> str:
@@ -330,13 +396,17 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
         user's confirmation.
 
         Args:
-            voice_id: The voice id from list_voices.
+            voice_id: The voice id from list_voices, or "auto" (the Google Chirp voice Zephyr while it is free this
+                month, else the free local voice).
             scope: document (this document only), default (all documents), or assistant (your own voice).
         """
         if scope == "document":
             await e.playback.set_voice(s.VoiceRequest(voice_id=voice_id, scope="document"))
             return _j({"status": "done", "voice_id": voice_id})
-        name = voice_display(e.registry.voice(voice_id))[0]
+        if voice_id == "auto":
+            name = t("voice.auto", name=voice_display(e.registry.voice(e.voices.effective("auto")))[0])
+        else:
+            name = voice_display(e.registry.voice(voice_id))[0]
         summary = t(f"action.voice.{scope}", name=name)
         aid = e.assistant.create_action(
             kind="set_voice",
@@ -350,9 +420,10 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
     # ------------------------------------------------------------------ rules: the files that shape reading
 
     async def list_rules() -> str:
-        """Every rule file: the user's rules, the built-in auto-skip presets, plus two special files, "preferences"
-        (standing preferences in the user's own words) and "lexicon" (pronunciations). Each has an id, whether it
-        is on, its scope and what it says. Rules active for the current document are marked."""
+        """Every rule file: the user's rules (each limited to a site, a document type or a document), plus two
+        special files, "preferences" (the reading instructions, SPEECH.md: the prompt that drives cleanup) and
+        "lexicon" (pronunciations). Each rule has an id, whether it is on, its scope and what it says. Rules active
+        for the current document are marked."""
         listing = e.rules.list()
         did = doc_id()
         active: set[str] = set()
@@ -371,7 +442,6 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
                         "enabled": r.enabled,
                         "scope": e.rules.scope_text(r.scope),
                         "tier": r.tier,
-                        "preset": r.preset,
                         "applies_to_current_document": r.id in active,
                     }
                     for r in listing.items
@@ -382,7 +452,9 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
         )
 
     async def read_rule(rule_id: str) -> str:
-        """Read one rule file in full: a rule id from list_rules, or "preferences" or "lexicon".
+        """Read one rule file in full: a rule id from list_rules, "preferences" (the reading instructions,
+        SPEECH.md: the prompt that drives cleanup) or "lexicon". Read "preferences" before edit_prompt when you need
+        its exact wording.
 
         Args:
             rule_id: The id.
@@ -395,8 +467,10 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
         scope_hint: Literal["site", "document", "type", "global"] | None = None,
         site: str | None = None,
     ) -> str:
-        """Create a new speech rule from a plain-language instruction. Shows the user a preview of what changes on
-        the current document and a confirmation card. Check the scope in the result before you describe it.
+        """Create a new speech rule limited to a site, a document type or one document, from a plain-language
+        instruction. Only for that: what should be read or left out everywhere goes in the reading instructions
+        (edit_prompt). Shows the user a preview of what changes on the current document and a confirmation card.
+        Check the scope in the result before you describe it.
 
         Args:
             instruction: What to do, e.g. "skip parenthetical author-year citations".
@@ -467,50 +541,47 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
         )
         return _pending(aid, summary)
 
-    async def edit_preferences(text: str, mode: Literal["append", "replace"] = "append") -> str:
-        """Change the user's standing preferences (the "preferences" file): free-form notes on how they like things
-        read and how you should behave, included in every cleanup and every conversation (needs confirmation).
+    async def edit_prompt(new_text: str, old_text: str | None = None, section: str | None = None) -> str:
+        """Change the reading instructions (SPEECH.md, the "preferences" file): the prompt that drives cleanup and
+        decides what is read and what is left out, everywhere. This is how to act on "skip X", "stop reading Y",
+        "read Z again", "read numbers carefully" (needs confirmation). Make the smallest edit that does it:
+        - To leave something out, add a bullet to its section: new_text "- Skip captions.", section "Leave out".
+        - To read something again, delete its line: old_text the whole line exactly as written (from "- Skip"
+          to its end), new_text "".
+        - To reword a line, quote it exactly in old_text and give the new line in new_text.
+        It starts with the sections "Leave out", "Read with care", "Never change" and "About me"; text between
+        <!-- and --> is a note for the user that cleanup never sees. When you are not sure of the exact wording,
+        read_rule("preferences") first. Use propose_rule instead only when the user limits the change to a site, a
+        document type or this document.
 
         Args:
-            text: The preference to add, or the complete new text when mode is replace.
-            mode: append (keep what is there and add this) or replace.
+            new_text: The text to add, or what replaces old_text ("" deletes old_text).
+            old_text: Exact text to replace; it must occur exactly once in the file (outside the <!-- --> notes).
+            section: Without old_text: the section (heading name, e.g. "Leave out") to add new_text to. A missing
+                section is created. Leave both out to add new_text at the end.
         """
         current = e.rules.read_file("preferences").text
-        new = text.strip() if mode == "replace" else f"{current.rstrip()}\n\n{text.strip()}\n".lstrip()
+        if old_text is not None:
+            at, found = _find_once(current, old_text)
+            if at is None:
+                problem = "isn't in" if found == 0 else f"occurs {found} times in"
+                return _j(
+                    {
+                        "error": f"That old_text {problem} the reading instructions. Call read_rule(\"preferences\") "
+                        "and retry with an exact quote of the text to change (enough of it to occur once)."
+                    }
+                )
+            new = _replace_once(current, old_text, new_text, at)
+        elif section:
+            new = _add_to_section(current, section.strip().lstrip("#").strip(), new_text.strip())
+        else:
+            new = f"{current.rstrip()}\n\n{new_text.strip()}\n".lstrip()
         summary = t("action.preferences")
         aid = e.assistant.create_action(
             kind="write_rule",
             summary=summary,
             payload={"file_id": "preferences", "write": {"text": new}},
             turn_id=turn_id,
-        )
-        return _pending(aid, summary)
-
-    async def set_preset(preset: str, enabled: bool) -> str:
-        """Turn an auto-skip preset on or off (needs confirmation). Presets: Headers, Footers, Page numbers,
-        Footnotes, Citations, URLs, Parentheses, Brackets, Braces, Tables, Formulas, Captions, Code.
-
-        Args:
-            preset: The preset name.
-            enabled: True to skip that content, False to read it.
-        """
-        prop = await e.rules.propose_preset(preset, enabled, turn_id=turn_id)
-        return _pending(prop.proposal_id, prop.summary)
-
-    async def set_mode(mode: Literal["classic", "ai_enhanced"], site: str | None = None) -> str:
-        """Switch cleanup between Classic (free filters) and AI Enhanced (Claude), globally or for one site (needs
-        confirmation).
-
-        Args:
-            mode: classic or ai_enhanced.
-            site: Optional hostname to scope the change to.
-        """
-        payload: dict[str, Any] = {"mode": mode}
-        if site:
-            payload["scope"] = {"sites": [site]}
-        summary = t(f"action.mode.{mode}") + (f" · {site}" if site else "")
-        aid = e.assistant.create_action(
-            kind="set_mode", summary=summary, spoken=t(f"ask.mode.{mode}"), payload=payload, turn_id=turn_id
         )
         return _pending(aid, summary)
 
@@ -561,19 +632,16 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
         """
         return e.usage.summary(period=period, group_by=group_by).model_dump_json()
 
-    async def estimate_cost(
-        document_id: str | None = None, mode: Literal["classic", "ai_enhanced"] | None = None
-    ) -> str:
+    async def estimate_cost(document_id: str | None = None) -> str:
         """Estimate the cost of reading a document with the current voice.
 
         Args:
             document_id: Defaults to the current document.
-            mode: Optional cleanup mode to estimate for.
         """
         did = document_id or doc_id()
         if not did:
             return _j({"error": "No document is open."})
-        return (await e.usage.estimate(s.EstimateRequest(document_id=did, mode=mode))).model_dump_json()
+        return (await e.usage.estimate(s.EstimateRequest(document_id=did))).model_dump_json()
 
     async def set_budget(
         monthly_usd: str | None = None, warn_at: float | None = None, hard_stop: bool | None = None
@@ -604,17 +672,19 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
     # ------------------------------------------------------------------ settings
 
     async def get_settings() -> str:
-        """All settings as JSON, with every dotted key. Includes appearance.theme (system, lavender, ember),
-        language (auto, en, es), reader options, shortcuts, defaults and budget."""
+        """All settings as JSON, with every dotted key. Includes appearance.theme (system: follows the Mac's light
+        or dark mode; lavender: the light theme, pastel; ember: the dark theme, orange), language (auto, en, es),
+        reader options, shortcuts, defaults and budget."""
         st = e.settings.get()
         return _j(
             {"settings": st.model_dump(mode="json"), "keys": UserSettings.keys(), "instant": sorted(INSTANT_SETTINGS)}
         )
 
     async def update_setting(key: str, value: str) -> str:
-        """Change any setting by its dotted key, e.g. appearance.theme, language, reader.font_size or
-        voice_input.end_of_speech_ms. Appearance, language, reader options and speed apply at once; everything
-        else needs the user's confirmation. Use get_settings to see keys and current values.
+        """Change any setting by its dotted key, e.g. appearance.theme ("lavender" is the light theme, "ember"
+        the dark one, "system" follows the Mac), language, reader.font_size or voice_input.end_of_speech_ms.
+        Appearance, language, reader options and speed apply at once; everything else needs the user's
+        confirmation. Use get_settings to see keys and current values.
 
         Args:
             key: Dotted setting key.
@@ -641,7 +711,7 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
 
     async def list_local_models() -> str:
         """Local models (voices and speech recognition) with download size, RAM, and whether they fit this Mac."""
-        return _j([m.model_dump(mode="json") for m in e.model_manager.list()])
+        return _j([m.model_dump(mode="json") for m in e.models.list().items])
 
     async def install_local_model(model_id: str) -> str:
         """Install a local model (needs confirmation; size and RAM are shown first).
@@ -649,7 +719,7 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
         Args:
             model_id: The id from list_local_models.
         """
-        m = next((x for x in e.model_manager.list() if x.id == model_id), None)
+        m = next((x for x in e.model_manager.list(all=True) if x.id == model_id), None)
         if m is None:
             return _j({"error": "Unknown model."})
         summary = t("action.install", name=m.name, size=m.size_mb)
@@ -658,13 +728,58 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
         )
         return _pending(aid, summary)
 
+    # ------------------------------------------------------------------ voices of the user's own (08 § Voice cloning)
+
+    async def clone_voice(name: str | None = None, audio_file: str | None = None) -> str:
+        """Clone a voice (local, free, stays on this Mac). Without `audio_file` it puts the user's passage card on
+        screen: they read two sentences aloud and hear the result. With an attached audio file's path it asks for
+        consent to clone the voice in that file. Either way the user confirms first; never say it is done.
+
+        Args:
+            name: What to call the new voice (default "My voice", or the file's name).
+            audio_file: Path of an attached audio file to clone instead of recording.
+        """
+        files = [audio_file] if audio_file else list(turn.audio)
+        reply = e.clones.start_file_clone(turn, files, name=name) if files else e.clones.start_clone(turn, name=name)
+        pending = e.assistant.latest_pending()
+        if pending is None or pending.turn_id != turn_id:
+            return _j({"error": reply.text})
+        return _pending(pending.action_id, pending.summary)
+
+    async def design_voice(description: str, name: str | None = None) -> str:
+        """Make a new voice from a description (needs confirmation): three short candidates are rendered locally
+        and the user keeps one. Describe sound, not identity: e.g. "a warm, low female voice, calm and slow".
+
+        Args:
+            description: How the voice should sound (age, pitch, pace, accent, mood).
+            name: What to call the voice it keeps.
+        """
+        reason = e.clones.available()
+        if reason:
+            return _j({"error": reason})
+        aid = e.clones.propose_design(turn_id, description, name=name)
+        pending = e.assistant.latest_pending()
+        return _pending(aid, pending.summary if pending else description)
+
+    async def delete_voice(name: str) -> str:
+        """Delete one of the user's cloned or designed voices (needs confirmation). Settings that used it go back to
+        the automatic voice.
+
+        Args:
+            name: The voice's name.
+        """
+        aid, text = e.clones.propose_delete(turn_id, name)
+        if aid is None:
+            return _j({"error": text})
+        return _pending(aid, text)
+
     # ------------------------------------------------------------------ showing things
 
     async def show(
-        what: Literal["voices", "rules", "usage", "recents", "queue", "models", "presets", "settings"],
+        what: Literal["voices", "rules", "usage", "recents", "queue", "models", "settings"],
     ) -> str:
         """Put a list on the user's screen: voices (with previews), rules (with switches), usage, recent documents,
-        the reading queue, local models, auto-skip presets, or the main settings.
+        the reading queue, local models, or the main settings.
 
         Args:
             what: Which list.
@@ -676,7 +791,7 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
 
     async def open_rules_editor(rule_id: str | None = None) -> str:
         """Open the rules editor window, where the user edits rule files as text: optionally on one rule,
-        "preferences" or "lexicon".
+        "preferences" (the reading instructions, SPEECH.md: the prompt that drives cleanup) or "lexicon".
 
         Args:
             rule_id: The file to open it on.
@@ -700,9 +815,7 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
         propose_rule,
         update_rule,
         delete_rule,
-        edit_preferences,
-        set_preset,
-        set_mode,
+        edit_prompt,
         add_pronunciation,
         remove_pronunciation,
         get_usage,
@@ -712,6 +825,9 @@ def build_tools(engine: Engine, *, turn: Turn, guard: TurnGuard) -> list[Tool]: 
         update_setting,
         list_local_models,
         install_local_model,
+        clone_voice,
+        design_voice,
+        delete_voice,
         show,
         open_rules_editor,
     ]
@@ -736,12 +852,13 @@ CONFIRM_REQUIRED = {
     "propose_rule",
     "update_rule",
     "delete_rule",
-    "edit_preferences",
-    "set_preset",
-    "set_mode",
+    "edit_prompt",
     "add_pronunciation",
     "remove_pronunciation",
     "set_budget",
     "update_setting",
     "install_local_model",
+    "clone_voice",
+    "design_voice",
+    "delete_voice",
 }

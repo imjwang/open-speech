@@ -6,7 +6,9 @@ MESSAGES: dict[str, str] = {
         "I can read things aloud and change playback, voices, rules and settings. "
         "Open-ended requests aren't part of this build."
     ),
-    "unavailable.ai_cleanup": "AI Enhanced cleanup isn't part of this build, so I'm using Classic cleanup.",
+    "unavailable.ai_cleanup": (
+        "Cleanup with Claude isn't part of this build, so only the simple skips in your reading instructions apply."
+    ),
     "unavailable.vision": "Describing images isn't part of this build.",
     "unavailable.speech_input": "Listening isn't ready on this Mac yet. You can type instead.",
     "unavailable.speech_model": "Listening needs a speech model on this Mac. Download it to talk to me.",
@@ -38,8 +40,6 @@ MESSAGES: dict[str, str] = {
     "reply.queue_cleared": "Queue cleared.",
     "reply.nothing_attached": "There's nothing attached to read.",
     "reply.no_pronunciation": "I don't have a pronunciation saved for {term}.",
-    "reply.already_skipping": "I already skip {what}.",
-    "reply.already_reading": "I already read {what}.",
     "reply.rules_opened": "Rules editor opened.",
     "reply.theme.system": "The theme follows your Mac now.",
     "reply.theme.lavender": "Lavender theme on.",
@@ -49,8 +49,16 @@ MESSAGES: dict[str, str] = {
     "reply.no_voice": "I couldn't find a voice called {name}. Say “show voices” to hear the options.",
     "reply.voice": "Switched to {name}.",
     "reply.voice_current": "You're using {name}.",
-    "reply.voices_ready.one": "{n} voice is ready. Press play to preview it.",
-    "reply.voices_ready.other": "{n} voices are ready. Say a name to switch, or press play to preview.",
+    "reply.voices_others.one": "Here is {n} more; say its name to hear it.",
+    "reply.voices_others.other": "Here are {n} more; say a name to hear one.",
+    "reply.voices_short.one": "Here is {n} voice; say its name to hear it.",
+    "reply.voices_short.other": "Here are {n} voices; say a name to hear one.",
+    "reply.voices_more.one": "Here is {n} more voice; say its name to hear it.",
+    "reply.voices_more.other": "Here are {n} more voices; say a name to hear one.",
+    "reply.no_more_voices": "Those are all the voices.",
+    "reply.voice_sample": "That was {name}. Say “use {name}” to switch.",
+    "voices.more": "More voices",
+    "voices.more_command": "more voices",
     "reply.rules_active.one": "{n} rule is active.",
     "reply.rules_active.other": "{n} rules are active.",
     "reply.recents.one": "You have {n} recent document.",
@@ -59,16 +67,16 @@ MESSAGES: dict[str, str] = {
     "reply.queue.one": "{n} document is waiting.",
     "reply.queue.other": "{n} documents are waiting.",
     "reply.models": "Here are the local models.",
-    "reply.mode.classic": "Cleanup is classic.",
-    "reply.mode.ai_enhanced": "Cleanup is AI enhanced.",
     "reply.settings": "Here are the main settings.",
-    "reply.can_show": "I can show voices, rules, usage, recents, the queue, presets, settings or local models.",
+    "reply.can_show": "I can show voices, rules, usage, recents, the queue, settings or local models.",
     "reply.nothing_said": "I haven't said anything yet.",
+    "reply.nothing_to_play": "Nothing to play.",
+    "reply.skipped": "Skipped.",
     "reply.not_understood": "Sorry, I didn't catch that.",
     "queue.empty": "Nothing is waiting in the queue.",
     "help.basic": (
         "You can say: read my clipboard, pause, faster, two x, next paragraph, go to page twelve, where am I, "
-        "skip footnotes, say SQL as sequel, show voices, dark theme, speak Spanish, or how much have I spent."
+        "say SQL as sequel, show voices, dark theme, speak Spanish, or how much have I spent."
     ),
     "help.with_agent": (
         "You can say: read my clipboard, pause, faster, two x, next paragraph, go to page twelve, where am I, "
@@ -78,10 +86,6 @@ MESSAGES: dict[str, str] = {
     # ------------------------------------------------------------------ questions on confirmation cards (spoken)
     "ask.pronounce": "I'll say {term} as {spoken}. Save it?",
     "ask.forget_pronunciation": "Forget how to say {term}?",
-    "ask.mode.ai_enhanced": (
-        "That turns on AI Enhanced cleanup. It uses Claude and costs a little per document. Turn it on?"
-    ),
-    "ask.mode.classic": "Switch to Classic cleanup? It's free and never calls an API.",
     "ask.budget": "Set your monthly budget to {amount}?",
     "ask.voice.default": "Make {name} the default voice?",
     "ask.voice.assistant": "Make {name} the assistant voice?",
@@ -89,27 +93,21 @@ MESSAGES: dict[str, str] = {
         "That deletes {amount} of cached audio, so replays will need to be synthesized again. Clear it?"
     ),
     "ask.read_cost": "Reading this will cost about {amount}, estimated. Go ahead?",
-    "ask.skip": "That skips {what} everywhere. Save it?",
-    "ask.read_again": "I'll read {what} again. OK?",
     "ask.save_rule": "{what}, {scope}. Save it?",
     # ------------------------------------------------------------------ card titles (shown)
     "action.pronounce": "Say “{term}” as “{spoken}”",
     "action.forget_pronunciation": "Forget “{term}”",
-    "action.mode.ai_enhanced": "AI Enhanced cleanup · everywhere",
-    "action.mode.classic": "Classic cleanup · everywhere",
     "action.budget": "Monthly budget · {amount}",
     "action.budget_options": "Budget options",
     "action.voice.default": "{name} · default voice",
     "action.voice.assistant": "{name} · assistant voice",
     "action.clear_cache": "Clear audio cache · {amount}",
     "action.read_cost": "Read · about {amount} (estimated)",
-    "action.read_again": "Read {what} again",
-    "action.skip": "Skip {what}",
     "action.rule_on": "Turn on · {name}",
     "action.rule_off": "Turn off · {name}",
     "action.rule_edit": "Edit rule · {name}",
     "action.rule_delete": "Delete rule · {name}",
-    "action.preferences": "Update preferences",
+    "action.preferences": "Update your reading instructions",
     "action.setting": "{key} → {value}",
     "action.install": "Install {name} · {size} MB",
     "action.already": "That was already answered.",
@@ -122,8 +120,6 @@ MESSAGES: dict[str, str] = {
     "done.rule_saved": "Saved. I'll apply it from here.",
     "done.rule_deleted": "Rule deleted.",
     "done.rule_updated": "Rule updated.",
-    "done.mode.ai_enhanced": "AI Enhanced is on.",
-    "done.mode.classic": "Classic cleanup is on.",
     "done.voice": "Voice changed.",
     "done.budget": "Your monthly budget is now {amount}.",
     "done.setting": "Setting changed.",
@@ -134,20 +130,20 @@ MESSAGES: dict[str, str] = {
     "card.usage.week": "Spending · this week (estimated)",
     "card.usage.month": "Spending · this month (estimated)",
     "card.voices": "Voices",
+    "card.voices_more": "More voices",
+    "card.voices_of": "{name} voices",
     "card.rules": "Rules",
     "card.recents": "Recent",
     "card.queue": "Up next",
     "card.models": "Local models",
-    "card.presets": "Auto-skip",
     "card.settings": "Settings",
     "setting.appearance.theme": "Theme",
     "setting.language": "Language",
     "setting.defaults.voice": "Voice",
     "setting.defaults.speed": "Speed",
-    "setting.defaults.mode": "Cleanup",
     "setting.reader.font_size": "Text size",
     # ------------------------------------------------------------------ rules
-    "rules.preferences": "Preferences",
+    "rules.preferences": "Reading instructions",
     "rules.pronunciations": "Pronunciations",
     "rules.nothing_to_save": "There's nothing to save.",
     "rules.invalid_file": "That rule file isn't valid: {reason}.",
@@ -166,19 +162,6 @@ MESSAGES: dict[str, str] = {
     "type.image": "images",
     "type.audio": "audio",
     "list.and": " and ",
-    "preset.headers": "headers",
-    "preset.footers": "footers",
-    "preset.page_numbers": "page numbers",
-    "preset.footnotes": "footnotes",
-    "preset.citations": "citations",
-    "preset.urls": "URLs",
-    "preset.parentheses": "parentheses",
-    "preset.brackets": "brackets",
-    "preset.braces": "braces",
-    "preset.tables": "tables",
-    "preset.formulas": "formulas",
-    "preset.captions": "captions",
-    "preset.code": "code",
     # ------------------------------------------------------------------ what a proposed rule changes (06 § Speech diff)
     "diff.on_these_pages": "On these pages",
     "diff.on_this_page": "On this page",
@@ -287,6 +270,7 @@ MESSAGES: dict[str, str] = {
     "usage.all": ", all {what}",
     "usage.provider_op": "{provider} {op}",
     "usage.budget_reached": "You've reached your {budget} budget.",
+    "usage.budget_well_under": "That's well under your {budget} budget.",
     "usage.budget_at": "You're at {fraction} of your {budget} budget.",
     "usage.cache_saved": "The cache saved you about {amount}.",
     "op.tts": "speech",
@@ -311,6 +295,31 @@ MESSAGES: dict[str, str] = {
     "notice.offline": "I couldn't reach {name}; reading with {target}.",
     "notice.unavailable": "That voice isn't available right now; reading with {target}.",
     "notice.not_responding": "{name} isn't responding; reading with {target}.",
+    "notice.free_tier": "This month's free Google voice is used up; reading with {target}.",
+    # ------------------------------------------------------------------ Google's voices and their free characters
+    "google.blocked": "Google's voices need Cloud Text-to-Speech enabled for this build's key.",
+    "google.disabled": "Google's voices need Cloud Text-to-Speech turned on in this build's Google Cloud project.",
+    "google.billing": "Google's voices need billing turned on in this build's Google Cloud project.",
+    "google.restricted": "This build's Google credentials can't use Cloud Text-to-Speech from this Mac.",
+    "free_tier.label.google": "Google voice",
+    "free_tier.exhausted": "This month's free Google voice characters are used up.",
+    "free_tier.warn": "Heads up: you've used about {pct} percent of this month's free Google voice, estimated.",
+    "free_tier.stop": (
+        "This month's free Google voice is used up, so I'm reading with the local voice until next month. "
+        "Say “keep using the Google voice” to keep it, at about {rate} per thousand characters."
+    ),
+    "free_tier.passed": (
+        "This month's free Google voice is used up; it now costs about {rate} per thousand characters, estimated."
+    ),
+    "voice.auto": "Automatic ({name})",
+    "reply.google_unavailable": "Google's voices aren't available in this build, so I'm reading with the local voice.",
+    "reply.beyond_free_tier.already": "You're already keeping the Google voice this month.",
+    "ask.beyond_free_tier": (
+        "Keep the Google voice after this month's free characters? It costs about {rate} per thousand characters, "
+        "estimated, and your budget still applies. Keep it?"
+    ),
+    "action.beyond_free_tier": "Keep the Google voice this month · {rate} per 1,000 characters",
+    "done.beyond_free_tier": "OK, I'll keep the Google voice until the end of the month.",
     # ------------------------------------------------------------------ errors people actually meet
     "what.action": "that action",
     "what.document": "that document",
@@ -341,8 +350,11 @@ MESSAGES: dict[str, str] = {
     "page.too_large": "That page is too large to read.",
     "page.redirects": "That link redirects too many times.",
     # ------------------------------------------------------------------ notes on how a document was prepared
-    "plan.ai_paused": "AI Enhanced cleanup paused: {detail}",
-    "plan.budget_classic": "Your budget is used up, so this used Classic cleanup.",
+    "plan.ai_paused": "Cleanup paused: {detail}",
+    "plan.budget_filters_only": (
+        "Your budget is used up, so Claude didn't clean this up: only the simple skips in your reading instructions "
+        "apply."
+    ),
     "plan.ops_dropped.one": "Left out {n} AI edit that didn't match the text exactly.",
     "plan.ops_dropped.other": "Left out {n} AI edits that didn't match the text exactly.",
     "plan.ops_refused.one": (
@@ -351,11 +363,161 @@ MESSAGES: dict[str, str] = {
     "plan.ops_refused.other": (
         "Ignored {n} AI edits that would have removed more than the rule covers; that text is read as written."
     ),
-    "plan.rule_unavailable": "“{name}” needs AI Enhanced cleanup, so the original text is read instead.",
+    "plan.rule_unavailable": "“{name}” needs Claude, so the original text is read instead.",
     "plan.rule_paused": "“{name}” paused: {detail}",
     "plan.rule_unusable": "“{name}” returned something unusable for one section; it is read as is.",
-    "plan.rule_needs_ai": "“{name}” needs AI Enhanced mode, so it wasn't applied.",
+    "plan.rule_needs_ai": "“{name}” needs Claude, so it wasn't applied.",
     "plan.one_rewrite": "Only one rewrite rule applies at a time; “{name}” was not applied.",
     "plan.scanned": "Page {pages} has no text layer (scanned), so it can't be read without AI extraction.",
     "notice.no_style": "This voice doesn't take style instructions, so I'm reading without them.",
+    # ------------------------------------------------------------------ local Qwen3-TTS voices (providers/qwen3.py)
+    "qwen.voice_name": "{speaker} (Qwen, {language})",
+    "qwen.clone_name": "{name} (cloned voice, Qwen)",
+    "qwen.lang.en": "English",
+    "qwen.lang.es": "Spanish",
+    "qwen.lang.zh": "Chinese",
+    "qwen.lang.ja": "Japanese",
+    "qwen.lang.ko": "Korean",
+    "qwen.lang.de": "German",
+    "qwen.lang.fr": "French",
+    "qwen.lang.ru": "Russian",
+    "qwen.lang.pt": "Portuguese",
+    "qwen.lang.it": "Italian",
+    "qwen.variant": "{size} {precision}",
+    "qwen.unavailable.chip": "Qwen voices need a Mac with Apple Silicon.",
+    "qwen.unavailable.runtime": "The Qwen voices' engine isn't part of this build.",
+    "qwen.unavailable.download": "Download the Qwen voices ({variant}, about {size}) to use them.",
+    "qwen.unavailable.download_clone": (
+        "Cloned voices need the Qwen cloning model ({variant}, about {size})."
+        " Download it to use them."
+    ),
+    "qwen.unavailable.memory": (
+        "This Qwen size needs about {ram} GB of memory and this Mac has {mem} GB."
+        " Choose the 0.6B size."
+    ),
+    "qwen.unavailable.clone_missing": "This cloned voice's recording is missing. Record it again.",
+    "qwen.unavailable.unknown_clone": "There's no cloned voice called {name}.",
+    "qwen.note.sibling": "Using the downloaded {have} Qwen voices, because {want} isn't downloaded.",
+    "qwen.error.load": "The Qwen voice couldn't be loaded. Remove it and download it again.",
+    "qwen.error.load_timeout": "The Qwen voice took too long to load. Try again, or choose a smaller size.",
+    "qwen.error.load_crashed": (
+        "The Qwen voice stopped while loading, perhaps for lack of memory."
+        " Close other apps or choose a smaller size."
+    ),
+    "qwen.error.load_start": "The Qwen voice's engine couldn't start.",
+    "qwen.error.crashed": "The Qwen voice stopped unexpectedly.",
+    "qwen.error.failed": "The Qwen voice failed: {detail}",
+    "notice.slow_voice": (
+        "This voice can't keep up at {speed} times speed on this Mac."
+        " A smaller size or Kokoro keeps up."
+    ),
+    "notice.slow_voice_small": "This voice can't keep up at {speed} times speed on this Mac. Kokoro keeps up.",
+    "qwen.voices_spoken": "the {size} Qwen voices",
+    "qwen.size.small": "small",
+    "qwen.size.large": "large",
+    "ask.install_qwen": "Downloading {name} takes {size}. Download them now?",
+    "reply.qwen_installed": "{name} are already on this Mac.",
+    "models.row": "{size} · {ram} GB memory",
+    # ------------------------------------------------------------------ cloned and designed voices (service/clones.py)
+    "qwen.design_name": "{name} (designed voice, Qwen)",
+    "qwen.unavailable.download_design": (
+        "Designing voices needs the Qwen voice design model ({variant}, about {size}). Download it to use it."
+    ),
+    "what.clone": "that voice",
+    "what.audio_file": "that audio file",
+    "what.candidate": "that voice sample",
+    "clone.default_name": "My voice",
+    "clone.consent": "This is my voice, or I have the speaker's permission to clone it. Clones stay on this Mac.",
+    "clone.consent_required": (
+        "Cloning needs a confirmation that this is your voice, or that you have the speaker's permission."
+    ),
+    "clone.unknown_passage": "I don't know that passage. Ask for the passages again.",
+    "clone.no_audio": "Send a recording or an audio file to make a voice from.",
+    "clone.job": "Making the voice",
+    "clone.step.cleaning": "Cleaning up the recording",
+    "clone.step.listening": "Checking what was said",
+    "clone.step.saving": "Saving the voice",
+    "clone.step.checking": "Trying out the new voice",
+    "clone.step.done": "The voice is ready",
+    "clone.step.downloading": "Downloading the cloning model, {pct}%",
+    "clone.working": "Got it. One moment while I make the voice.",
+    "clone.check.needs_download": "I'll be able to try it once the cloning model, {size}, is downloaded.",
+    "clone.reject.mismatch": (
+        "That recording doesn't match the passage. Read it as written, at your normal pace, and try again."
+    ),
+    "clone.reject.need_text": "I can't tell what this recording says on this Mac. Type what is said in it.",
+    "clone.reject.no_words": "I couldn't make out any words in that recording.",
+    "clone.reject.empty_name": "A voice needs a name.",
+    "clone.reject.low_rate": "That recording is telephone quality, so the voice would sound muffled. Use a better one.",
+    "clone.reject.no_speech": "I didn't hear any speech in that recording.",
+    "clone.reject.too_short": (
+        "I need at least {needed} seconds of speech, and that recording has {seconds}."
+        " Read the whole passage, or use a longer recording."
+    ),
+    "clone.reject.clipped": (
+        "That recording is distorted because it was too loud. Move back a little from the microphone and try again."
+    ),
+    "clone.reject.noisy": "There's too much background noise in that recording. Try a quieter room.",
+    "clone.reject.unreadable": "I can't open {name} as audio.",
+    "clone.reject.unusable": "I can't use that recording.",
+    "clone.warn.clipped": "Some loud peaks are flattened.",
+    "clone.warn.noisy": "There's some background noise, and the voice may carry it.",
+    "clone.warn.low_rate": "The recording is low quality, so the voice may sound muffled.",
+    "clone.warn.quiet": "The recording is very quiet.",
+    "clone.warn.long": "I used {seconds} seconds of one long phrase.",
+    "clone.warn.unverified": "I couldn't check the recording against the passage on this Mac.",
+    "ask.clone_download": "To clone a voice I need a {size} model first. It stays on this Mac. Download it?",
+    "action.clone_download": "Download the cloning model · {size}",
+    "ask.clone_record": "Read the passage on the screen aloud, in your normal voice. Say ready, or press record.",
+    "action.clone_record": "Clone your voice",
+    "reply.clone_no_audio": "Attach or drop an audio file first, then say “clone this voice”.",
+    "ask.clone_file": (
+        "I'll make a voice from {name}. Only clone a voice that's yours or that you have permission to use."
+        " Go ahead?"
+    ),
+    "ask.clone_file_download": "This first downloads the cloning model, {size}.",
+    "action.clone_file": "Clone the voice in {name}",
+    "ask.design_download": "Designing voices needs {size} of models first. They stay on this Mac. Download them?",
+    "action.design_download": "Download the voice models · {size}",
+    "action.design": "Make three voices: {description}",
+    "action.download_size": "{size} download",
+    "reply.no_clone": "There's no voice of yours called {name}.",
+    "ask.delete_voice": "Delete the voice {name}? This can't be undone.",
+    "action.delete_voice": "Delete “{name}”",
+    "reply.clone_renamed": "Renamed {old} to {new}.",
+    "done.clone_go": "Go ahead.",
+    "done.clone_downloading": "Downloading the cloning model now. You can record while it downloads.",
+    "done.clone_made": "Made the voice {name}.",
+    "done.clone_kept": "Saved. I'll read with it from now on.",
+    "done.clone_discarded": "Okay, I deleted it.",
+    "done.voice_deleted": "Deleted {name}.",
+    "reply.clone_saved_unchecked": "Saved {name}. {note}",
+    "ask.keep_clone": "Keep it?",
+    "ask.keep_clone_fair": "It's a little rough. Keep it anyway?",
+    "ask.keep_clone_poor": "That didn't come out clearly. A quieter room or a clearer recording helps. Keep it anyway?",
+    "action.keep_clone": "Keep “{name}”",
+    "design.job": "Designing voices",
+    "design.step": "Rendering voice {n} of {total}",
+    "design.done": "The voices are ready",
+    "design.working": "Making three voices. This takes about half a minute.",
+    "design.reject.describe": "Tell me how the voice should sound, for example “a warm, low voice, calm and slow”.",
+    "design.reject.failed": "I couldn't make a voice from that description. Try describing it differently.",
+    "design.reject.download": "Designing voices needs the voice design model, about {size}. Download it first.",
+    "design.candidate": "Voice {n}",
+    "design.say_candidate": "Voice {n}.",
+    "design.keep_command": "keep voice {n}",
+    "design.shown": "Here are {n} voices.",
+    "card.design": "Voices for “{name}”",
+    "ask.design_which": "Which one should I keep? Say its number, or none.",
+    "action.keep_design": "Choose a voice for {name}",
+    "done.design_kept": "Saved “{name}”. I'll read with it from now on.",
+    "done.design_discarded": "Okay, none of them.",
+    "voices.clone": "Clone a voice",
+    "voices.clone_command": "clone my voice",
+    "voices.delete_command": "delete the voice {name}",
+    "setting.qwen3.size": "Local voice size",
+    "setting.qwen3.precision": "Local voice precision",
+    "models.family.customvoice": "Qwen voices",
+    "models.family.base": "Qwen voice cloning",
+    "models.family.voicedesign": "Qwen voice design",
 }

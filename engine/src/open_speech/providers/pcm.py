@@ -15,6 +15,11 @@ import numpy as np
 import soundfile as sf
 
 OPUS_RATES = (8000, 12000, 16000, 24000, 48000)
+# libsndfile maps compression level 0..1 onto Opus bitrates ~256..~10 kbps. Its default gave ~36 kbps on speech,
+# where Opus still codes in its band-limited speech modes: 2.0 dB log-spectral distance from the fresh audio.
+# 0.8 (~57 kbps) is past the switch to full-band coding: 0.9 dB (audio lab, docs/05 § Caches). Files written
+# before keep playing; only new ones are larger (~1.6x).
+OPUS_COMPRESSION_LEVEL = 0.8
 
 
 def f32_to_bytes(x: np.ndarray) -> bytes:
@@ -58,26 +63,15 @@ def audio_info_duration(data: bytes) -> float:
     return float(info.frames) / float(info.samplerate) if info.samplerate else 0.0
 
 
-def _sinc_lowpass(cutoff: float, taps: int = 63) -> np.ndarray:
-    """Windowed-sinc FIR, cutoff as a fraction of the input Nyquist (0..1)."""
-    n = np.arange(taps) - (taps - 1) / 2
-    h = cutoff * np.sinc(cutoff * n) * np.hanning(taps)
-    return (h / h.sum()).astype(np.float32)
-
-
 def resample(x: np.ndarray, sr_in: int, sr_out: int) -> np.ndarray:
-    """Band-limited resampling good enough for speech: FIR low-pass when downsampling, then linear
-    interpolation onto the new grid. Exact pass-through when the rates match."""
+    """Band-limited resampling (soxr, very high quality) in both directions: no imaging when upsampling, no
+    aliasing when downsampling. Exact pass-through when the rates match."""
     if sr_in == sr_out or x.size == 0:
         return np.asarray(x, dtype=np.float32)
-    x = np.asarray(x, dtype=np.float32)
-    if sr_out < sr_in:
-        x = np.convolve(x, _sinc_lowpass(sr_out / sr_in), mode="same").astype(np.float32)
-    n_out = int(round(x.size * sr_out / sr_in))
-    if n_out <= 0:
-        return np.zeros(0, dtype=np.float32)
-    t_out = np.arange(n_out, dtype=np.float64) * (sr_in / sr_out)
-    return np.interp(t_out, np.arange(x.size, dtype=np.float64), x).astype(np.float32)
+    import soxr
+
+    y = soxr.resample(np.ascontiguousarray(x, dtype=np.float32), sr_in, sr_out, quality="VHQ")
+    return np.asarray(y, dtype=np.float32).reshape(-1)
 
 
 def opus_rate(sr: int) -> int:
@@ -95,7 +89,12 @@ def encode_ogg_opus(x: np.ndarray, sr: int) -> tuple[bytes, int]:
         x = resample(x, sr, target)
         sr = target
     buf = io.BytesIO()
-    sf.write(buf, np.clip(x, -1.0, 1.0), sr, format="OGG", subtype="OPUS")
+    y = np.clip(x, -1.0, 1.0)
+    try:
+        sf.write(buf, y, sr, format="OGG", subtype="OPUS", compression_level=OPUS_COMPRESSION_LEVEL)
+    except TypeError:  # soundfile < 0.12 can't set it: libsndfile's default (~36 kbps)
+        buf = io.BytesIO()
+        sf.write(buf, y, sr, format="OGG", subtype="OPUS")
     return buf.getvalue(), sr
 
 

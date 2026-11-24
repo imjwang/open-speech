@@ -1,0 +1,147 @@
+{
+  "model": "Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
+  "load": {
+    "op": "loaded",
+    "id": 1,
+    "load_s": 3.578,
+    "warm_s": 0.923,
+    "active_gb": 3.143,
+    "sample_rate": 24000,
+    "type": "custom_voice",
+    "size": "1b7",
+    "speakers": [
+      "serena",
+      "vivian",
+      "uncle_fu",
+      "ryan",
+      "aiden",
+      "ono_anna",
+      "sohee",
+      "eric",
+      "dylan"
+    ],
+    "languages": [
+      "chinese",
+      "english",
+      "german",
+      "italian",
+      "portuguese",
+      "spanish",
+      "japanese",
+      "korean",
+      "french",
+      "russian"
+    ],
+    "wall_s": 4.54
+  },
+  "voice": "Ryan",
+  "quality": {
+    "en": {
+      "wer": 0.0,
+      "words": 226,
+      "f0_median_hz": 133.9,
+      "f0_spread_pct": 11.4,
+      "timbre_similarity_mean": 0.969,
+      "timbre_similarity_min": 0.902,
+      "worst": [
+        {
+          "wer": 0.0,
+          "ref": "Water boils at one hundred degrees Celsius at sea level.",
+          "hyp": "Water boils at one hundred degrees Celsius at sea level."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Turn left at the next light.",
+          "hyp": "Turn left at the next light."
+        },
+        {
+          "wer": 0.0,
+          "ref": "To reset your password, follow the link we sent to your email address.",
+          "hyp": "To reset your password, follow the link we sent to your email address."
+        }
+      ]
+    },
+    "es": {
+      "wer": 0.03,
+      "words": 100,
+      "f0_median_hz": 145.6,
+      "f0_spread_pct": 17.3,
+      "timbre_similarity_mean": 0.948,
+      "timbre_similarity_min": 0.88,
+      "worst": [
+        {
+          "wer": 0.154,
+          "ref": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos.",
+          "hyp": "Jeje, jeje. Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos."
+        },
+        {
+          "wer": 0.1,
+          "ref": "Por favor, guarde su trabajo antes de cerrar la ventana.",
+          "hyp": "Oh, por favor, guarde su trabajo antes de cerrar la ventana."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Si la bater\u00eda est\u00e1 baja, la pantalla se oscurece para ahorrar energ\u00eda.",
+          "hyp": "Si la bater\u00eda est\u00e1 baja, la pantalla se oscurece para ahorrar energ\u00eda."
+        }
+      ]
+    },
+    "es-auto": {
+      "wer": 0.03,
+      "words": 100,
+      "f0_median_hz": 146.2,
+      "f0_spread_pct": 11.1,
+      "timbre_similarity_mean": 0.949,
+      "timbre_similarity_min": 0.883,
+      "worst": [
+        {
+          "wer": 0.286,
+          "ref": "La reuni\u00f3n se ha cambiado al jueves.",
+          "hyp": "La reuni\u00f3n se ha cambiado a the jueves."
+        },
+        {
+          "wer": 0.125,
+          "ref": "Gire a la izquierda en el pr\u00f3ximo sem\u00e1foro.",
+          "hyp": "Gui a la izquierda en el pr\u00f3ximo sem\u00e1foro."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos.",
+          "hyp": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos."
+        }
+      ]
+    }
+  },
+  "sustained": {
+    "sentences": 199,
+    "x_rt_overall": 1.506,
+    "x_rt_last3min": 1.641,
+    "x_rt_per_minute": [
+      1.685,
+      1.539,
+      1.572,
+      1.388,
+      1.291,
+      1.259,
+      1.403,
+      1.618,
+      1.664,
+      1.639
+    ],
+    "load_avg_per_minute": [
+      2.6,
+      2.9,
+      3.1,
+      3.1,
+      3.3,
+      3.5,
+      4.4,
+      3.7,
+      2.9,
+      2.2
+    ],
+    "first_audio_p50_s": 0.325,
+    "first_audio_p90_s": 0.461,
+    "peak_gb": 3.779
+  }
+}

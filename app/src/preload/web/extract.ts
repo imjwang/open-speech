@@ -79,7 +79,7 @@ function isCaption(el: Element): boolean {
 
 /**
  * The engine type of a block element. Blocks are typed as what they are on the page, not only by
- * tag, so the Tables and Captions presets apply to all of an infobox: everything inside a data table
+ * tag, so skip lines for tables and captions apply to all of an infobox: everything inside a data table
  * is `table` (also its nested lists and divs), and picture captions are `caption`.
  */
 export function blockTypeFor(el: Element, knownTables?: Map<Element, boolean>): { type: string; level: number | null } {

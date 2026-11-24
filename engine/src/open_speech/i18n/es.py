@@ -7,7 +7,10 @@ MESSAGES: dict[str, str] = {
         "Puedo leer en voz alta y cambiar la reproducción, las voces, las reglas y los ajustes. "
         "Las peticiones abiertas no están incluidas en esta versión."
     ),
-    "unavailable.ai_cleanup": "La limpieza con IA no está incluida en esta versión, así que uso la limpieza clásica.",
+    "unavailable.ai_cleanup": (
+        "La limpieza con Claude no está incluida en esta versión, así que solo se aplican las omisiones simples de "
+        "tus instrucciones de lectura."
+    ),
     "unavailable.vision": "Describir imágenes no está incluido en esta versión.",
     "unavailable.speech_input": "La escucha aún no está lista en este Mac. Puedes escribir.",
     "unavailable.speech_model": "Para escucharte hace falta un modelo de voz en este Mac. Descárgalo para hablarme.",
@@ -40,8 +43,6 @@ MESSAGES: dict[str, str] = {
     "reply.queue_cleared": "Cola vacía.",
     "reply.nothing_attached": "No hay nada adjunto para leer.",
     "reply.no_pronunciation": "No tengo guardada ninguna pronunciación para {term}.",
-    "reply.already_skipping": "Ya omito {what}.",
-    "reply.already_reading": "Ya leo {what}.",
     "reply.rules_opened": "Editor de reglas abierto.",
     "reply.theme.system": "El tema sigue ahora a tu Mac.",
     "reply.theme.lavender": "Tema lavanda activado.",
@@ -51,8 +52,16 @@ MESSAGES: dict[str, str] = {
     "reply.no_voice": "No he encontrado ninguna voz llamada {name}. Di «muestra las voces» para oír las opciones.",
     "reply.voice": "He cambiado a {name}.",
     "reply.voice_current": "Estás usando {name}.",
-    "reply.voices_ready.one": "Hay {n} voz lista. Pulsa reproducir para escucharla.",
-    "reply.voices_ready.other": "Hay {n} voces listas. Di un nombre para cambiar, o pulsa reproducir para escucharlas.",
+    "reply.voices_others.one": "Aquí tienes {n} más; di su nombre para escucharla.",
+    "reply.voices_others.other": "Aquí tienes {n} más; di un nombre para escuchar una.",
+    "reply.voices_short.one": "Aquí tienes {n} voz; di su nombre para escucharla.",
+    "reply.voices_short.other": "Aquí tienes {n} voces; di un nombre para escuchar una.",
+    "reply.voices_more.one": "Aquí tienes {n} voz más; di su nombre para escucharla.",
+    "reply.voices_more.other": "Aquí tienes {n} voces más; di un nombre para escuchar una.",
+    "reply.no_more_voices": "No hay más voces.",
+    "reply.voice_sample": "Esa era {name}. Di «usa {name}» para cambiar.",
+    "voices.more": "Más voces",
+    "voices.more_command": "más voces",
     "reply.rules_active.one": "Hay {n} regla activa.",
     "reply.rules_active.other": "Hay {n} reglas activas.",
     "reply.recents.one": "Tienes {n} documento reciente.",
@@ -61,18 +70,17 @@ MESSAGES: dict[str, str] = {
     "reply.queue.one": "Hay {n} documento en cola.",
     "reply.queue.other": "Hay {n} documentos en cola.",
     "reply.models": "Estos son los modelos locales.",
-    "reply.mode.classic": "La limpieza es clásica.",
-    "reply.mode.ai_enhanced": "La limpieza usa IA.",
     "reply.settings": "Estos son los ajustes principales.",
-    "reply.can_show": "Puedo mostrar las voces, las reglas, el gasto, los recientes, la cola, las omisiones, "
-    "los ajustes o los modelos locales.",
+    "reply.can_show": "Puedo mostrar las voces, las reglas, el gasto, los recientes, la cola, los ajustes o los "
+    "modelos locales.",
     "reply.nothing_said": "Todavía no he dicho nada.",
+    "reply.nothing_to_play": "No hay nada que reproducir.",
+    "reply.skipped": "Saltado.",
     "reply.not_understood": "Perdona, no te he entendido.",
     "queue.empty": "No hay nada en la cola.",
     "help.basic": (
         "Puedes decir: lee mi portapapeles, pausa, más rápido, al doble, siguiente párrafo, ve a la página doce, "
-        "dónde estoy, omite las notas al pie, di SQL como sicuel, muestra las voces, tema oscuro, habla inglés, "
-        "o cuánto he gastado."
+        "dónde estoy, di SQL como sicuel, muestra las voces, tema oscuro, habla inglés, o cuánto he gastado."
     ),
     "help.with_agent": (
         "Puedes decir: lee mi portapapeles, pausa, más rápido, al doble, siguiente párrafo, ve a la página doce, "
@@ -82,8 +90,6 @@ MESSAGES: dict[str, str] = {
     # ------------------------------------------------------------------ preguntas de confirmación (habladas)
     "ask.pronounce": "Diré {term} como {spoken}. ¿Lo guardo?",
     "ask.forget_pronunciation": "¿Olvido cómo se dice {term}?",
-    "ask.mode.ai_enhanced": ("Eso activa la limpieza con IA. Usa Claude y cuesta un poco por documento. ¿La activo?"),
-    "ask.mode.classic": "¿Cambio a la limpieza clásica? Es gratis y nunca llama a ninguna API.",
     "ask.budget": "¿Pongo tu presupuesto mensual en {amount}?",
     "ask.voice.default": "¿Pongo a {name} como voz predeterminada?",
     "ask.voice.assistant": "¿Pongo a {name} como voz del asistente?",
@@ -91,27 +97,21 @@ MESSAGES: dict[str, str] = {
         "Eso borra {amount} de audio guardado, así que habrá que volver a sintetizar lo que se repita. ¿Lo borro?"
     ),
     "ask.read_cost": "Leer esto costará unos {amount}, estimado. ¿Sigo?",
-    "ask.skip": "Eso omite {what} en todas partes. ¿Lo guardo?",
-    "ask.read_again": "Volveré a leer {what}. ¿De acuerdo?",
     "ask.save_rule": "{what}, {scope}. ¿La guardo?",
     # ------------------------------------------------------------------ títulos de tarjeta (en pantalla)
     "action.pronounce": "Decir «{term}» como «{spoken}»",
     "action.forget_pronunciation": "Olvidar «{term}»",
-    "action.mode.ai_enhanced": "Limpieza con IA · en todas partes",
-    "action.mode.classic": "Limpieza clásica · en todas partes",
     "action.budget": "Presupuesto mensual · {amount}",
     "action.budget_options": "Opciones del presupuesto",
     "action.voice.default": "{name} · voz predeterminada",
     "action.voice.assistant": "{name} · voz del asistente",
     "action.clear_cache": "Borrar el audio guardado · {amount}",
     "action.read_cost": "Leer · unos {amount} (estimado)",
-    "action.read_again": "Volver a leer {what}",
-    "action.skip": "Omitir {what}",
     "action.rule_on": "Activar · {name}",
     "action.rule_off": "Desactivar · {name}",
     "action.rule_edit": "Editar regla · {name}",
     "action.rule_delete": "Borrar regla · {name}",
-    "action.preferences": "Actualizar las preferencias",
+    "action.preferences": "Actualizar tus instrucciones de lectura",
     "action.setting": "{key} → {value}",
     "action.install": "Instalar {name} · {size} MB",
     "action.already": "Eso ya estaba respondido.",
@@ -124,8 +124,6 @@ MESSAGES: dict[str, str] = {
     "done.rule_saved": "Guardada. La aplico desde aquí.",
     "done.rule_deleted": "Regla borrada.",
     "done.rule_updated": "Regla actualizada.",
-    "done.mode.ai_enhanced": "La limpieza con IA está activada.",
-    "done.mode.classic": "La limpieza clásica está activada.",
     "done.voice": "Voz cambiada.",
     "done.budget": "Tu presupuesto mensual ahora es de {amount}.",
     "done.setting": "Ajuste cambiado.",
@@ -136,20 +134,20 @@ MESSAGES: dict[str, str] = {
     "card.usage.week": "Gasto · esta semana (estimado)",
     "card.usage.month": "Gasto · este mes (estimado)",
     "card.voices": "Voces",
+    "card.voices_more": "Más voces",
+    "card.voices_of": "Voces de {name}",
     "card.rules": "Reglas",
     "card.recents": "Recientes",
     "card.queue": "A continuación",
     "card.models": "Modelos locales",
-    "card.presets": "Omisiones",
     "card.settings": "Ajustes",
     "setting.appearance.theme": "Tema",
     "setting.language": "Idioma",
     "setting.defaults.voice": "Voz",
     "setting.defaults.speed": "Velocidad",
-    "setting.defaults.mode": "Limpieza",
     "setting.reader.font_size": "Tamaño de letra",
     # ------------------------------------------------------------------ reglas
-    "rules.preferences": "Preferencias",
+    "rules.preferences": "Instrucciones de lectura",
     "rules.pronunciations": "Pronunciaciones",
     "rules.nothing_to_save": "No hay nada que guardar.",
     "rules.invalid_file": "Ese archivo de regla no es válido: {reason}.",
@@ -168,19 +166,6 @@ MESSAGES: dict[str, str] = {
     "type.image": "las imágenes",
     "type.audio": "el audio",
     "list.and": " y ",
-    "preset.headers": "los encabezados",
-    "preset.footers": "los pies de página",
-    "preset.page_numbers": "los números de página",
-    "preset.footnotes": "las notas al pie",
-    "preset.citations": "las citas",
-    "preset.urls": "las URL",
-    "preset.parentheses": "los paréntesis",
-    "preset.brackets": "los corchetes",
-    "preset.braces": "las llaves",
-    "preset.tables": "las tablas",
-    "preset.formulas": "las fórmulas",
-    "preset.captions": "las leyendas",
-    "preset.code": "el código",
     # ------------------------------------------------------------------ lo que cambia una regla propuesta
     "diff.on_these_pages": "En estas páginas",
     "diff.on_this_page": "En esta página",
@@ -289,6 +274,7 @@ MESSAGES: dict[str, str] = {
     "usage.all": ", todo en {what}",
     "usage.provider_op": "{op} de {provider}",
     "usage.budget_reached": "Has llegado a tu presupuesto de {budget}.",
+    "usage.budget_well_under": "Vas muy por debajo de tu presupuesto de {budget}.",
     "usage.budget_at": "Llevas {fraction} de tu presupuesto de {budget}.",
     "usage.cache_saved": "El audio guardado te ha ahorrado unos {amount}.",
     "op.tts": "voz",
@@ -313,6 +299,39 @@ MESSAGES: dict[str, str] = {
     "notice.offline": "No he podido conectar con {name}; leo con {target}.",
     "notice.unavailable": "Esa voz no está disponible ahora; leo con {target}.",
     "notice.not_responding": "{name} no responde; leo con {target}.",
+    "notice.free_tier": "Se ha acabado la voz de Google gratuita de este mes; leo con {target}.",
+    # ------------------------------------------------------------------ las voces de Google y sus caracteres gratis
+    "google.blocked": (
+        "Las voces de Google necesitan Cloud Text-to-Speech activado para la credencial de esta versión."
+    ),
+    "google.disabled": (
+        "Las voces de Google necesitan Cloud Text-to-Speech activado en el proyecto de Google Cloud de esta versión."
+    ),
+    "google.billing": (
+        "Las voces de Google necesitan la facturación activada en el proyecto de Google Cloud de esta versión."
+    ),
+    "google.restricted": "La credencial de Google de esta versión no puede usar Cloud Text-to-Speech desde este Mac.",
+    "free_tier.label.google": "Voz de Google",
+    "free_tier.exhausted": "Se han acabado los caracteres gratis de la voz de Google de este mes.",
+    "free_tier.warn": "Aviso: has usado cerca del {pct} por ciento de la voz de Google gratuita de este mes, estimado.",
+    "free_tier.stop": (
+        "Se ha acabado la voz de Google gratuita de este mes, así que leo con la voz local hasta el mes que viene. "
+        "Di «sigue con la voz de Google» para mantenerla, por unos {rate} cada mil caracteres."
+    ),
+    "free_tier.passed": (
+        "Se ha acabado la voz de Google gratuita de este mes; ahora cuesta unos {rate} cada mil caracteres, estimado."
+    ),
+    "voice.auto": "Automática ({name})",
+    "reply.google_unavailable": (
+        "Las voces de Google no están disponibles en esta versión, así que leo con la voz local."
+    ),
+    "reply.beyond_free_tier.already": "Ya mantienes la voz de Google este mes.",
+    "ask.beyond_free_tier": (
+        "¿Mantengo la voz de Google cuando se acaben los caracteres gratis de este mes? Cuesta unos {rate} cada mil "
+        "caracteres, estimado, y tu presupuesto sigue valiendo. ¿La mantengo?"
+    ),
+    "action.beyond_free_tier": "Mantener la voz de Google este mes · {rate} por 1.000 caracteres",
+    "done.beyond_free_tier": "Vale, mantengo la voz de Google hasta final de mes.",
     # ------------------------------------------------------------------ errores que la gente se encuentra
     "what.action": "esa acción",
     "what.document": "ese documento",
@@ -345,8 +364,11 @@ MESSAGES: dict[str, str] = {
     "page.too_large": "Esa página es demasiado grande para leerla.",
     "page.redirects": "Ese enlace redirige demasiadas veces.",
     # ------------------------------------------------------------------ notas sobre cómo se preparó un documento
-    "plan.ai_paused": "La limpieza con IA se ha pausado: {detail}",
-    "plan.budget_classic": "Has agotado tu presupuesto, así que he usado la limpieza clásica.",
+    "plan.ai_paused": "La limpieza se ha pausado: {detail}",
+    "plan.budget_filters_only": (
+        "Has agotado tu presupuesto, así que Claude no ha limpiado este texto: solo se aplican las omisiones "
+        "simples de tus instrucciones de lectura."
+    ),
     "plan.ops_dropped.one": "He descartado {n} cambio de la IA que no coincidía exactamente con el texto.",
     "plan.ops_dropped.other": "He descartado {n} cambios de la IA que no coincidían exactamente con el texto.",
     "plan.ops_refused.one": (
@@ -355,12 +377,173 @@ MESSAGES: dict[str, str] = {
     "plan.ops_refused.other": (
         "He ignorado {n} cambios de la IA que habrían quitado más de lo que cubre la regla; ese texto se lee tal cual."
     ),
-    "plan.rule_unavailable": "«{name}» necesita la limpieza con IA, así que se lee el texto original.",
+    "plan.rule_unavailable": "«{name}» necesita Claude, así que se lee el texto original.",
     "plan.rule_paused": "«{name}» se ha pausado: {detail}",
     "plan.rule_unusable": "«{name}» ha devuelto algo inservible en una sección; se lee tal cual.",
-    "plan.rule_needs_ai": "«{name}» necesita el modo con IA, así que no se ha aplicado.",
+    "plan.rule_needs_ai": "«{name}» necesita Claude, así que no se ha aplicado.",
     "plan.one_rewrite": "Solo se aplica una regla de reescritura a la vez; «{name}» no se ha aplicado.",
     "plan.scanned": "La página {pages} no tiene capa de texto (está escaneada), así que no se puede leer sin "
     "extracción con IA.",
     "notice.no_style": "Esta voz no admite instrucciones de estilo, así que leo sin ellas.",
+    # ------------------------------------------------------------------ voces Qwen3-TTS locales (providers/qwen3.py)
+    "qwen.voice_name": "{speaker} (Qwen, {language})",
+    "qwen.clone_name": "{name} (voz clonada, Qwen)",
+    "qwen.lang.en": "inglés",
+    "qwen.lang.es": "español",
+    "qwen.lang.zh": "chino",
+    "qwen.lang.ja": "japonés",
+    "qwen.lang.ko": "coreano",
+    "qwen.lang.de": "alemán",
+    "qwen.lang.fr": "francés",
+    "qwen.lang.ru": "ruso",
+    "qwen.lang.pt": "portugués",
+    "qwen.lang.it": "italiano",
+    "qwen.variant": "{size} {precision}",
+    "qwen.unavailable.chip": "Las voces Qwen necesitan un Mac con Apple Silicon.",
+    "qwen.unavailable.runtime": "El motor de las voces Qwen no viene en esta versión.",
+    "qwen.unavailable.download": "Descarga las voces Qwen ({variant}, unos {size}) para usarlas.",
+    "qwen.unavailable.download_clone": (
+        "Las voces clonadas necesitan el modelo de clonación de Qwen ({variant}, unos {size})."
+        " Descárgalo para usarlas."
+    ),
+    "qwen.unavailable.memory": (
+        "Este tamaño de Qwen necesita unos {ram} GB de memoria y este Mac tiene {mem} GB."
+        " Elige el tamaño 0.6B."
+    ),
+    "qwen.unavailable.clone_missing": "Falta la grabación de esta voz clonada. Grábala de nuevo.",
+    "qwen.unavailable.unknown_clone": "No hay ninguna voz clonada llamada {name}.",
+    "qwen.note.sibling": "Uso las voces Qwen {have} descargadas, porque {want} no está descargada.",
+    "qwen.error.load": "No pude cargar la voz Qwen. Quítala y descárgala de nuevo.",
+    "qwen.error.load_timeout": "La voz Qwen tardó demasiado en cargarse. Inténtalo de nuevo o elige un tamaño menor.",
+    "qwen.error.load_crashed": (
+        "La voz Qwen se detuvo mientras se cargaba, quizá por falta de memoria."
+        " Cierra otras apps o elige un tamaño menor."
+    ),
+    "qwen.error.load_start": "No se pudo iniciar el motor de la voz Qwen.",
+    "qwen.error.crashed": "La voz Qwen se detuvo de forma inesperada.",
+    "qwen.error.failed": "La voz Qwen falló: {detail}",
+    "notice.slow_voice": (
+        "Esta voz no da abasto a {speed} veces la velocidad en este Mac."
+        " Un tamaño más pequeño o Kokoro sí."
+    ),
+    "notice.slow_voice_small": "Esta voz no da abasto a {speed} veces la velocidad en este Mac. Kokoro sí.",
+    "qwen.voices_spoken": "las voces Qwen {size}",
+    "qwen.size.small": "pequeñas",
+    "qwen.size.large": "grandes",
+    "ask.install_qwen": "Descargar {name} ocupa {size}. ¿Las descargo ahora?",
+    "reply.qwen_installed": "{name} ya están en este Mac.",
+    "models.row": "{size} · {ram} GB de memoria",
+    # ------------------------------------------------------------------ voces clonadas y diseñadas (service/clones.py)
+    "qwen.design_name": "{name} (voz diseñada, Qwen)",
+    "qwen.unavailable.download_design": (
+        "Para diseñar voces hace falta el modelo de diseño de voz de Qwen ({variant}, unos {size})."
+        " Descárgalo para usarlo."
+    ),
+    "what.clone": "esa voz",
+    "what.audio_file": "ese archivo de audio",
+    "what.candidate": "esa muestra de voz",
+    "clone.default_name": "Mi voz",
+    "clone.consent": (
+        "Esta es mi voz, o tengo permiso de la persona para clonarla. Las voces clonadas se quedan en este Mac."
+    ),
+    "clone.consent_required": (
+        "Para clonar hace falta confirmar que es tu voz, o que tienes permiso de la persona."
+    ),
+    "clone.unknown_passage": "No conozco ese texto. Vuelve a pedir los textos.",
+    "clone.no_audio": "Envía una grabación o un archivo de audio para hacer una voz.",
+    "clone.job": "Creando la voz",
+    "clone.step.cleaning": "Limpiando la grabación",
+    "clone.step.listening": "Comprobando lo que se dijo",
+    "clone.step.saving": "Guardando la voz",
+    "clone.step.checking": "Probando la voz nueva",
+    "clone.step.done": "La voz está lista",
+    "clone.step.downloading": "Descargando el modelo de clonación, {pct} %",
+    "clone.working": "Entendido. Un momento mientras creo la voz.",
+    "clone.check.needs_download": "Podré probarla cuando se descargue el modelo de clonación, de {size}.",
+    "clone.reject.mismatch": (
+        "Esa grabación no coincide con el texto. Léelo tal como está, a tu ritmo normal, y vuelve a intentarlo."
+    ),
+    "clone.reject.need_text": "En este Mac no puedo saber qué dice esta grabación. Escribe lo que se dice en ella.",
+    "clone.reject.no_words": "No he entendido ninguna palabra en esa grabación.",
+    "clone.reject.empty_name": "Una voz necesita un nombre.",
+    "clone.reject.low_rate": "Esa grabación tiene calidad de teléfono y la voz sonaría apagada. Usa una mejor.",
+    "clone.reject.no_speech": "No he oído voz en esa grabación.",
+    "clone.reject.too_short": (
+        "Necesito al menos {needed} segundos de voz y esa grabación tiene {seconds}."
+        " Lee el texto entero o usa una grabación más larga."
+    ),
+    "clone.reject.clipped": (
+        "Esa grabación está distorsionada porque sonaba demasiado fuerte. Aléjate un poco del micrófono y repite."
+    ),
+    "clone.reject.noisy": "Hay demasiado ruido de fondo en esa grabación. Prueba en un sitio más tranquilo.",
+    "clone.reject.unreadable": "No puedo abrir {name} como audio.",
+    "clone.reject.unusable": "No puedo usar esa grabación.",
+    "clone.warn.clipped": "Algunos picos fuertes están recortados.",
+    "clone.warn.noisy": "Hay algo de ruido de fondo y la voz puede llevarlo.",
+    "clone.warn.low_rate": "La grabación es de baja calidad y la voz puede sonar apagada.",
+    "clone.warn.quiet": "La grabación es muy baja.",
+    "clone.warn.long": "He usado {seconds} segundos de una frase larga.",
+    "clone.warn.unverified": "En este Mac no he podido comprobar la grabación con el texto.",
+    "ask.clone_download": (
+        "Para clonar una voz necesito antes un modelo de {size}. Se queda en este Mac. ¿Lo descargo?"
+    ),
+    "action.clone_download": "Descargar el modelo de clonación · {size}",
+    "ask.clone_record": "Lee en voz alta el texto de la pantalla, con tu voz normal. Di listo, o pulsa grabar.",
+    "action.clone_record": "Clonar tu voz",
+    "reply.clone_no_audio": "Adjunta o arrastra primero un archivo de audio y luego di «clona esta voz».",
+    "ask.clone_file": (
+        "Voy a crear una voz a partir de {name}. Clona solo una voz que sea tuya o que tengas permiso para usar."
+        " ¿Sigo?"
+    ),
+    "ask.clone_file_download": "Antes se descarga el modelo de clonación, de {size}.",
+    "action.clone_file": "Clonar la voz de {name}",
+    "ask.design_download": (
+        "Para diseñar voces hacen falta antes {size} de modelos. Se quedan en este Mac. ¿Los descargo?"
+    ),
+    "action.design_download": "Descargar los modelos de voz · {size}",
+    "action.design": "Crear tres voces: {description}",
+    "action.download_size": "descarga de {size}",
+    "reply.no_clone": "No tienes ninguna voz llamada {name}.",
+    "ask.delete_voice": "¿Borro la voz {name}? No se puede deshacer.",
+    "action.delete_voice": "Borrar «{name}»",
+    "reply.clone_renamed": "He cambiado el nombre de {old} a {new}.",
+    "done.clone_go": "Adelante.",
+    "done.clone_downloading": "Descargando el modelo de clonación. Puedes grabar mientras se descarga.",
+    "done.clone_made": "He creado la voz {name}.",
+    "done.clone_kept": "Guardada. A partir de ahora leeré con ella.",
+    "done.clone_discarded": "Vale, la he borrado.",
+    "done.voice_deleted": "He borrado {name}.",
+    "reply.clone_saved_unchecked": "He guardado {name}. {note}",
+    "ask.keep_clone": "¿La guardo?",
+    "ask.keep_clone_fair": "Suena un poco áspera. ¿La guardo de todos modos?",
+    "ask.keep_clone_poor": (
+        "No ha salido clara. Un sitio más tranquilo o una grabación más limpia ayudan. ¿La guardo de todos modos?"
+    ),
+    "action.keep_clone": "Guardar «{name}»",
+    "design.job": "Diseñando voces",
+    "design.step": "Creando la voz {n} de {total}",
+    "design.done": "Las voces están listas",
+    "design.working": "Creando tres voces. Tarda como medio minuto.",
+    "design.reject.describe": "Dime cómo debe sonar la voz, por ejemplo «una voz cálida y grave, tranquila y lenta».",
+    "design.reject.failed": "No he podido crear una voz con esa descripción. Prueba a describirla de otra forma.",
+    "design.reject.download": (
+        "Para diseñar voces hace falta el modelo de diseño de voz, de unos {size}. Descárgalo antes."
+    ),
+    "design.candidate": "Voz {n}",
+    "design.say_candidate": "Voz {n}.",
+    "design.keep_command": "quédate con la voz {n}",
+    "design.shown": "Aquí tienes {n} voces.",
+    "card.design": "Voces para «{name}»",
+    "ask.design_which": "¿Cuál guardo? Di su número, o ninguna.",
+    "action.keep_design": "Elegir una voz para {name}",
+    "done.design_kept": "He guardado «{name}». A partir de ahora leeré con ella.",
+    "done.design_discarded": "Vale, ninguna.",
+    "voices.clone": "Clonar una voz",
+    "voices.clone_command": "clona mi voz",
+    "voices.delete_command": "borra la voz {name}",
+    "setting.qwen3.size": "Tamaño de la voz local",
+    "setting.qwen3.precision": "Precisión de la voz local",
+    "models.family.customvoice": "Voces Qwen",
+    "models.family.base": "Clonación de voz Qwen",
+    "models.family.voicedesign": "Diseño de voz Qwen",
 }

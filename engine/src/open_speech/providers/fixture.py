@@ -81,6 +81,8 @@ class FixtureTts:
 
     latency_s: ClassVar[float] = 0.0
     calls: ClassVar[int] = 0
+    # Syntheses at once (transport scheduling). Tests use three-utterance scripts, so 2 keeps the cap observable.
+    max_concurrency: ClassVar[int] = 2
     _failures: ClassVar[deque[int]] = deque()
 
     def __init__(self, catalog: ModelCatalog) -> None:

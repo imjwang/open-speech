@@ -2,8 +2,8 @@
 
 Status: Draft v0.1 · 2026-11-22
 
-The design borrows from Claude Code: standing preferences in one Markdown file (like `CLAUDE.md`),
-scoped rule files (like `.claude/rules/*.md` with path scopes), and on-demand **skills** in the open
+The design borrows from Claude Code: one Markdown prompt that drives cleanup, the **reading instructions**
+(like `CLAUDE.md`), scoped rule files (like `.claude/rules/*.md` with path scopes), and on-demand **skills** in the open
 Agent Skills format. Everything is a plain file under `rules/` and `skills/` in app data. Users can
 version, share and hand-edit them, and the engine reloads them on change. There are three ways to change
 them, and they are the same thing underneath: say it, type it in the rules editor, or edit the file.
@@ -12,7 +12,7 @@ them, and they are the same thing underneath: say it, type it in the rules edito
 
 | File | What it is | Loaded |
 |---|---|---|
-| `rules/SPEECH.md` | Free-form standing preferences ("I'm a nurse; read drug names carefully; never read legal disclaimers"). Starts empty; the editor explains what it is for | Every Claude plan call, as part of the cached prefix, and every assistant conversation |
+| `rules/SPEECH.md` | The reading instructions: the prompt Claude follows to clean up every document, in the user's words ("Skip citations", "I'm a nurse; read drug names carefully", "never read legal disclaimers"). Ships with sections (§ The reading instructions) | Every Claude cleanup call, as part of the cached prefix, and every assistant turn |
 | `rules/*.md` | One rule each: scope + instruction (+ compiled filter) | When the scope matches the document |
 | `rules/lexicon.csv` | Pronunciations: `term,spoken[,scope]` | Always; applied as a deterministic filter |
 | `skills/<name>/SKILL.md` (P1) | A pack of instructions, rules and lexicon for a document genre | Only name + description in context until relevant |
@@ -29,7 +29,7 @@ scope:
 enabled: true
 tier: annotate            # filter | annotate | transform — set by the compiler, user may override
 compiled: null            # machine-managed filter spec when tier = filter
-created_by: assistant     # assistant | user | preset | skill:<name>
+created_by: assistant     # assistant | user | skill:<name>
 ---
 Skip parenthetical author-year citations. If the author name is the grammatical
 subject ("Smith et al. (2020) showed…"), keep the name and drop only the year.
@@ -59,34 +59,46 @@ compiled:
   keep_blocks_only: null              # e.g. [heading, paragraph] for "only read the body"
 ```
 
-## Built-in presets
+## The reading instructions
 
-Presets are ordinary rule files shipped in `engine/data/presets/` and copied to `rules/` on first run.
-They carry the same names as Speechify's toggles, so switchers find them, plus three additions.
+There is one kind of cleanup: Claude reading the document with the user's reading instructions. There are
+no modes and no preset toggles. To change what is read, the user asks the assistant ("stop reading captions"),
+which edits the file on a confirmation card (`edit_prompt`), or edits the text in the rules editor or on disk.
 
-| Preset | Classic (filter) | AI Enhanced adds |
-|---|---|---|
-| Headers | `drop_blocks: [header]` | Catches running heads the heuristic missed (text that repeats in the document) |
-| Footers | `drop_blocks: [footer]` | — |
-| Page numbers | `drop_blocks: [page_number]` | Inline "Page 4 of 18" fragments |
-| Footnotes | `drop_blocks: [footnote]`, `drop_marks: [footnote_ref]` | Endnote markers in odd formats |
-| Citations | `drop_marks: [citation_ref]` | Author-year forms, keeping names that are subjects |
-| URLs | `drop_marks: [url]` | Addresses the detector missed ("example.org/docs"), read as a short domain. An address Classic already removed is not brought back: Claude sees only `⟦url⟧` in its place |
-| Parentheses | `drop_marks: [parenthetical]` | Parentheticals the detector missed. Keeping a parenthetical "that carries meaning" is not possible while Classic removes every one first (there is no restore op) |
-| Brackets | `drop_marks: [bracket]` | — |
-| Braces | `drop_marks: [brace]` | — |
-| Tables | `drop_blocks: [table]` | Optional one-sentence table summary (transform) |
-| Formulas | `drop_blocks: [equation]`, `drop_marks: [formula]` | Optional "explain in words" (transform) |
-| Captions | `drop_blocks: [caption]` | — |
-| Code | `drop_blocks: [code]` | Optional one-line summary of each code block |
+A fresh profile gets `engine/src/open_speech/data/SPEECH.default.md`. It is written as a prompt: who is
+listening and why, short sections, instructions with their reason, and an example for each edge case.
 
-**Mode** (`classic | ai_enhanced`) is set globally and can be overridden per scope (e.g. AI Enhanced
-only for `sites: [arxiv.org]`). Classic never calls an API. AI Enhanced exists only in builds that
-include Claude; elsewhere the mode control offers Classic alone.
+| Section | Holds |
+|---|---|
+| `## Leave out` | One skip per line. By default: headers, footers and page numbers; footnotes and their markers; citations (keep an author who is the subject of the sentence); URLs (say the short domain when the link text is the address). A comment lists the lines users often add: parentheses, brackets, braces, tables, formulas, captions, code |
+| `## Read with care` | How to read what stays (tables, formulas, code) |
+| `## Never change` | The bound on Claude: remove only what the instructions name, plus at most the few words that only introduced it; never summarize, reorder or correct; when unsure, read it |
+| `## About me` | The user's own notes ("I'm a nurse…"). Empty, with an example in a comment |
 
-What AI Enhanced may remove on behalf of a preset is bounded by a guard (`05` § Tier 2): the kind of span
-the preset names plus the few words that only introduced it. It cannot drop what the author said next to
-a citation or an address.
+HTML comments are notes for the user and are never sent to Claude.
+
+**Skip lines are also filters.** A bullet whose first sentence is an obvious skip ("- Skip footnotes and
+footnote markers. …") goes through the offline compiler (§ The compiler) and becomes a filter rule held in
+memory, never a file (`rules/prompt.py`). That rule:
+- removes what it names before Claude sees the text (Claude sees `⟦footnote⟧` in its place, `05` § Tier 2),
+  so the free part of cleanup still happens when Claude can't be reached or the budget is spent;
+- goes to Claude as an active rule with the whole line as its instruction ("keep the name"), for the forms
+  the detectors miss (author-year citations, bare addresses, inline "Page 4 of 18");
+- bounds what Claude may remove on its behalf (`05` § Tier 2, `plan/guard.py`): the kind of span it names
+  (citation, address, parenthetical, running head) plus the few words that only introduced it.
+
+Deleting the line removes all of that. Claude reads the rest of the file as written, without those lines.
+A line such as "Skip tables; summarize them in one sentence instead" compiles to a filter too; one that needs
+judgment ("never read legal disclaimers") is Claude's alone.
+
+Without Claude in the build, only the filters (from skip lines and rule files) and the lexicon apply.
+Offline or over budget, the plan is made with the filters, marked as such in Script view, and made again with
+Claude when it is back.
+
+**Upgrade.** A profile from a version with presets is converted once, on first start: each preset the user
+had on becomes its line in `## Leave out` (one they had turned off is left out, an optional one they had
+turned on is added), what they had written in `SPEECH.md` moves under `## About me`, and the preset files,
+`.installed-presets` and `modes.toml` are removed. Their own rule files are kept.
 
 ## Lexicon
 
@@ -113,7 +125,7 @@ A rule proposed by voice, typed in the editor or written by hand goes through th
   2. **Compile** filter rules into the `compiled` schema. The engine validates the schema and test-runs the regexes; a filter that doesn't validate is saved as `annotate` rather than broken.
   3. **Scope:** suggest a scope from context ("you're on arxiv.org: only there, or everywhere?").
   4. **Name and describe** the rule.
-- **In a build without Claude**, a spoken or typed proposal the local compiler can't express is declined in one sentence ("Try a simpler one, like 'skip footnotes'"). In the editor the same text is kept as written and marked as needing AI Enhanced cleanup, so nothing typed is lost.
+- **In a build without Claude**, a spoken or typed proposal the local compiler can't express is declined in one sentence ("Try a simpler one, like 'skip footnotes'"). In the editor the same text is kept as written and marked as needing Claude, so nothing typed is lost.
 
 Hand-written rules with no `tier` are compiled on first load. Users can pin `tier` to override.
 
@@ -132,7 +144,7 @@ to any client:
 
 | Call | What it does |
 |---|---|
-| `GET /rules/files` | The files, in the order the editor shows them: `preferences`, `lexicon`, the user's rules, the presets |
+| `GET /rules/files` | The files, in the order the editor shows them: `preferences` (the reading instructions), `lexicon`, the user's rules |
 | `GET /rules/files/{id}` | `text` (the file as it is on disk) and `body` (what a person edits) |
 | `POST /rules/files {body}` | A new rule from plain words: named, compiled, written to `rules/<name>.md` |
 | `PUT /rules/files/{id} {body}` | Change what a rule says. It is compiled again, so what it says and how it is applied never drift apart; what the user set on the file (scope, on/off) is kept |
@@ -156,12 +168,15 @@ open editor shows the change unless that would overwrite what is being typed.
 > → transform rule, `docs: [doc_…]` → estimate (small) → confirm → script rebuilt.
 
 > "Deja de leer las tablas." → "Eso omite las tablas en todas partes. ¿Lo guardo?" → "sí" → saved.
-> The same grammar exists in Spanish, and cards name built-in presets in the interface language.
+> The same grammar exists in Spanish.
 
 > "That arxiv rule should skip captions, not footnotes."
 > → the assistant reads the rule (`list_rules`, `read_rule`), proposes the new wording (`update_rule`) on a
 > confirmation card → "yes" → the file is rewritten and re-compiled. Deleting a rule, turning one off, and
-> adding to the standing preferences (`edit_preferences`) work the same way: always a card, never a silent change.
+> editing the reading instructions (`edit_prompt`) work the same way: always a card, never a silent change.
+
+> "Stop reading captions." → the assistant adds "- Skip captions." under `## Leave out` (`edit_prompt`) on a
+> card → "yes" → `SPEECH.md` is saved, the line becomes a filter, the open document is re-planned.
 
 > "Open the rules." → the rules editor opens (`open_rules`), optionally on one file ("open my pronunciations").
 
@@ -203,11 +218,11 @@ Announce section headings as "Section 3: Methods".
 
 | Say | Becomes |
 |---|---|
-| "Skip citations" | Preset *Citations* on (Classic); AI Enhanced handles author-year |
+| "Skip citations" | A "- Skip citations." line in the reading instructions: a filter for bracketed citations, and Claude for author-year forms |
 | "Describe figures in one sentence" | Transform rule, `types: [pdf, web]`, figure-anchored utterances |
 | "Say SQL as sequel" · "Di SQL como sequel" | Lexicon row |
 | "Forget how to say SQL" | Lexicon row removed (confirmation card) |
 | "Summarize each section in two sentences" | Transform rule (section-anchored); estimate first |
 | "Only read the abstract and conclusions of this paper" | Transform rule, `docs: [this]` |
 | "On Wikipedia, skip the infobox and the edit links" | Filter rule `sites: [wikipedia.org]` (which covers `en.wikipedia.org`), compiled `drop_blocks` + regex |
-| "Never read legal disclaimers" | Added to `SPEECH.md` (preference) and an annotate rule |
+| "Never read legal disclaimers" | A line in the reading instructions (Claude applies it) |

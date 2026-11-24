@@ -1,6 +1,5 @@
-"""Rule files on disk (06 § Three kinds of file): `rules/*.md`, `rules/SPEECH.md`, `rules/lexicon.csv`, plus
-`rules/modes.toml` for per-scope mode overrides. Hand edits are picked up by `watch()` within 1 s
-(FR-RULE-3).
+"""Rule files on disk (06 § Three kinds of file): `rules/SPEECH.md` (the reading instructions), `rules/*.md` and
+`rules/lexicon.csv`. Hand edits are picked up by `watch()` within 1 s (FR-RULE-3).
 """
 
 from __future__ import annotations
@@ -11,12 +10,10 @@ import logging
 import os
 import re
 import threading
-import tomllib
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
-import tomli_w
 import yaml
 from pydantic import ValidationError
 
@@ -27,25 +24,19 @@ from open_speech.errors import EngineError, NotFound
 from open_speech.rules.hashing import compute_rules_hash
 from open_speech.rules.lexicon import Lexicon
 from open_speech.rules.model import CompiledFilter, Rule, name_from_rule_id, rule_id_for, slugify
-from open_speech.rules.presets import preset_dir, preset_order, preset_spec
-from open_speech.rules.scope import (
-    by_precedence,
-    level_reason,
-    normalized_scope,
-    scope_level,
-    scope_matches,
-)
+from open_speech.rules.prompt import default_prompt, derive_rules, prompt_from_presets
+from open_speech.rules.scope import by_precedence, level_reason, scope_level, scope_matches
 
 log = logging.getLogger("open_speech.rules")
 
-Mode = Literal["classic", "ai_enhanced"]
-MODES_FILE = "modes.toml"
+# Earlier versions copied 13 presets into rules/ and recorded them here, and kept per-scope Classic / AI Enhanced
+# overrides in modes.toml. Both are retired on upgrade: the presets become lines of the reading instructions.
 INSTALLED_PRESETS_FILE = ".installed-presets"
+LEGACY_MODES_FILE = "modes.toml"
 _SKIP_FILES = {"speech.md", "readme.md"}
 
-# The preferences file starts empty: the editor explains what it is for, in the user's language. Earlier
-# versions wrote an explanatory comment into the file; it is recognised so the editor shows such a file as empty.
-DEFAULT_SPEECH_MD = ""
+# Earlier versions started SPEECH.md with an explanatory comment (and later empty); it is recognised on upgrade
+# so the user's own words, if any, are kept.
 LEGACY_SPEECH_MD = """<!--
 SPEECH.md: standing preferences for how Open Speech reads to you, in your own words.
 Everything outside this comment is included in every AI Enhanced (Claude) plan call. Examples:
@@ -211,35 +202,50 @@ class RuleStore:
         self._errors: list[str] = []
         self._lexicon = Lexicon([], paths.lexicon)
         self._speech_md = ""
-        self._modes: list[tuple[RuleScope, Mode]] = []
+        self._derived: list[Rule] = []  # filter rules from the skip lines of SPEECH.md (rules/prompt.py)
+        self._speech_rest = ""  # what Claude reads of SPEECH.md: no comments, no lines that became filters
 
     # ------------------------------------------------------------ lifecycle
 
     def ensure_defaults(self) -> None:
-        """Copy bundled presets on first run (and any preset added by a later version), create SPEECH.md
-        and lexicon.csv if missing, then load everything. Presets the user deleted are not restored."""
+        """Write the default reading instructions on first run (or turn an earlier version's presets into
+        them), create lexicon.csv if missing, then load everything."""
         self.dir.mkdir(parents=True, exist_ok=True)
-        marker = self.dir / INSTALLED_PRESETS_FILE
-        installed = set(marker.read_text("utf-8").split()) if marker.exists() else set()
-        changed = False
-        for entry in sorted(preset_dir().iterdir(), key=lambda t: t.name):
-            if not entry.name.endswith(".md"):
-                continue
-            stem = entry.name[:-3]
-            if stem in installed:
-                continue
-            target = self.dir / entry.name
-            if not target.exists():
-                _atomic_write(target, entry.read_text("utf-8"))
-            installed.add(stem)
-            changed = True
-        if changed or not marker.exists():
-            _atomic_write(marker, "\n".join(sorted(installed)) + "\n")
+        self._retire_presets()
         if not self.paths.speech_md.exists():
-            _atomic_write(self.paths.speech_md, DEFAULT_SPEECH_MD)
+            _atomic_write(self.paths.speech_md, default_prompt())
         if not self.paths.lexicon.exists():
             Lexicon([], self.paths.lexicon).save()
         self.reload()
+
+    def _retire_presets(self) -> None:
+        """Upgrade from a version with presets and Classic / AI Enhanced modes: the presets the user had on
+        become lines of SPEECH.md (what they had written there is kept under "About me"), and the preset files,
+        their marker and modes.toml are removed."""
+        marker = self.dir / INSTALLED_PRESETS_FILE
+        if not marker.exists():
+            return
+        enabled: dict[str, bool] = {}
+        for path in sorted(self.dir.glob("*.md")):
+            if path.name.lower() in _SKIP_FILES:
+                continue
+            try:
+                meta, _ = split_frontmatter(path.read_text("utf-8"))
+            except (OSError, ValueError):
+                continue
+            if meta.get("created_by") != "preset":
+                continue
+            enabled[slugify(str(meta.get("name") or path.stem))] = meta.get("enabled", True) is True
+            path.unlink(missing_ok=True)
+        # A preset the user deleted is off; one never installed keeps its default.
+        for name in marker.read_text("utf-8").split():
+            enabled.setdefault(name, False)
+        old = self.paths.speech_md.read_text("utf-8") if self.paths.speech_md.exists() else ""
+        about = "" if old.strip() == LEGACY_SPEECH_MD.strip() else old
+        _atomic_write(self.paths.speech_md, prompt_from_presets(enabled, about))
+        marker.unlink(missing_ok=True)
+        (self.dir / LEGACY_MODES_FILE).unlink(missing_ok=True)
+        log.info("reading instructions written from %d presets", len(enabled))
 
     def reload(self) -> None:
         rules: dict[str, Rule] = {}
@@ -266,13 +272,15 @@ class RuleStore:
                 rules[rule.id] = rule
         lexicon = Lexicon.load(self.paths.lexicon)
         speech = self.paths.speech_md.read_text("utf-8") if self.paths.speech_md.exists() else ""
-        modes = self._load_modes(errors)
+        mtime = self.paths.speech_md.stat().st_mtime if speech else 0.0
+        derived, rest = derive_rules(speech, mtime=mtime)
         with self._lock:
             self._rules = rules
             self._errors = errors
             self._lexicon = lexicon
             self._speech_md = _HTML_COMMENT.sub("", speech).strip()
-            self._modes = modes
+            self._derived = derived
+            self._speech_rest = rest
 
     def errors(self) -> list[str]:
         """Addition: files that failed to parse (shown in the rules panel)."""
@@ -331,86 +339,22 @@ class RuleStore:
         """Human-readable conflicts between active rules ("read footnotes" vs "skip footnotes")."""
         return find_conflicts(rules)
 
-    # ------------------------------------------------------------ presets
+    # ------------------------------------------------------------ what the planner gets
 
-    def presets(self) -> list[Rule]:
-        return sorted((r for r in self.all() if r.preset), key=preset_order)
-
-    def set_preset(self, name_or_id: str, enabled: bool) -> Rule:
-        spec = preset_spec(name_or_id)
-        rule: Rule | None = None
+    def derived_rules(self) -> list[Rule]:
+        """The filter rules the skip lines of SPEECH.md stand for (in memory only, never files)."""
         with self._lock:
-            for r in self._rules.values():
-                if r.id == name_or_id or r.name == name_or_id or (spec and r.name == spec.name):
-                    rule = r
-                    break
-        if rule is None and spec is not None:
-            bundled = preset_dir().joinpath(f"{spec.name}.md")
-            rule = rule_from_text(bundled.read_text("utf-8"), path=self.dir / f"{spec.name}.md")
-        if rule is None:
-            raise NotFound(f"a preset called {name_or_id}")
-        if rule.enabled == enabled and rule.path and rule.path.exists():
-            return rule
-        return self.save(rule.model_copy(update={"enabled": enabled}))
+            return list(self._derived)
 
-    # ------------------------------------------------------------ modes
+    def plan_rules(self, doc: Document) -> list[Rule]:
+        """What cleans up `doc`: its matching rule files plus the filters from SPEECH.md, by precedence."""
+        derived = [r for r in self.derived_rules() if r.enabled and scope_matches(r.scope, doc)]
+        return by_precedence([*self.rules_for(doc), *derived])
 
-    def _modes_path(self) -> Path:
-        return self.dir / MODES_FILE
-
-    def _load_modes(self, errors: list[str]) -> list[tuple[RuleScope, Mode]]:
-        path = self._modes_path()
-        if not path.exists():
-            return []
-        try:
-            data = tomllib.loads(path.read_text("utf-8"))
-        except (OSError, tomllib.TOMLDecodeError) as e:
-            errors.append(f"{MODES_FILE}: {e}")
-            return []
-        out: list[tuple[RuleScope, Mode]] = []
-        for item in data.get("overrides", []):
-            mode = item.get("mode")
-            if mode not in ("classic", "ai_enhanced"):
-                errors.append(f"{MODES_FILE}: mode must be classic or ai_enhanced (got {mode!r})")
-                continue
-            scope = RuleScope(**{k: _as_list(item.get(k)) for k in ("sites", "types", "docs", "languages")})
-            out.append((normalized_scope(scope), mode))
-        return out
-
-    def mode_overrides(self) -> list[tuple[RuleScope, str]]:
+    def plan_speech_md(self) -> str:
+        """What Claude reads of SPEECH.md: the file without comments and without the lines that became filters."""
         with self._lock:
-            return list(self._modes)
-
-    def set_mode_override(self, scope: RuleScope, mode: str | None) -> None:
-        """Upsert the override for exactly this scope; `mode` None (or "inherit") removes it."""
-        norm = normalized_scope(scope)
-        if mode not in (None, "inherit", "classic", "ai_enhanced"):
-            raise EngineError("invalid_request", "Mode must be classic or AI Enhanced.")
-        with self._lock:
-            modes = [(s, m) for s, m in self._modes if s != norm]
-            if mode in ("classic", "ai_enhanced"):
-                modes.append((norm, mode))  # type: ignore[arg-type]
-            self._modes = modes
-            doc: dict[str, Any] = {"overrides": []}
-            for s, m in modes:
-                item: dict[str, Any] = {"mode": m}
-                item.update({k: v for k, v in s.model_dump().items() if v})
-                doc["overrides"].append(item)
-            header = "# Per-scope reading mode overrides (06). The global mode lives in settings.toml.\n"
-            _atomic_write(self._modes_path(), header + tomli_w.dumps(doc))
-
-    def mode_for(self, doc: Document, global_mode: str) -> Mode:
-        with self._lock:
-            modes = list(self._modes)
-        best: tuple[int, int, Mode] | None = None
-        for i, (scope, mode) in enumerate(modes):
-            if scope_matches(scope, doc):
-                cand = (scope_level(scope), i, mode)
-                if best is None or cand[:2] > best[:2]:
-                    best = cand
-        if best is not None:
-            return best[2]
-        return "ai_enhanced" if global_mode == "ai_enhanced" else "classic"
+            return self._speech_rest
 
     # ------------------------------------------------------------ SPEECH.md / lexicon / hash
 

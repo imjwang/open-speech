@@ -210,11 +210,11 @@ def locate_ops(
 def attribute(op: SpanOp, rules_by_id: Mapping[str, Rule], annotate_rules: Sequence[Rule]) -> tuple[str, str]:
     if op.rule_id and op.rule_id in rules_by_id:
         r = rules_by_id[op.rule_id]
-        return r.id, r.name
+        return r.id, r.label
     if op.rule_id == SPEECH_MD_RULE_ID:
         return SPEECH_MD_RULE_ID, SPEECH_MD_NAME
     if len(annotate_rules) == 1:
-        return annotate_rules[0].id, annotate_rules[0].name
+        return annotate_rules[0].id, annotate_rules[0].label
     return AI_RULE_ID, AI_RULE_NAME
 
 

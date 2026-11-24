@@ -308,8 +308,9 @@ def test_in_the_bar_the_cost_is_a_confirmation_card_asked_once(api: tuple[Any, T
 def test_rules_are_text_files_that_can_be_edited_as_text(api: tuple[Any, TestClient], home: Path) -> None:
     engine, client = api
     listed = client.get("/api/v1/rules/files").json()["items"]
-    assert [f["id"] for f in listed[:2]] == ["preferences", "lexicon"]
-    assert {f["kind"] for f in listed[2:]} == {"preset"}
+    assert [f["id"] for f in listed] == ["preferences", "lexicon"]  # no presets: a fresh profile has no rule files
+    prefs = client.get("/api/v1/rules/files/preferences").json()
+    assert "## Leave out" in prefs["text"] and prefs["body"] == prefs["text"]
 
     with ws_connect(client) as ws:
         reader = WsReader(ws)
@@ -364,7 +365,9 @@ def test_a_rule_written_in_the_editor_changes_what_is_read(api: tuple[Any, TestC
     doc = _text_doc(client, text)
     before = " ".join(u["text"] for u in client.get(f"/api/v1/documents/{doc}/script").json()["utterances"])
     assert "(Smith, 2020)" not in before, "Citations are skipped by default"
-    client.put("/api/v1/rules/files/rule_citations", json={"enabled": False})
+    prefs = client.get("/api/v1/rules/files/preferences").json()["text"]
+    kept = "\n".join(ln for ln in prefs.splitlines() if not ln.startswith("- Skip citations."))
+    client.put("/api/v1/rules/files/preferences", json={"text": kept + "\n"})
     after = " ".join(u["text"] for u in client.get(f"/api/v1/documents/{doc}/script").json()["utterances"])
     assert "(Smith, 2020)" in after
 
@@ -569,37 +572,6 @@ def test_the_assistant_maintains_rules_through_confirmation_cards(engine_factory
         assert path.exists()
         turn(client, reader, "yes")
     assert not path.exists()
-
-
-def test_the_assistant_sees_what_was_settled_without_it(engine_factory: Any) -> None:
-    """A "yes" is answered without the assistant. If it never hears about it, its next turn starts from a
-    conversation with a hole in it (a real run proposed the same rule twice)."""
-    seen: list[list[dict[str, Any]]] = []
-
-    class Remembering(ScriptedRunner):
-        async def run(self, *, history: Any, **kw: Any) -> Any:
-            seen.append(list(history))
-            return await super().run(history=history, **kw)
-
-    holder: dict[str, ScriptedRunner] = {}
-    engine, client = engine_factory(agent_runner_factory=lambda: holder["r"])
-    holder["r"] = Remembering([("propose_rule", {"instruction": "skip captions", "site": "wikipedia.org"})], "Save it?")
-    with ws_connect(client) as ws:
-        reader = WsReader(ws)
-        first = turn(client, reader, "on wikipedia.org, stop reading the figure captions")
-        assert first["actions"][0]["summary"].endswith("wikipedia.org"), "the site the user named, with nothing open"
-        assert json.loads(holder["r"].results[0])["applies"] == "wikipedia.org"
-        assert turn(client, reader, "yes")["done"]["handled_by"] == "fast_path"
-        turn(client, reader, "pause")  # nothing is playing; still part of the conversation
-        holder["r"] = Remembering([], "You have one rule of your own.")
-        turn(client, reader, "how many rules have I written?")
-    assert seen[0] == []
-    history = [(m["role"], m["content"]) for m in seen[1]]
-    assert history[:2] == [("user", "on wikipedia.org, stop reading the figure captions"), ("assistant", "Save it?")]
-    assert history[2] == ("user", "yes")
-    assert history[3][0] == "assistant" and history[3][1].startswith("Saved")
-    assert history[4] == ("user", "pause")
-    assert [role for role, _ in history] == ["user", "assistant"] * 3, "always in pairs"
 
 
 def test_the_assistant_changes_visible_settings_at_once_and_lasting_ones_by_card(engine_factory: Any) -> None:

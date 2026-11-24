@@ -12,7 +12,7 @@ from open_speech.document.model import Block, DomAnchor
 from open_speech.plan.script import RuleHit, Utterance
 from open_speech.providers.base import Voice
 
-Mode = Literal["classic", "ai_enhanced"]
+Mode = Literal["classic", "ai_enhanced"]  # of a script: "ai_enhanced" when Claude cleaned it up
 Money = str  # decimal string, never a float (04 § Conventions)
 
 
@@ -47,13 +47,11 @@ class CreateDocumentRequest(BaseModel):
     image_mode: Literal["auto", "transcribe", "describe"] = "auto"
     play: bool = False
     voice_id: str | None = None
-    mode: Mode | None = None
     confirm_estimate: bool = False
 
 
 class DocumentSettings(BaseModel):
     voice_id: str | None = None
-    mode: Mode | None = None
     pinned: bool = False
 
 
@@ -120,7 +118,6 @@ class ScriptOut(BaseModel):
 
 class DocumentSettingsUpdate(BaseModel):
     voice_id: str | None = None
-    mode: Mode | None = None
     pinned: bool | None = None
 
 
@@ -205,6 +202,107 @@ class PreviewResponse(BaseModel):
     recording_id: str
     cached: bool
     usd_estimate: Money = "0"
+
+
+# ------------------------------------------------------------------ cloned and designed voices (08 § Voice cloning)
+
+
+class CloneConsent(BaseModel):
+    """What the person confirmed ("This is my voice, or I have the speaker's permission …") and when."""
+
+    text_version: str
+    accepted_at: str
+
+
+class CloneCheck(BaseModel):
+    """The new voice said a test sentence; the on-device recognizer's word error rate grades it."""
+
+    wer: float | None = None
+    similarity: float | None = None  # speaker similarity: not measured yet
+    grade: Literal["good", "fair", "poor"] | None = None  # None: not checked (the cloning model isn't downloaded)
+    recording_id: str | None = None  # the test sentence, for replay (GET /recordings/{id})
+    note: str | None = None
+
+
+class CloneOut(BaseModel):
+    slug: str
+    voice_id: str  # "qwen3:clone:<slug>": use it like any voice id
+    name: str
+    language: str  # of the reference; the voice reads every language Qwen3-TTS speaks
+    source: Literal["recording", "file", "design"]
+    design_prompt: str | None = None
+    ref_text: str  # exactly what the reference says
+    ref_sha256: str
+    processing_version: str
+    duration_s: float
+    created_at: str
+    kept: bool
+    consent: CloneConsent | None = None
+    check: CloneCheck | None = None
+    quality: dict[str, Any] = Field(default_factory=dict)  # sample rate, speech, SNR, clipping, level, window
+    warnings: list[str] = Field(default_factory=list)
+
+
+class CloneList(BaseModel):
+    items: list[CloneOut]
+
+
+class PassageOut(BaseModel):
+    id: str
+    language: str
+    text: str
+
+
+class PassageList(BaseModel):
+    """Two-sentence passages to read for a clone, and the consent line to show with them."""
+
+    items: list[PassageOut]
+    consent: str
+    consent_version: str
+
+
+class CloneAccepted(BaseModel):
+    """The clone is being made: follow `job_id` (`job.progress`, GET /jobs/{id}; its result has the check)."""
+
+    job_id: str
+    slug: str
+    voice_id: str
+
+
+class ClonePatch(BaseModel):
+    """Rename, correct what the reference says (a new reference hash: cached audio is made again), or its language."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    ref_text: str | None = Field(default=None, max_length=2000)
+    language: str | None = Field(default=None, max_length=8)
+
+
+class DesignRequest(BaseModel):
+    """Make voices from a description (VoiceDesign 1.7B): three candidates, each a few seconds of a neutral passage."""
+
+    description: str = Field(min_length=3, max_length=300)
+    name: str | None = Field(default=None, max_length=64)
+    language: str | None = Field(default=None, max_length=8)
+
+
+class DesignAccepted(BaseModel):
+    """Follow `job_id`; its result lists the candidates ({candidate_id, recording_id, wer})."""
+
+    job_id: str
+
+
+class KeepCandidate(BaseModel):
+    name: str | None = Field(default=None, max_length=64)
+
+
+class JobOut(BaseModel):
+    job_id: str
+    kind: str
+    pct: float
+    label: str
+    state: Literal["running", "done", "failed"]
+    error: dict[str, Any] | None = None
+    result: dict[str, Any] = Field(default_factory=dict)
 
 
 # ------------------------------------------------------------------ rules
@@ -297,36 +395,11 @@ class RulePatch(BaseModel):
     description: str | None = None
 
 
-class PresetOut(BaseModel):
-    id: str
-    name: str
-    enabled: bool
-    classic: str
-    ai_enhanced_adds: str
-
-
-class ModeOverride(BaseModel):
-    scope: RuleScope
-    mode: Mode
-
-
-class PresetsState(BaseModel):
-    mode: Mode
-    overrides: list[ModeOverride] = Field(default_factory=list)
-    presets: list[PresetOut]
-
-
-class PresetsUpdate(BaseModel):
-    mode: Mode | None = None
-    presets: dict[str, bool] = Field(default_factory=dict)  # preset name or id → enabled
-    scope: RuleScope | None = None  # mode override scope; None = global
-
-
 class RuleFile(BaseModel):
-    """One text file under rules/: the standing preferences, the pronunciation list, or a rule."""
+    """One text file under rules/: the reading instructions (SPEECH.md), the pronunciation list, or a rule."""
 
-    id: str  # "preferences" | "lexicon" | a rule id
-    kind: Literal["preferences", "lexicon", "rule", "preset"]
+    id: str  # "preferences" (SPEECH.md) | "lexicon" | a rule id
+    kind: Literal["preferences", "lexicon", "rule"]
     name: str
     path: str
     description: str = ""
@@ -413,6 +486,13 @@ class SayRequest(BaseModel):
     text: str = Field(min_length=1, max_length=600)
 
 
+class SpeechStopRequest(BaseModel):
+    """Stop what the engine is saying (the WS `speech.stop`): one turn's reply, or anything when `turn_id` is
+    omitted. It fades out in ~15 ms and pending synthesis is dropped."""
+
+    turn_id: str | None = None
+
+
 class TurnAccepted(BaseModel):
     turn_id: str
 
@@ -477,8 +557,19 @@ class EstimateRequest(BaseModel):
     document_id: str | None = None
     text: str | None = None
     voice_id: str | None = None
-    mode: Mode | None = None
     operation: Literal["read", "regenerate", "export", "keep_offline", "transform"] = "read"
+
+
+class FreeTierState(BaseModel):
+    """A provider allowance that costs nothing until it is used up (e.g. Google's free voice characters).
+    Counted from this app's own use only, so it is an estimate."""
+
+    provider: str
+    label: str
+    unit: Literal["chars"] = "chars"
+    used: int
+    limit: int
+    resets_on: str  # ISO date of the next reset
 
 
 class BudgetState(BaseModel):
@@ -487,6 +578,7 @@ class BudgetState(BaseModel):
     hard_stop: bool
     spent_usd: Money
     pct: float
+    free_tiers: list[FreeTierState] = Field(default_factory=list)
 
 
 class BudgetUpdate(BaseModel):
@@ -534,6 +626,12 @@ class LocalModel(BaseModel):
     fit: Literal["fits", "slow", "unsupported"]
     status: str = ""
     kind: Literal["tts", "stt"] = "tts"  # a voice, or a speech-to-text model
+    # Weights variants (Qwen3-TTS): which family ("customvoice" preset voices, "base" cloning, "voicedesign"), size
+    # ("0.6b"/"1.7b") and precision ("bf16".."4bit"); `selected` = the one the settings choose for that family.
+    family: str | None = None
+    size: str | None = None
+    precision: str | None = None
+    selected: bool = False
 
 
 class LocalModelList(BaseModel):
@@ -549,6 +647,35 @@ class Health(BaseModel):
     version: str
     uptime_s: float
     fixture_providers: bool = False
+
+
+class AudioDiagnostics(BaseModel):
+    """What the audio path counted since the engine started (GET /diagnostics/audio). Starvation is split by
+    cause: `render_starvations` (the renderer fell behind: a bug or an overloaded Mac) versus `synthesis_waits`
+    (the next sentence wasn't synthesized yet: a slow voice)."""
+
+    device: str | None = None
+    rate: int = 0  # output sample rate (the device's native rate when it could be opened at it)
+    latency_ms: float = 0.0
+    mode: str = ""  # "callback" | "blocking" | "null"
+    resampler: str = ""
+    uptime_s: float = 0.0
+    callbacks: int = 0
+    audio_s: float = 0.0  # audio handed to the device
+    output_underflows: int = 0  # PortAudio status flags reported by the device
+    output_overflows: int = 0
+    priming_output: int = 0
+    render_starvations: int = 0
+    synthesis_waits: int = 0
+    stream_starvations: int = 0
+    ring_low_water_ms: float | None = None  # least reading audio buffered ahead while reading played
+    max_pull_ms: float = 0.0  # slowest audio callback (the renderer's part)
+    mean_pull_ms: float | None = None
+    device_reopens: int = 0
+    reading_buffered_ms: float = 0.0
+    speed: float = 1.0
+    output_running: bool = False
+    speaking: int = 0  # replies / clips being said now
 
 
 class Problem(BaseModel):

@@ -291,3 +291,81 @@ def test_misaki_dictionaries_are_used_without_espeak() -> None:
     g = LexiconPhonemizer()
     words = [t.phonemes for t in g.phonemize("Open speech reads aloud.") if t.is_word]
     assert words[0] == "ˈOpᵊn" and words[1] == "spˈiʧ"
+
+
+# ------------------------------------------------------------------ CPU discipline and cache identity (05 § 9)
+
+
+def test_session_options_limit_threads_and_spinning() -> None:
+    pytest.importorskip("onnxruntime")
+    from open_speech.providers.kokoro import INTRA_OP_THREADS, session_options
+
+    opts = session_options()
+    assert 2 <= INTRA_OP_THREADS <= 4 and opts.intra_op_num_threads == INTRA_OP_THREADS
+    assert opts.inter_op_num_threads == 1
+    assert opts.get_session_config_entry("session.intra_op.allow_spinning") == "0"
+    assert opts.get_session_config_entry("session.inter_op.allow_spinning") == "0"
+    assert session_options(2).intra_op_num_threads == 2
+
+
+def test_one_session_run_at_a_time(catalog: ModelCatalog, paths: Paths) -> None:
+    import threading
+    import time
+
+    install_fake_weights(paths)
+
+    class Counting(FakeSession):
+        def __init__(self) -> None:
+            super().__init__()
+            self.active = 0
+            self.peak = 0
+            self._l = threading.Lock()
+
+        def run(self, names: Any, feeds: dict[str, Any]) -> list[np.ndarray]:
+            with self._l:
+                self.active += 1
+                self.peak = max(self.peak, self.active)
+            time.sleep(0.02)
+            try:
+                return super().run(names, feeds)
+            finally:
+                with self._l:
+                    self.active -= 1
+
+    sess = Counting()
+    tts, _ = make_kokoro(catalog, paths, session=sess)
+    threads = [threading.Thread(target=tts.synthesize_sync, args=("hello there friend", MODEL, "af_heart"))
+               for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(sess.calls) == 3 and sess.peak == 1
+
+
+def test_cache_identity_names_the_weights_and_keys_use_it(catalog: ModelCatalog, paths: Paths) -> None:
+    from open_speech.providers.base import cache_identity, max_concurrency
+
+    tts, _ = make_kokoro(catalog, paths)
+    req = TtsRequest(text="hi", model=MODEL, voice="af_heart")
+    assert tts.cache_identity(req) == f"{MODEL}/q8"
+    assert cache_identity(tts, req) == f"{MODEL}/q8"
+    assert max_concurrency(tts) == 1
+
+    class Cloud:
+        id = "cloud"
+
+    assert cache_identity(Cloud(), req) == MODEL and max_concurrency(Cloud()) == 3
+
+
+def test_catalog_pins_every_kokoro_file(catalog: ModelCatalog) -> None:
+    """bundle-engine.sh bundles exactly what the catalog pins: model, tokenizer and one file per voice."""
+    import re
+
+    entry = catalog.tts_models("kokoro")[0]
+    w = entry.weights
+    assert w is not None
+    files = w.all_files() + w.voice_files(entry.voices)
+    assert len(files) == 2 + len(entry.voices)
+    assert all(re.fullmatch(r"[0-9a-f]{64}", f.sha256) for f in files)
+    assert w.model_file in {f.path for f in files} and w.quant

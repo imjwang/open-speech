@@ -94,7 +94,7 @@ def _hit(
 
 
 def block_drop_hit(block: Block, decision: BlockDecision) -> RuleHit:
-    return _hit(decision.rule.id, decision.rule.name, decision.action, block, (0, len(block.text)))
+    return _hit(decision.rule.id, decision.rule.label, decision.action, block, (0, len(block.text)))
 
 
 def apply_mark_drops(block: Block, mt: MappedText, plan: FilterPlan) -> list[RuleHit]:
@@ -119,7 +119,7 @@ def apply_mark_drops(block: Block, mt: MappedText, plan: FilterPlan) -> list[Rul
     for s, e, rule in reversed(merged):
         rng = mt.delete(s, e)
         if rng is not None:
-            hits.append(_hit(rule.id, rule.name, "skip", block, rng))
+            hits.append(_hit(rule.id, rule.label, "skip", block, rng))
     hits.reverse()
     return hits
 
@@ -136,10 +136,10 @@ def apply_replacements(block: Block, mt: MappedText, plan: FilterPlan) -> list[R
                 continue
             if new:
                 mt.edit(m.start(), m.end(), new)
-                hits.append(_hit(rule.id, rule.name, "replace", block, rng, new))
+                hits.append(_hit(rule.id, rule.label, "replace", block, rng, new))
             else:
                 mt.delete(m.start(), m.end())
-                hits.append(_hit(rule.id, rule.name, "skip", block, rng))
+                hits.append(_hit(rule.id, rule.label, "skip", block, rng))
     return hits
 
 

@@ -1,6 +1,6 @@
 /**
  * The renderer's view of the host. In Electron it wraps `window.openSpeech` (shell preload). In a plain
- * browser (UI tests via `pnpm dev:web`) it reads the engine from `?engine=<baseUrl>&token=<t>` (kept in
+ * browser (UI tests via `bun run dev:web`) it reads the engine from `?engine=<baseUrl>&token=<t>` (kept in
  * sessionStorage so in-app navigation keeps working) and degrades OS-only features gracefully.
  */
 import type { OpenSpeechBridge } from '@shared/bridge-types'
@@ -87,11 +87,12 @@ export function createBrowserBridge(win: Window = window): Bridge {
       // No window to hide: tell the page it closed (tests observe data-open="false").
       for (const cb of closedListeners) cb()
     },
-    resizeBar: () => undefined,
+    resizeBar: (height) => Math.round(height),
+    barShown: () => undefined,
     setListening: () => undefined,
     onBarOpened: (cb: (e: BarOpenedEvent) => void) => {
       // Loading the page counts as opening the bar; `?listen=0` starts in typing mode (no mic prompt).
-      const event: BarOpenedEvent = { listen: params.get('listen') !== '0', viaHotkey: false }
+      const event: BarOpenedEvent = { openId: 1, listen: params.get('listen') !== '0', viaHotkey: false }
       const doc = params.get('doc')
       if (doc) event.documentId = doc
       const t = win.setTimeout(() => cb(event), 0)

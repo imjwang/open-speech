@@ -36,12 +36,11 @@ async def upload_document(
     file: Annotated[UploadFile, File()],
     play: Annotated[bool, Form()] = False,
     voice_id: Annotated[str | None, Form()] = None,
-    mode: Annotated[s.Mode | None, Form()] = None,
     confirm_estimate: Annotated[bool, Form()] = False,
 ) -> s.CreateDocumentResponse:
     data = await file.read()
     return await engine.documents.create_from_upload(
-        file.filename or "upload", data, play=play, voice_id=voice_id, mode=mode, confirm_estimate=confirm_estimate
+        file.filename or "upload", data, play=play, voice_id=voice_id, confirm_estimate=confirm_estimate
     )
 
 
@@ -162,9 +161,112 @@ async def list_voices(engine: E, provider: str | None = None, lang: str | None =
     return engine.voices.list(provider=provider, lang=lang)
 
 
+@router.get("/voices/clones", response_model=s.CloneList, tags=["voices"])
+async def list_clones(engine: E) -> s.CloneList:
+    """Cloned and designed voices (kept ones)."""
+    return engine.clones.listing()
+
+
+@router.get("/voices/clones/passages", response_model=s.PassageList, tags=["voices"])
+async def clone_passages(engine: E, language: str | None = None) -> s.PassageList:
+    """Passages to read for a clone (two sentences, ~8-10 s), and the consent line to show with them."""
+    return engine.clones.passages(language)
+
+
+@router.post("/voices/clones", response_model=s.CloneAccepted, status_code=202, tags=["voices"])
+async def create_clone(
+    engine: E,
+    file: Annotated[UploadFile, File()],
+    name: Annotated[str | None, Form(max_length=64)] = None,
+    consent: Annotated[bool, Form()] = False,
+    language: Annotated[str | None, Form(max_length=8)] = None,
+    ref_text: Annotated[str | None, Form(max_length=2000)] = None,
+    passage_id: Annotated[str | None, Form(max_length=16)] = None,
+    source: Annotated[Literal["recording", "file"], Form()] = "file",
+    keep: Annotated[bool, Form()] = True,
+    session_id: Annotated[str | None, Form(max_length=64)] = None,
+    conversation_id: Annotated[str | None, Form(max_length=64)] = None,
+) -> s.CloneAccepted:
+    """Make a voice from a recording or an audio file. `consent=true` is required (422 otherwise): the person
+    confirms it is their voice or they have the speaker's permission. With `passage_id` the recording must say that
+    passage. `keep=false` leaves it unlisted until kept (the bar's "Keep it?"); `session_id` answers in that
+    conversation with the check sentence in the new voice."""
+    data = await file.read()
+    return await engine.clones.create(
+        data=data, filename=file.filename or "recording.wav", name=name, consent=consent, language=language,
+        ref_text=ref_text, passage_id=passage_id, source=source, keep=keep, session_id=session_id,
+        conversation_id=conversation_id,
+    )
+
+
+@router.post("/voices/clones/design", response_model=s.DesignAccepted, status_code=202, tags=["voices"])
+async def design_voices(body: s.DesignRequest, engine: E) -> s.DesignAccepted:
+    """Three candidate voices from a description; keep one with POST /voices/clones/design/{candidate_id}."""
+    return await engine.clones.design(body.description, name=body.name, language=body.language)
+
+
+@router.post("/voices/clones/design/{candidate_id}", response_model=s.CloneOut, tags=["voices"])
+async def keep_designed(candidate_id: str, engine: E, body: s.KeepCandidate | None = None) -> s.CloneOut:
+    """Keep a designed candidate as a voice (`source = "design"`)."""
+    return await engine.clones.keep_candidate(candidate_id, name=body.name if body else None)
+
+
+@router.patch("/voices/clones/{slug}", response_model=s.CloneOut, tags=["voices"])
+async def patch_clone(slug: str, body: s.ClonePatch, engine: E) -> s.CloneOut:
+    return await engine.clones.patch(slug, body)
+
+
+@router.post("/voices/clones/{slug}/reference", response_model=s.CloneAccepted, status_code=202, tags=["voices"])
+async def replace_reference(
+    slug: str,
+    engine: E,
+    file: Annotated[UploadFile, File()],
+    consent: Annotated[bool, Form()] = False,
+    ref_text: Annotated[str | None, Form(max_length=2000)] = None,
+    passage_id: Annotated[str | None, Form(max_length=16)] = None,
+    source: Annotated[Literal["recording", "file"], Form()] = "file",
+) -> s.CloneAccepted:
+    """Replace a voice's recording (same id and name; its cached audio is made again)."""
+    data = await file.read()
+    return await engine.clones.create(
+        data=data, filename=file.filename or "recording.wav", consent=consent, ref_text=ref_text,
+        passage_id=passage_id, source=source, keep=True, replace=slug,
+    )
+
+
+@router.delete("/voices/clones/{slug}", status_code=204, tags=["voices"])
+async def delete_clone(slug: str, engine: E) -> Response:
+    """Delete a voice: its folder, its cached audio; settings that used it go back to "auto"."""
+    await engine.clones.delete(slug)
+    return Response(status_code=204)
+
+
 @router.post("/voices/{voice_id}/preview", response_model=s.PreviewResponse, tags=["voices"])
-async def preview_voice(voice_id: str, engine: E, style: str | None = None, play: bool = True) -> s.PreviewResponse:
-    return await engine.voices.preview(voice_id, style=style, play=play)
+async def preview_voice(
+    voice_id: str,
+    engine: E,
+    style: str | None = None,
+    play: bool = True,
+    text: Annotated[str | None, Query(max_length=500)] = None,
+) -> s.PreviewResponse:
+    """A short sample (`text`, or the voice introducing itself). `play=false` only makes the recording."""
+    return await engine.voices.preview(voice_id, style=style, play=play, text=text)
+
+
+@router.get("/jobs/{job_id}", response_model=s.JobOut, tags=["system"])
+async def get_job(job_id: str, engine: E) -> s.JobOut:
+    """A background job: a clone or designed voices being made, or a model download."""
+    job = engine.jobs.get(job_id)
+    if job is not None:
+        return s.JobOut.model_validate(job.as_dict())
+    m = engine.model_manager.job(job_id)
+    if m is None:
+        from open_speech.errors import NotFound
+
+        raise NotFound("that job")
+    state = {"running": "running", "done": "done"}.get(m["state"], "failed")
+    return s.JobOut(job_id=job_id, kind="install", pct=m["pct"], label=m["label"], state=state,  # type: ignore[arg-type]
+                    error={"detail": m["error"]} if m.get("error") else None, result={"model": m["model"]})
 
 
 # ------------------------------------------------------------------ rules
@@ -183,16 +285,6 @@ async def propose_rule(body: s.RuleProposalRequest, engine: E) -> s.RuleProposal
 @router.post("/rules", response_model=s.RuleOut, tags=["rules"])
 async def save_rule(body: s.SaveRuleRequest, engine: E) -> s.RuleOut:
     return await engine.rules.save(body)
-
-
-@router.get("/rules/presets", response_model=s.PresetsState, tags=["rules"])
-async def get_presets(engine: E) -> s.PresetsState:
-    return engine.rules.presets()
-
-
-@router.put("/rules/presets", response_model=s.PresetsState, tags=["rules"])
-async def put_presets(body: s.PresetsUpdate, engine: E) -> s.PresetsState:
-    return await engine.rules.update_presets(body)
 
 
 @router.get("/rules/lexicon", response_model=s.LexiconList, tags=["rules"])
@@ -258,6 +350,11 @@ async def assistant_turn(body: s.TurnRequest, engine: E) -> s.TurnAccepted:
 @router.post("/assistant/say", status_code=204, tags=["assistant"])
 async def assistant_say(body: s.SayRequest, engine: E) -> None:
     await engine.assistant.say(body.text)
+
+
+@router.post("/assistant/speech/stop", status_code=204, tags=["assistant"])
+async def assistant_speech_stop(body: s.SpeechStopRequest, engine: E) -> None:
+    await engine.stop_speech(body.turn_id)
 
 
 @router.get("/actions", response_model=list[s.ActionOut], tags=["assistant"])
@@ -336,8 +433,10 @@ async def capabilities(engine: E) -> s.Capabilities:
 
 
 @router.get("/models/local", response_model=s.LocalModelList, tags=["settings"])
-async def local_models(engine: E) -> s.LocalModelList:
-    return engine.models.list()
+async def local_models(engine: E, all: bool = False) -> s.LocalModelList:  # noqa: A002 — the query parameter
+    """Local models. Of the downloadable weight variants (Qwen3-TTS sizes x precisions) only the installed ones, the
+    ones downloading and the ones the settings choose are listed, unless `all=1`."""
+    return engine.models.list(all=all)
 
 
 @router.post("/models/local/{model_id}", response_model=s.JobAccepted, status_code=202, tags=["settings"])
@@ -361,6 +460,12 @@ async def get_recording(recording_id: str, engine: E) -> FileResponse:
 async def play_recording(recording_id: str, engine: E) -> s.PlaybackState:
     """Replay a recording through the engine's output (FR-BAR-6) — reading ducks around it."""
     return await engine.recordings.play(recording_id)
+
+
+@router.get("/diagnostics/audio", response_model=s.AudioDiagnostics, tags=["system"])
+async def audio_diagnostics(engine: E) -> s.AudioDiagnostics:
+    """Underflows, starvations, ring low-water and callback timing since the engine started (05 § 9)."""
+    return s.AudioDiagnostics.model_validate(engine.transport.audio_diagnostics())
 
 
 @router.get("/health", response_model=s.Health, tags=["system"])

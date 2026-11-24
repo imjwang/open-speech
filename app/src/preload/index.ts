@@ -29,8 +29,13 @@ const bridge: OpenSpeechBridge = {
   getEngine: () => ipcRenderer.invoke(IPC.engineGet) as Promise<EngineInfo | null>,
   onEngineChanged: (cb) => subscribe<EngineInfo | null>(IPC.engineChanged, cb),
   hideBar: () => ipcRenderer.send(IPC.barHide),
-  resizeBar: (height) => ipcRenderer.send(IPC.barResize, { height: Math.round(height) }),
-  setListening: (listening) => ipcRenderer.send(IPC.barListening, { listening }),
+  // Synchronous on purpose: the window must have its new height before this frame paints (no band, no clip).
+  resizeBar: (height) => {
+    const applied: unknown = ipcRenderer.sendSync(IPC.barResize, { height: Math.round(height) })
+    return typeof applied === 'number' && applied > 0 ? applied : Math.round(height)
+  },
+  barShown: (openId, height) => ipcRenderer.send(IPC.barShown, { openId, height: Math.round(height) }),
+  setListening: (listening, recording = false) => ipcRenderer.send(IPC.barListening, { listening, recording }),
   onBarOpened: (cb) => subscribe<BarOpenedEvent>(IPC.barOpened, cb),
   onBarClosed: (cb) => subscribe<void>(IPC.barClosed, () => cb()),
   openBar: (request = {}) => ipcRenderer.send(IPC.barOpen, request),

@@ -27,8 +27,12 @@ from open_speech.config import EngineEnv, Paths
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="Open Speech: read anything aloud.")
 rules_app = typer.Typer(help="Speech rules.", no_args_is_help=True)
 models_app = typer.Typer(help="Local models.", no_args_is_help=True)
+doctor_app = typer.Typer(help="Self-tests that play nothing.", no_args_is_help=True)
+voices_app = typer.Typer(help="Voices: list them, clone or design your own, save samples.")
+app.add_typer(voices_app, name="voices")
 app.add_typer(rules_app, name="rules")
 app.add_typer(models_app, name="models")
+app.add_typer(doctor_app, name="doctor")
 
 JsonOpt = Annotated[bool, typer.Option("--json", help="Machine-readable output.")]
 
@@ -225,13 +229,11 @@ def read(
     source: Annotated[str, typer.Argument(help="File path, URL, or '-' for stdin.")],
     voice: Annotated[str | None, typer.Option(help="Voice id, e.g. openai:gpt-4o-mini-tts:coral")] = None,
     speed: Annotated[float | None, typer.Option(min=0.5, max=5.0)] = None,
-    mode: Annotated[str | None, typer.Option(help="classic | ai")] = None,
     from_page: Annotated[int | None, typer.Option("--from-page")] = None,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Accept the cost estimate.")] = False,
     as_json: JsonOpt = False,
 ) -> None:
     """Read a file, URL or stdin aloud."""
-    mode_v = {"ai": "ai_enhanced", "ai_enhanced": "ai_enhanced", "classic": "classic", None: None}.get(mode)
     with engine_client() as (client, ephemeral):
         if voice is None and not any(v.get("available") for v in client.call("GET", "/voices")["items"]):
             typer.secho(
@@ -246,13 +248,13 @@ def read(
             res = client.call(
                 "POST",
                 "/documents",
-                json={"kind": "text", "text": text, "voice_id": voice, "mode": mode_v, "confirm_estimate": yes},
+                json={"kind": "text", "text": text, "voice_id": voice, "confirm_estimate": yes},
             )
         elif source.startswith(("http://", "https://")):
             res = client.call(
                 "POST",
                 "/documents",
-                json={"kind": "url", "url": source, "voice_id": voice, "mode": mode_v, "confirm_estimate": yes},
+                json={"kind": "url", "url": source, "voice_id": voice, "confirm_estimate": yes},
             )
         else:
             p = Path(source).expanduser()
@@ -266,7 +268,7 @@ def read(
                     files={"file": (p.name, fh)},
                     data={
                         k: str(v).lower() if isinstance(v, bool) else v
-                        for k, v in {"voice_id": voice, "mode": mode_v, "confirm_estimate": yes}.items()
+                        for k, v in {"voice_id": voice, "confirm_estimate": yes}.items()
                         if v is not None
                     },
                 )
@@ -340,13 +342,16 @@ def skip(
     _simple("/playback/skip", body={"unit": unit, "count": count})
 
 
-@app.command()
+@voices_app.callback(invoke_without_command=True)
 def voices(
+    ctx: typer.Context,
     provider: Annotated[str | None, typer.Option()] = None,
     lang: Annotated[str | None, typer.Option()] = None,
     as_json: JsonOpt = False,
 ) -> None:
-    """List voices (AI-generated)."""
+    """List voices (AI-generated). Subcommands clone, design and manage your own."""
+    if ctx.invoked_subcommand is not None:
+        return
     with engine_client() as (client, _):
         params = {k: v for k, v in {"provider": provider, "lang": lang}.items() if v}
         data = client.call("GET", "/voices", params=params)
@@ -356,6 +361,179 @@ def voices(
         for v in data["items"]
     ]
     _out(data, as_json, "\n".join(lines) or "No voices.")
+
+
+def _wait_job(client: EngineClient, job_id: str, *, quiet: bool = False) -> dict[str, Any]:
+    """Follow a job until it ends, printing its progress lines; exit 1 if it failed."""
+    last = ""
+    while True:
+        job = client.call("GET", f"/jobs/{job_id}")
+        line = f"{job['label']} ({job['pct']:.0f}%)" if job["state"] == "running" else job["label"]
+        if line != last and not quiet:
+            typer.echo(line, err=True)
+            last = line
+        if job["state"] != "running":
+            break
+        time.sleep(0.4)
+    if job["state"] != "done":
+        typer.secho(str((job.get("error") or {}).get("detail") or "Failed."), fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+    return job  # type: ignore[no-any-return]
+
+
+def _check_line(check: dict[str, Any] | None) -> str:
+    if not check or check.get("grade") is None:
+        return (check or {}).get("note") or "not checked yet"
+    wer = check.get("wer")
+    return f"{check['grade']}" + (f" (word error rate {wer * 100:.0f}%)" if wer is not None else "")
+
+
+@voices_app.command("clone")
+def voices_clone(
+    name: Annotated[str, typer.Argument(help="What to call the voice.")],
+    file: Annotated[Path, typer.Option("--file", "-f", help="Recording or audio file (WAV, M4A, MP3, FLAC…).")],
+    consent: Annotated[
+        bool, typer.Option("--i-have-consent", help="This is my voice, or I have the speaker's permission to clone it.")
+    ] = False,
+    text: Annotated[
+        str | None, typer.Option("--text", help="Exactly what the recording says (else transcribed).")
+    ] = None,
+    language: Annotated[str | None, typer.Option("--language", help="en, es, …")] = None,
+    passage: Annotated[str | None, typer.Option("--passage", help="The passage id it reads (voices passages).")] = None,
+    as_json: JsonOpt = False,
+) -> None:
+    """Clone a voice from a recording (stays on this Mac). Needs --i-have-consent."""
+    if not consent:
+        typer.secho("Cloning needs --i-have-consent: it must be your voice, or you have the speaker's permission.",
+                    fg=typer.colors.RED, err=True)
+        raise typer.Exit(2)
+    p = file.expanduser()
+    if not p.is_file():
+        typer.secho(f"No such file: {file}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+    with engine_client() as (client, _), p.open("rb") as fh:
+        form = {k: v for k, v in {"name": name, "consent": "true", "ref_text": text, "language": language,
+                                  "passage_id": passage, "source": "recording" if passage else "file",
+                                  "keep": "true"}.items() if v is not None}
+        accepted = client.call("POST", "/voices/clones", files={"file": (p.name, fh)}, data=form)
+        job = _wait_job(client, accepted["job_id"], quiet=as_json)
+    res = job["result"]
+    warnings = "".join(f"\n  note: {w}" for w in res.get("warnings") or [])
+    _out(res, as_json, f"Made “{res['name']}” ({res['voice_id']}). Check: {_check_line(res.get('check'))}.\n"
+                       f"  It says: {res['ref_text']}{warnings}")
+
+
+@voices_app.command("design")
+def voices_design(
+    name: Annotated[str, typer.Argument(help="What to call the voice you keep.")],
+    describe: Annotated[str, typer.Option("--describe", "-d", help="How it should sound.")],
+    language: Annotated[str | None, typer.Option("--language")] = None,
+    keep: Annotated[int | None, typer.Option("--keep", help="Keep candidate N (1-3) right away.")] = None,
+    out_dir: Annotated[Path | None, typer.Option("--out-dir", help="Write each candidate as a WAV here.")] = None,
+    as_json: JsonOpt = False,
+) -> None:
+    """Make three candidate voices from a description; keep one (now with --keep, or later with keep-design)."""
+    with engine_client() as (client, _):
+        accepted = client.call("POST", "/voices/clones/design",
+                               json={"description": describe, "name": name, "language": language})
+        job = _wait_job(client, accepted["job_id"], quiet=as_json)
+        cands = job["result"]["candidates"]
+        if out_dir is not None:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            for c in cands:
+                _save_recording(client, c["recording_id"], out_dir / f"{name}-candidate-{c['index']}.wav")
+        kept = None
+        if keep is not None:
+            pick = next((c for c in cands if c["index"] == keep), None)
+            if pick is None:
+                typer.secho(f"There is no candidate {keep}.", fg=typer.colors.RED, err=True)
+                raise typer.Exit(1)
+            kept = client.call("POST", f"/voices/clones/design/{pick['candidate_id']}", json={"name": name})
+    lines = [f"  {c['index']}. {c['candidate_id']}  (word error rate "
+             f"{'?' if c.get('wer') is None else f'{c['wer'] * 100:.0f}%'})" for c in cands]
+    tail = (f"Kept candidate {keep} as “{kept['name']}” ({kept['voice_id']})." if kept
+            else "Keep one: open-speech voices keep-design <candidate id>")
+    _out({"candidates": cands, "kept": kept}, as_json, "\n".join(["Candidates:", *lines, tail]))
+
+
+@voices_app.command("keep-design")
+def voices_keep_design(
+    candidate: Annotated[str, typer.Argument(help="A candidate id from `voices design`.")],
+    name: Annotated[str | None, typer.Option("--name")] = None,
+    as_json: JsonOpt = False,
+) -> None:
+    """Keep a designed candidate as a voice."""
+    with engine_client(ephemeral_ok=False) as (client, _):
+        kept = client.call("POST", f"/voices/clones/design/{candidate}", json={"name": name})
+    _out(kept, as_json, f"Kept “{kept['name']}” ({kept['voice_id']}). Check: {_check_line(kept.get('check'))}.")
+
+
+@voices_app.command("clones")
+def voices_clones(as_json: JsonOpt = False) -> None:
+    """Your cloned and designed voices."""
+    with engine_client() as (client, _):
+        data = client.call("GET", "/voices/clones")
+    lines = [
+        f"{c['slug']:<24} {c['name']:<20} {c['source']:<9} {c['duration_s']:>5.1f} s  {_check_line(c.get('check'))}"
+        for c in data["items"]
+    ]
+    empty = "No voices of your own yet. Try: open-speech voices clone NAME --file x.wav --i-have-consent"
+    _out(data, as_json, "\n".join(lines) or empty)
+
+
+@voices_app.command("passages")
+def voices_passages(
+    language: Annotated[str | None, typer.Option("--language")] = None, as_json: JsonOpt = False
+) -> None:
+    """Passages to read for a clone."""
+    with engine_client() as (client, _):
+        data = client.call("GET", "/voices/clones/passages", params={"language": language} if language else None)
+    lines = [f"{p['id']}: {p['text']}" for p in data["items"]] + ["", data["consent"]]
+    _out(data, as_json, "\n".join(lines))
+
+
+@voices_app.command("rm-clone")
+def voices_rm_clone(slug: Annotated[str, typer.Argument()]) -> None:
+    """Delete one of your voices (its cached audio too; settings using it go back to automatic)."""
+    with engine_client() as (client, _):
+        client.call("DELETE", f"/voices/clones/{slug}")
+    typer.echo(f"Deleted {slug}.")
+
+
+def _save_recording(client: EngineClient, recording_id: str, out: Path) -> float:
+    """A recording (Ogg/Opus from the engine) written to `out` as WAV, or kept as Ogg if `out` ends in .ogg."""
+    import io
+
+    import soundfile as sf
+
+    r = client.http.get(f"/recordings/{recording_id}")
+    if r.status_code >= 400:
+        typer.secho(f"Couldn't fetch the recording ({r.status_code}).", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if out.suffix.lower() in (".ogg", ".opus"):
+        out.write_bytes(r.content)
+        info = sf.info(io.BytesIO(r.content))
+        return float(info.frames) / float(info.samplerate)
+    y, sr = sf.read(io.BytesIO(r.content), dtype="float32")
+    sf.write(str(out), y, sr, subtype="PCM_16")
+    return float(len(y)) / float(sr)
+
+
+@voices_app.command("preview")
+def voices_preview(
+    voice_id: Annotated[str, typer.Argument(help="A voice id (see `voices`), or \"auto\".")],
+    out: Annotated[Path, typer.Option("--out", "-o", help="Where to write the sample (.wav or .ogg).")],
+    text: Annotated[str | None, typer.Option("--text", help="What it should say.")] = None,
+) -> None:
+    """Write a voice sample to a file. Plays nothing."""
+    with engine_client() as (client, _):
+        params: dict[str, Any] = {"play": "false"}
+        if text:
+            params["text"] = text
+        res = client.call("POST", f"/voices/{voice_id}/preview", params=params)
+        seconds = _save_recording(client, res["recording_id"], out.expanduser())
+    typer.echo(f"Wrote {out} ({seconds:.1f} s{', cached' if res.get('cached') else ''}).")
 
 
 @rules_app.command("ls")
@@ -478,6 +656,21 @@ def mcp() -> None:
     from open_speech.mcp.server import main as mcp_main
 
     mcp_main()
+
+
+@doctor_app.command("audio")
+def doctor_audio(seconds: float = typer.Option(5.0, help="How long to test callback deadlines.")) -> None:
+    """Check the playback chain without playing a sound: 1x bit-exact, resampling, speeds, fades, deadlines."""
+    from open_speech.playback import selftest
+
+    rep = selftest.run(deadline_s=seconds)
+    d = rep.device
+    typer.echo(f"Output device: {d.get('name')} at {d.get('native_rate')} Hz (queried only; nothing is played)")
+    typer.echo(f"Output settings: {d.get('latency_ms'):g} ms, {d.get('mode')} mode")
+    typer.echo(f"Test speech: {rep.source}")
+    for c in rep.checks:
+        typer.echo(f"  {'ok  ' if c.ok else 'FAIL'}  {c.name}: {c.detail}")
+    raise typer.Exit(0 if rep.ok else 1)
 
 
 @app.command("export-api", hidden=True)

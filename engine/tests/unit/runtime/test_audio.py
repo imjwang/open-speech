@@ -201,3 +201,81 @@ def test_streaming_stretcher_speed_change_mid_stream() -> None:
     assert s.speed == 2.0
     s.set_speed(9.0)
     assert s.speed == 5.0
+
+
+# ------------------------------------------------------------------ pause-anchored word timing
+
+
+def _speech(parts: list[tuple[str, float]], sr: int = 24000) -> np.ndarray:
+    """("word"/"pause", seconds) → a signal: voiced stretches (a buzzy tone) and digital silence."""
+    out = []
+    for kind, secs in parts:
+        n = int(secs * sr)
+        if kind == "pause":
+            out.append(np.zeros(n, np.float32))
+        else:
+            t = np.arange(n) / sr
+            out.append((0.3 * np.sign(np.sin(2 * np.pi * 140 * t)) * np.hanning(n) ** 0.1).astype(np.float32))
+    return np.concatenate(out)
+
+
+def test_detect_pauses_finds_the_silences_inside_speech() -> None:
+    from open_speech.playback.timing import detect_pauses
+
+    sr = 24000
+    x = _speech([("pause", 0.2), ("w", 0.8), ("pause", 0.3), ("w", 0.6), ("pause", 0.05), ("w", 0.5),
+                 ("pause", 0.4)], sr)
+    start, end, pauses = detect_pauses(x, sr)
+    assert start == pytest.approx(0.2, abs=0.02) and end == pytest.approx(2.45, abs=0.02)
+    assert len(pauses) == 1  # the 50 ms gap is too short to be a pause (a stop consonant's closure)
+    assert pauses[0].t0 == pytest.approx(1.0, abs=0.02) and pauses[0].t1 == pytest.approx(1.3, abs=0.02)
+
+
+def test_pause_anchored_timing_pins_words_to_the_pauses_at_punctuation() -> None:
+    from open_speech.playback.timing import estimate_word_timings_from_audio
+
+    sr = 24000
+    text = "Before you begin, make sure it is charged. Then press the button."
+    # before you begin | 0.25 s | make sure it is charged | 0.5 s | then press the button
+    x = _speech([("pause", 0.15), ("w", 0.9), ("pause", 0.25), ("w", 1.4), ("pause", 0.5), ("w", 1.1),
+                 ("pause", 0.2)], sr)
+    words = estimate_word_timings_from_audio(text, x, sr)
+    by = {text[w.start : w.end]: w for w in words}
+    assert len(words) == 12
+    assert by["Before"].t0 == pytest.approx(0.15, abs=0.02)
+    assert by["begin"].t1 == pytest.approx(1.05, abs=0.02)  # ends where the comma's pause starts
+    assert by["make"].t0 == pytest.approx(1.30, abs=0.02)  # starts where it ends
+    assert by["charged"].t1 == pytest.approx(2.70, abs=0.02)
+    assert by["Then"].t0 == pytest.approx(3.20, abs=0.02)
+    assert by["button"].t1 == pytest.approx(4.30, abs=0.02)
+    for a, b in zip(words, words[1:], strict=False):
+        assert a.t0 < a.t1 <= b.t0 + 1e-6
+    # The old estimate spreads words over the whole span and drifts at the pauses.
+    old = {text[w.start : w.end]: w for w in estimate_word_timings(text, x.size / sr, speech_start_s=0.15,
+                                                                  speech_end_s=4.3)}
+    assert abs(old["Then"].t0 - 3.20) > abs(by["Then"].t0 - 3.20)
+
+
+def test_a_pause_with_no_punctuation_near_its_place_is_not_a_word_boundary_pin() -> None:
+    from open_speech.playback.timing import estimate_word_timings_from_audio
+
+    sr = 24000
+    text = "Strengths and weaknesses aside, the plan was approved."
+    # A short gap early in "weaknesses" (a closure), then the real pause at the comma.
+    x = _speech([("w", 0.9), ("pause", 0.09), ("w", 0.6), ("pause", 0.35), ("w", 1.5)], sr)
+    words = estimate_word_timings_from_audio(text, x, sr)
+    by = {text[w.start : w.end]: w for w in words}
+    assert by["the"].t0 == pytest.approx(1.94, abs=0.02)  # pinned at the comma's pause
+    assert by["aside"].t1 == pytest.approx(1.59, abs=0.02)
+
+
+def test_pause_anchored_timing_edge_cases() -> None:
+    from open_speech.playback.timing import estimate_word_timings_from_audio
+
+    sr = 24000
+    assert estimate_word_timings_from_audio("", np.zeros(100, np.float32), sr) == []
+    assert estimate_word_timings_from_audio("Hello.", np.zeros(0, np.float32), sr) == []
+    silent = estimate_word_timings_from_audio("Hello there.", np.zeros(sr, np.float32), sr)
+    assert len(silent) == 2  # nothing to measure: the plain estimate
+    one = estimate_word_timings_from_audio("Hello.", _speech([("pause", 0.1), ("w", 0.5)], sr), sr)
+    assert one[0].t0 == pytest.approx(0.1, abs=0.02) and one[0].t1 == pytest.approx(0.6, abs=0.02)

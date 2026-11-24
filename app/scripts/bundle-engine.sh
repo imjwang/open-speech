@@ -5,10 +5,12 @@
 #
 #   engine-runtime/
 #     python/                          relocatable CPython (uv-managed python-build-standalone build) with the
-#                                      engine and its locked dependencies, incl. the local-kokoro and
-#                                      local-stt extras, installed into its own site-packages. Not a venv:
+#                                      engine and its locked dependencies, incl. the local-kokoro, local-stt
+#                                      and local-qwen extras, installed into its own site-packages. Not a venv:
 #                                      no absolute paths.
-#     models/kokoro/kokoro-82m-v1.0/   Kokoro weights, pinned by commit + sha256 (FR-SETUP-3), read-only
+#     models/kokoro/<model>/           Kokoro weights (the catalog's first Kokoro model and the variant it pins:
+#                                      model file, tokenizer, one file per voice), pinned by commit + sha256
+#                                      from engine/src/open_speech/data/models.toml (FR-SETUP-3), read-only
 #                                      (engine/src/open_speech/local/bundled.py)
 #     models/stt/<model>/              the catalog's default speech-to-text model (about 640 MB), pinned by
 #                                      commit + sha256, read-only: the bar listens offline from first launch
@@ -21,53 +23,16 @@
 #   OPEN_SPEECH_PYTHON         CPython version to bundle (default below)
 #   OPEN_SPEECH_BUNDLE_KOKORO  0 skips the weights (the engine then downloads them on first use)
 #   OPEN_SPEECH_BUNDLE_STT     0 skips the speech-to-text weights (the user downloads them from the model list)
+#   OPEN_SPEECH_BUNDLE_QWEN    0 leaves out the local Qwen3-TTS runtime (the local-qwen extra: MLX, mlx-audio,
+#                              transformers; about 380 MB). Its weights are never bundled: the user downloads the
+#                              size and precision they want from the model list (engine/src/open_speech/local/manager.py)
 #   OPEN_SPEECH_BUNDLE_KEYS    0 builds without provider keys (local voice and local speech input only)
-#   ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
+#   ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, GOOGLE_TTS_API_KEY
 #                              the keys to build in; when unset they are read from <repo>/.env
+#                              (GOOGLE_TTS_API_KEY is optional: the engine uses GEMINI_API_KEY for Chirp without it)
 set -euo pipefail
 
 PYTHON_VERSION="${OPEN_SPEECH_PYTHON:-3.13.11}"
-KOKORO_MODEL="kokoro-82m-v1.0"
-KOKORO_REPO="onnx-community/Kokoro-82M-v1.0-ONNX-timestamped"
-KOKORO_REVISION="dd4401a9add81ac692d20e240d22ec9dda82cc29"
-# sha256 of every bundled file at KOKORO_REVISION: Hugging Face's LFS hashes for the model and voices, and
-# the hash of tokenizer.json (a small non-LFS file) at that commit. The file list must match the catalog
-# (engine/src/open_speech/data/models.toml); the script fails if it doesn't.
-KOKORO_PINS='
-c0c02b3299fd97c34ea92a98e6d41eaa1a739c8f77bf685aac34bd7b34c1132c  onnx/model_quantized.onnx
-77a02c8e164413299b4b4c403b14f8e0e1c1b727db4d46a09d6327b861060a34  tokenizer.json
-d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b  voices/af_heart.bin
-c4a6b876047fd7fb472edf4ebd63cfac7c3b958a7cae7c106e8f038ca6308c45  voices/af_alloy.bin
-4a004c33430762e2461eedb2013fad808ef4ab3121f5300f554476caf58d8361  voices/af_aoede.bin
-f69d836209b78eb8c66e75e3cda491e26ea838a3674257e9d4e5703cbaf55c8b  voices/af_bella.bin
-a240a5e3c15b43563d6e923bdca8ef5613a23471d9b77653694012435df23bd8  voices/af_jessica.bin
-9be5221b6a941c04b561959b8ff0b06e809444dcc4ab7e75a7b23606f691819e  voices/af_kore.bin
-cd2191ab31b914ed7b318416b0e4440fdf392ddad9106a060819aa600a64f59a  voices/af_nicole.bin
-18778272caa0d0eebaea251c35fd635f038434f9eee5e691d02a174bd328414f  voices/af_nova.bin
-00a2bcf82b1d86e8f19902ede58c65ccf6c0e43b44b7d74fad54e5d8933c9c30  voices/af_river.bin
-4409fbc125afabacc615d94db5398d847006a737b0247d6892b7a9a0007a2f0a  voices/af_sarah.bin
-4435255c9744f3f31659e0d714ab7689bf65d9e77ec1cce060f083912614f0b9  voices/af_sky.bin
-162b035ed91cfc48b6046982184c645f72edcdd1b82843347f605d7bf7b15716  voices/am_adam.bin
-3968b92c3c4cd1c4416dbded36c13eaa388a90d5788d02a13e4d781f5f8cf3c3  voices/am_echo.bin
-e8b5be17edd1e3636901ce7598baafe2dc8dd8ff707a0c23bf9e461add7e2832  voices/am_eric.bin
-c27989f741f7ee34d273a39d8a595cc0837d35f5ced9a29b7cc162614616df43  voices/am_fenrir.bin
-52403be32fd047c6a44517cb0bcd6b134f2a18baa73e70ef41651e0eab921ade  voices/am_liam.bin
-1d1f21dd8da39c30705cd4c75d039d265e9bc4a2a93ed09bc9e1b1225eb95ba1  voices/am_michael.bin
-da5d135b424164916d75a68ffb4c2abce3d7d5ccc82dd1ee6cf447ce286145e6  voices/am_onyx.bin
-fcf73c989033e9233e0b98713eca600c8c74dcc1614b37009d5450ff4a2274a0  voices/am_puck.bin
-08afa6ba24da61ea5e8efa139e5aadc938d83f0a6da5a900adaf763ac1da5573  voices/bf_alice.bin
-669fe0647f9dd04fcab92f1439a40eeb4c8b4ab1f82e4996fe3d918ce4a63b73  voices/bf_emma.bin
-3754352c4aaa46d17f27654ab7518d65b62ad6163a0f55a5f4330c2da2c4e94f  voices/bf_isabella.bin
-5e0ee32ebe64a467124976b14e69590746f1c4ce41a12b587a50c862edfea335  voices/bf_lily.bin
-6b3194bbceffb746733cbc22c8f593dd44e401a71d53895a2dca891bc595a1e8  voices/bm_daniel.bin
-f889083196807b4adb15e9204252165f503b8d33d3982e681c52443c49d798f1  voices/bm_fable.bin
-c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc  voices/bm_george.bin
-b8f671cef828c30e66fdf0b0756a76bba58f6bb3398cbbf27058642acbcedb97  voices/bm_lewis.bin
-f66ec66bd295acb18372e37008533a9a3228483ccd294e7538d5d9294ac9a532  voices/ef_dora.bin
-27809e9eafdcbcfff90a3016c697568676531de2a2c39cee29c96c7bd6b83e95  voices/em_alex.bin
-ad43b774e1ca24d05c6161297d8aeb770ac3d29bb95daf516727af5f7d543683  voices/em_santa.bin
-'
-
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_DIR="$(cd "$APP_DIR/.." && pwd)"
 ENGINE_DIR="$REPO_DIR/engine"
@@ -118,8 +83,12 @@ install_name_tool -id "@rpath/libpython$PYV.dylib" "$PY/lib/libpython$PYV.dylib"
 codesign --force --sign - "$PY/lib/libpython$PYV.dylib"
 
 # --------------------------------------------------------------------------- engine + dependencies
-step "Engine and locked dependencies (uv.lock, --extra local-kokoro --extra local-stt, no dev group)"
-"$UV" export --project "$ENGINE_DIR" --frozen --no-dev --extra local-kokoro --extra local-stt --no-emit-project \
+EXTRAS=(--extra local-kokoro --extra local-stt)
+if [[ "${OPEN_SPEECH_BUNDLE_QWEN:-1}" != 0 ]]; then
+  EXTRAS+=(--extra local-qwen)  # Qwen3-TTS voices: the runtime only (Apple Silicon wheels), weights on demand
+fi
+step "Engine and locked dependencies (uv.lock, ${EXTRAS[*]}, no dev group)"
+"$UV" export --project "$ENGINE_DIR" --frozen --no-dev "${EXTRAS[@]}" --no-emit-project \
   --format requirements.txt --no-header --output-file "$CACHE/requirements.txt" >/dev/null
 "$UV" pip install --no-config --python "$PY/bin/python3" --link-mode copy --only-binary :all: \
   --require-hashes -r "$CACHE/requirements.txt"
@@ -171,6 +140,37 @@ print(f"python {sys.version.split()[0]}, open-speech {open_speech.__version__}, 
 print("sys.path:", " ".join(os.path.relpath(p, root) for p in sys.path if p))
 PYCODE
 
+if [[ "${OPEN_SPEECH_BUNDLE_QWEN:-1}" != 0 ]]; then
+  # The Qwen3-TTS runtime, offline and as the engine starts it: MLX runs a kernel on the GPU (its metallib loads
+  # from inside the runtime), mlx-audio's loader and the Qwen3-TTS model code import without the network, and the
+  # worker process (`-I -m open_speech.providers.qwen3_worker`) answers over its pipes (fake model: no weights).
+  env -i HOME="$HOME" PATH=/usr/bin:/bin PYTHONNOUSERSITE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+    HF_HUB_DISABLE_TELEMETRY=1 TOKENIZERS_PARALLELISM=false "$PY/bin/python3" -I - "$PY" <<'PYCODE'
+import os, subprocess, sys
+root = os.path.realpath(sys.argv[1])
+import mlx.core as mx
+mx.eval(mx.ones(4) + 1)
+assert mx.default_device() == mx.gpu, mx.default_device()
+from mlx_audio.tts.utils import load_model  # noqa: F401
+import mlx_audio.tts.models.qwen3_tts  # noqa: F401
+from open_speech.providers import qwen3_worker as qw
+metallib = [os.path.join(d, f) for d, _, fs in os.walk(os.path.dirname(mx.__file__)) for f in fs if f.endswith(".metallib")]
+if not metallib or not all(os.path.realpath(p).startswith(root) for p in metallib):
+    sys.exit(f"MLX's metallib isn't inside the runtime: {metallib}")
+proc = subprocess.Popen([sys.executable, "-I", "-m", "open_speech.providers.qwen3_worker", "--fake"],
+                        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+proc.stdin.write(qw.encode_frame({"op": "ping", "id": 1}) + qw.encode_frame({"op": "exit"}))
+proc.stdin.flush()
+reply = qw.read_frame(proc.stdout)
+proc.wait(timeout=30)
+if not reply or reply[0].get("op") != "pong":
+    sys.exit(f"the Qwen3-TTS worker didn't answer: {reply}")
+import importlib.metadata as md
+print(f"mlx {md.version('mlx')}, mlx-audio {md.version('mlx-audio')}, transformers {md.version('transformers')}; "
+      f"GPU kernel ran; worker answered")
+PYCODE
+fi
+
 # Every Mach-O must load only system libraries or files inside the runtime (@rpath/@loader_path/...).
 bad_links=0
 while IFS= read -r -d '' f; do
@@ -211,49 +211,54 @@ PYCODE
 
 # --------------------------------------------------------------------------- Kokoro weights
 if [[ "${OPEN_SPEECH_BUNDLE_KOKORO:-1}" != 0 ]]; then
-  step "Kokoro weights ($KOKORO_REPO @ ${KOKORO_REVISION:0:12})"
-  # The pinned file list must be exactly what the catalog expects (model, tokenizer, one file per voice).
-  expected="$("$PY/bin/python3" -I - "$KOKORO_MODEL" <<'PYCODE'
+  # Like speech-to-text below: the model, the revision, every file (model, tokenizer, one per voice) and its sha256
+  # come from the catalog installed in the runtime, the same pins the engine verifies when it downloads the
+  # weights itself. A file without a pin is refused. Lines: "<sha256> <path> <url>".
+  kokoro_pins="$("$PY/bin/python3" -I - <<'PYCODE'
 import sys
 from open_speech.local.catalog import ModelCatalog
-e = ModelCatalog.load().local_model(sys.argv[1])
+models = ModelCatalog.load().tts_models("kokoro")
+if not models or models[0].weights is None:
+    sys.exit("the catalog has no Kokoro model with weights")
+e = models[0]
 w = e.weights
-files = {f.path for f in w.all_files()} | {w.voice_file.format(voice=v) for v in e.voices}
-print("\n".join(sorted(files)))
+base = w.base_url()
+print(e.model, f"{w.url}@{w.revision}", w.quant or "")
+for f in w.all_files() + w.voice_files(e.voices):
+    if len(f.sha256) != 64:
+        sys.exit(f"{e.model}: {f.path} has no sha256 pin in the catalog")
+    print(f.sha256, f.path, f.url or f"{base}/{f.path}")
 PYCODE
 )"
-  pinned="$(printf '%s\n' "$KOKORO_PINS" | awk 'NF==2 {print $2}' | sort)"
-  [[ "$expected" == "$pinned" ]] || die "Kokoro pins don't match the catalog:
-$(diff <(echo "$expected") <(echo "$pinned") || true)"
-
-  dl="$CACHE/kokoro/$KOKORO_REVISION"
+  read -r KOKORO_MODEL KOKORO_SOURCE KOKORO_QUANT <<<"$(head -n 1 <<<"$kokoro_pins")"
+  step "Kokoro weights ($KOKORO_MODEL ${KOKORO_QUANT:+$KOKORO_QUANT }from $KOKORO_SOURCE)"
+  dl="$CACHE/kokoro/${KOKORO_SOURCE##*@}"
   dest="$OUT/models/kokoro/$KOKORO_MODEL"
-  base="https://huggingface.co/$KOKORO_REPO/resolve/$KOKORO_REVISION"
-  while read -r sha rel; do
-    [[ -n "${rel:-}" ]] || continue
+  while read -r sha rel url; do
+    [[ -n "${url:-}" ]] || continue
     f="$dl/$rel"
     if [[ ! -f "$f" ]] || [[ "$(shasum -a 256 "$f" | awk '{print $1}')" != "$sha" ]]; then
       mkdir -p "$(dirname "$f")"
-      curl -fsSL --retry 3 --retry-delay 2 -o "$f.part" "$base/$rel"
+      curl -fsSL --retry 3 --retry-delay 2 -o "$f.part" "$url"
       got="$(shasum -a 256 "$f.part" | awk '{print $1}')"
       [[ "$got" == "$sha" ]] || { rm -f "$f.part"; die "$rel: sha256 $got, expected $sha"; }
       mv "$f.part" "$f"
     fi
     mkdir -p "$(dirname "$dest/$rel")"
     cp "$f" "$dest/$rel"
-  done <<<"$KOKORO_PINS"
+  done < <(tail -n +2 <<<"$kokoro_pins")
 
-  "$PY/bin/python3" -I - "$dest" "$KOKORO_MODEL" "$KOKORO_REPO" "$KOKORO_REVISION" <<'PYCODE'
+  "$PY/bin/python3" -I - "$dest" "$KOKORO_MODEL" "$KOKORO_SOURCE" <<'PYCODE'
 import hashlib, json, sys
 from datetime import UTC, datetime
 from pathlib import Path
-dest, model, repo, rev = Path(sys.argv[1]), *sys.argv[2:]
+dest, model, source = Path(sys.argv[1]), *sys.argv[2:]
 files = {
     str(p.relative_to(dest)): {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "bytes": p.stat().st_size, "pinned": True}
-    for p in sorted(dest.rglob("*")) if p.is_file()
+    for p in sorted(dest.rglob("*")) if p.is_file() and p.name != "manifest.json"
 }
 manifest = {"model": model, "provider": "kokoro", "installed_at": datetime.now(UTC).isoformat(), "pinned": True,
-            "bundled": True, "source": f"hf://{repo}@{rev}", "files": files}
+            "bundled": True, "source": source, "files": files}
 (dest / "manifest.json").write_text(json.dumps(manifest, indent=2), "utf-8")
 print(f"{len(files)} files, {sum(f['bytes'] for f in files.values()) / 1e6:.0f} MB")
 PYCODE
@@ -329,8 +334,8 @@ fi
 
 # --------------------------------------------------------------------------- provider keys
 # Keys are build configuration: the app never asks a user for one. Whatever is set when this script runs is
-# written to provider.env, which the packaged engine reads (engine/src/open_speech/config.py). Only the three
-# provider keys are copied, never the rest of .env.
+# written to provider.env, which the packaged engine reads (engine/src/open_speech/config.py). Only the provider
+# keys are copied, never the rest of .env.
 #
 # A key shipped inside an app can be read by anyone who has the app. That is acceptable for builds that stay
 # on our own machines; anything distributed further must use the hosted deployment instead of bundled keys.
@@ -339,7 +344,7 @@ if [[ "${OPEN_SPEECH_BUNDLE_KEYS:-1}" != 0 ]]; then
   keys_file="$OUT/provider.env"
   ( umask 077; : > "$keys_file" )
   included=()
-  for name in ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY; do
+  for name in ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY GOOGLE_TTS_API_KEY; do
     value="${!name:-}"
     if [[ -z "$value" && -f "$REPO_DIR/.env" ]]; then
       value="$(grep -E "^${name}=" "$REPO_DIR/.env" | tail -n 1 | cut -d= -f2- | sed -e "s/^[\"']//" -e "s/[\"']\$//" || true)"

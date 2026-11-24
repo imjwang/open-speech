@@ -6,6 +6,14 @@ body {
   overflow: hidden;
 }
 
+/* In the window, the panel fills it: the window is sized to the content synchronously, but for any frame where
+   the two disagree the difference is panel, never a transparent band below it. The native window draws the
+   shadow (and invalidates it on resize), so the panel has none of its own and no backdrop blur either. */
+html:not(.in-browser) .bar-panel {
+  height: 100vh;
+  box-sizing: border-box;
+}
+
 /* Plain-browser mode (UI tests): centre the bar on a neutral backdrop. */
 html.in-browser,
 html.in-browser body {
@@ -17,4 +25,23 @@ html.in-browser #root {
   max-width: 680px;
   margin: 12vh auto 0;
   padding: 0 12px;
+}
+html.in-browser .bar-panel {
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 25%);
+}
+
+/* While an open is being painted (invisible window), state changes land at once: no transition is caught
+   halfway in the first visible frame. Removed when the bar tells main it has painted. */
+html.bar-opening *,
+html.bar-opening *::before,
+html.bar-opening *::after {
+  transition: none !important;
+}
+
+/* A take's level (cloning a voice): scaled from the left by --level, on the compositor (no layout per chunk). */
+.clone-meter {
+  --level: 0;
+  transform: scaleX(var(--level));
+  transition: transform 90ms linear;
+  will-change: transform;
 }

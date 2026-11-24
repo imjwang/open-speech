@@ -21,7 +21,7 @@ from .helpers import SettingsBox
 
 
 def test_pricing_decimal_math(pricing: Pricing) -> None:
-    assert pricing.version == "2026-11-21"
+    assert pricing.version == "2026-11-22"
     # Sonnet: 1M in = $2, 1M out = $10, cache read $0.10/M, cache write $2.50/M
     c = pricing.cost(
         "anthropic",
@@ -57,7 +57,7 @@ def test_user_pricing_override_applies_immediately(paths: Paths) -> None:
     paths.pricing_toml.write_text('[openai."whisper-1"]\nper_audio_minute = "0.010"\n')
     after = p.cost("openai", "whisper-1", Units(audio_sec=60))
     assert before == Decimal("0.006") and after == Decimal("0.010")
-    assert p.version == "2026-11-21+user"
+    assert p.version == "2026-11-22+user"
 
 
 def test_money_formatting() -> None:
@@ -100,7 +100,7 @@ def test_ledger_rows_paid_cache_local_unpriced(db: Database, pricing: Pricing) -
     assert hit.usd_estimate == "0" and Decimal(hit.units["avoided_usd"]) == usd
     assert by_op[("kokoro", False, True)].usd_estimate == "0"
     assert by_op[("anthropic", False, False)].units["unpriced"] is True
-    assert all(r.pricing_version == "2026-11-21" for r in page.items)
+    assert all(r.pricing_version == "2026-11-22" for r in page.items)
     raw = db.query("SELECT units_json, usd_estimate FROM ledger ORDER BY id")
     assert json.loads(raw[0]["units_json"])["chars"] == 400
     assert Decimal(raw[0]["usd_estimate"]) == usd  # decimal string, never float

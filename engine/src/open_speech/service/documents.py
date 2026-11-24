@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from open_speech.api import schemas as s
 from open_speech.api.ws_schema import DocumentUpdated
+from open_speech.config import AUTO_VOICE
 from open_speech.document.model import Document, SourceKind
 from open_speech.errors import EngineError, EstimateRequired, NotFound, Unavailable
 from open_speech.i18n import t
@@ -53,8 +54,11 @@ class DocumentService:
     def _warm_voice(self, voice_id: str | None) -> None:
         """A document is being opened, so speech is about to be needed: start loading a local voice now, in
         the background, instead of when the first sentence is requested (NFR-1, time to first audio)."""
+        voice_id = voice_id or self.e.settings.get().defaults.voice
+        if voice_id == AUTO_VOICE:
+            voice_id = self.e.voices.effective(voice_id)
         try:
-            provider, template = self.e.registry.tts_for(voice_id or self.e.settings.get().defaults.voice)
+            provider, template = self.e.registry.tts_for(voice_id)
         except EngineError:
             return
         prewarm = getattr(provider, "prewarm", None)
@@ -121,12 +125,11 @@ class DocumentService:
                     p.read_bytes(),
                     play=req.play,
                     voice_id=req.voice_id,
-                    mode=req.mode,
                     confirm_estimate=req.confirm_estimate,
                     path=str(p),
                 )
         return await self._ingest_and_open(
-            src, play=req.play, voice_id=req.voice_id, mode=req.mode, confirm_estimate=req.confirm_estimate
+            src, play=req.play, voice_id=req.voice_id, confirm_estimate=req.confirm_estimate
         )
 
     async def create_from_upload(
@@ -136,7 +139,6 @@ class DocumentService:
         *,
         play: bool = False,
         voice_id: str | None = None,
-        mode: s.Mode | None = None,
         confirm_estimate: bool = False,
         path: str | None = None,
     ) -> s.CreateDocumentResponse:
@@ -153,7 +155,7 @@ class DocumentService:
         else:
             raise EngineError("invalid_request", t("error.unsupported_file", ext=ext or "?"))
         return await self._ingest_and_open(
-            src, play=play, voice_id=voice_id, mode=mode, confirm_estimate=confirm_estimate, path=path
+            src, play=play, voice_id=voice_id, confirm_estimate=confirm_estimate, path=path
         )
 
     async def _ingest_and_open(
@@ -162,7 +164,6 @@ class DocumentService:
         *,
         play: bool,
         voice_id: str | None,
-        mode: s.Mode | None,
         confirm_estimate: bool,
         path: str | None = None,
     ) -> s.CreateDocumentResponse:
@@ -192,9 +193,6 @@ class DocumentService:
         if voice_id:
             settings["voice_id"] = voice_id
             changed = True
-        if mode:
-            settings["mode"] = mode
-            changed = True
         if changed:
             self._save_settings(doc.id, settings)
         if not voice_id:
@@ -204,6 +202,11 @@ class DocumentService:
         if self.mode_for(doc) == "ai_enhanced":
             estimate = await self.e.usage.estimate(s.EstimateRequest(document_id=doc.id))
             if estimate.requires_confirmation and not confirm_estimate:
+                # Nothing is spent before the user agrees, not even the first cleanup batch. When they asked
+                # for it to play, say what it would cost; pressing play is then the go-ahead.
+                if play:
+                    self.e.playback.cost_was_asked(doc.id)
+                    self._announce_cost(doc, estimate)
                 return s.CreateDocumentResponse(document=await self.get(doc.id), estimate=estimate, playing=False)
 
         await self.script_for(doc)
@@ -375,7 +378,7 @@ class DocumentService:
                 utterance_index=pos["utterance_index"] if pos else 0, offset_ms=pos["offset_ms"] if pos else 0
             ),
             settings=s.DocumentSettings(
-                voice_id=st.get("voice_id"), mode=st.get("mode"), pinned=bool(st.get("pinned"))
+                voice_id=st.get("voice_id"), pinned=bool(st.get("pinned"))
             ),
             flags=flags,
             language=language,
@@ -429,24 +432,38 @@ class DocumentService:
     # ------------------------------------------------------------------ planning
 
     def mode_for(self, doc: Document) -> Literal["classic", "ai_enhanced"]:
-        st = self._settings(doc.id)
-        if st.get("mode") in ("classic", "ai_enhanced"):
-            return st["mode"]  # type: ignore[no-any-return]
-        return self.e.rule_store.mode_for(doc, self.e.settings.get().defaults.mode)
+        """Cleanup is Claude following the reading instructions whenever this build has Claude. Without it
+        ("classic"), only the filters from the skip lines and rule files apply. Being offline or over budget
+        is not a mode: the plan is made with the filters, marked degraded and tried again later."""
+        del doc
+        return "ai_enhanced" if self.e.registry.llm() is not None else "classic"
 
     def voice_for(self, document_id: str | None) -> str:
         """The voice that reads a document: its own choice if it has one, else the default voice, or, when
-        the default can't pronounce the document's language, the user's voice for that language."""
+        the default can't pronounce the document's language, the user's voice for that language. "auto" is
+        resolved (Chirp Zephyr in the document's language while it can be used, else the local voice)."""
+        return self.resolve_voice(document_id)[0]
+
+    def resolve_voice(self, document_id: str | None) -> tuple[str, str | None]:
+        """`voice_for()` and, when "auto" reads with the local voice for a runtime reason ("free_tier", "budget"),
+        that reason, so the reader can be told once (`VoiceService.resolve`)."""
         language: str | None = None
+        chosen: str | None = None
         if document_id:
             v = self._settings(document_id).get("voice_id")
-            if v:
-                return str(v)
+            chosen = str(v) if v else None
+            if chosen and chosen != AUTO_VOICE:
+                return chosen, None
             try:
                 language = self.load(document_id).language
             except EngineError:
                 language = None
-        return self.e.voices.for_language(self.e.settings.get().defaults.voice, language)
+        preferred = AUTO_VOICE if chosen == AUTO_VOICE else self.e.settings.get().defaults.voice
+        voice = self.e.voices.for_language(preferred, language)
+        if preferred == AUTO_VOICE:
+            auto_voice, reason = self.e.voices.resolve(AUTO_VOICE, language)
+            return voice, (reason if voice == auto_voice else None)
+        return voice, None
 
     def plan_context(self, doc: Document) -> Any:
         from open_speech.plan.planner import PlanContext
@@ -454,9 +471,9 @@ class DocumentService:
         rs = self.e.rule_store
         return PlanContext(
             document=doc,
-            rules=rs.rules_for(doc),
+            rules=rs.plan_rules(doc),
             lexicon=rs.lexicon(),
-            speech_md=rs.speech_md(),
+            speech_md=rs.plan_speech_md(),
             mode=self.mode_for(doc),
             llm_model=self.e.settings.get().llm.model,
         )
@@ -487,7 +504,7 @@ class DocumentService:
                 self.e.record_llm(op, call, document_id=doc.id)
             script = result.script
             if ctx.mode == "ai_enhanced" and llm is None:
-                reason = t("unavailable.ai_cleanup") if self.e.registry.llm() is None else t("plan.budget_classic")
+                reason = t("unavailable.ai_cleanup") if self.e.registry.llm() is None else t("plan.budget_filters_only")
                 if reason not in script.warnings:
                     script.warnings.append(reason)
             if result.degraded or (ctx.mode == "ai_enhanced" and llm is None):
@@ -542,20 +559,13 @@ class DocumentService:
     async def update_settings(self, document_id: str, upd: s.DocumentSettingsUpdate) -> s.DocumentOut:
         self._row(document_id)
         st = self._settings(document_id)
-        replan = False
         if upd.voice_id is not None:
             st["voice_id"] = upd.voice_id
-        if upd.mode is not None and upd.mode != st.get("mode"):
-            st["mode"] = upd.mode
-            replan = True
         if upd.pinned is not None:
             st["pinned"] = upd.pinned
         self._save_settings(document_id, st)
-        if replan:
-            await self.replan(document_id, "mode changed")
-            await self.e.playback.on_script_changed(document_id)
         if upd.voice_id is not None and self.e.playback.current_document_id() == document_id:
-            await self.e.transport.set_voice(upd.voice_id)
+            await self.e.transport.set_voice(self.voice_for(document_id))
         return await self.get(document_id)
 
     def pinned_ids(self) -> set[str]:

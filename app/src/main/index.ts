@@ -12,7 +12,7 @@ import { app, dialog, ipcMain, nativeTheme, Notification, shell } from 'electron
 
 import { isEngineError, unwrap, type UserSettings } from '../shared/api/client'
 import type { PlaybackState } from '../shared/api/ws.gen'
-import { setLanguage } from '../shared/i18n'
+import { setLanguage, t } from '../shared/i18n'
 import type { EngineInfo, FileHit, HtmlBlocksMessage, ReaderTarget } from '../shared/ipc'
 import { postClipboard, readClipboard } from './clipboard'
 import { EngineLink } from './engine-link'
@@ -24,6 +24,7 @@ import { rulesDir } from './paths'
 import { appPageUrl, installAppProtocol, registerAppSchemePrivileges } from './protocol'
 import { toDomAnchor, worthShowing } from './reader-policy'
 import { installSecurity, openExternalSafely, shellOrigins } from './security'
+import { canListenFallback, ShellStateStore, shellStatePath, type ThemePref } from './shell-state'
 import { ShortcutManager } from './shortcuts'
 import { TrayController } from './tray'
 import { WindowManager, type PageName } from './windows'
@@ -42,7 +43,13 @@ function log(level: 'info' | 'warn' | 'error', message: string): void {
   else console.log(line)
 }
 
-function pageUrl(page: PageName, query: Record<string, string> = {}): string {
+/** The theme preference pages paint their first frame in (renderer/shared/prefs.ts reads `theme=`). */
+let pageTheme: ThemePref = 'system'
+
+function pageUrl(page: PageName, extra: Record<string, string> = {}): string {
+  const query: Record<string, string> = { ...extra, theme: pageTheme }
+  // Unpackaged builds count renders for the UI driver (renderer/shared/debug.ts).
+  if (!app.isPackaged) query.debug = '1'
   if (devServerUrl) {
     const qs = new URLSearchParams(query).toString()
     return `${devServerUrl.replace(/\/$/, '')}/${page}/index.html${qs ? `?${qs}` : ''}`
@@ -84,11 +91,20 @@ async function main(): Promise<void> {
 
   const link = new EngineLink()
   const shortcuts = new ShortcutManager()
+  const shellState = new ShellStateStore(shellStatePath(process.env, app.getPath('userData')), undefined, (m) => log('warn', m))
   let playback: PlaybackState | null = null
   let attention: string | null = null
   let engineDown = true
   let listening = false
+  /** The bar's microphone is recording a voice to clone (see windows.showBar). */
+  let recording = false
+  let speaking = false
   let lastPlayingDoc: string | null = null
+
+  // The saved theme applies before any window exists, so the first frame of every page is already in it.
+  const themeSource = (pref: ThemePref) => (pref === 'system' ? 'system' : pref === 'ember' ? 'dark' : 'light')
+  pageTheme = shellState.get().themePref
+  nativeTheme.themeSource = themeSource(pageTheme)
 
   const client = () => link.client
 
@@ -120,6 +136,7 @@ async function main(): Promise<void> {
         refreshTray()
       }
     },
+    barContext: () => ({ canListen: canListenFallback(shellState.get(), app.isPackaged), speaking, listening, recording }),
   })
 
   installSecurity({
@@ -127,12 +144,34 @@ async function main(): Promise<void> {
     // The command bar listens for commands; the rules editor takes dictation. Nothing else gets the microphone.
     micAllowed: (contents) => windows.isBar(contents) || windows.isRules(contents),
     isWebView: (contents) => windows.isWebPage(contents),
+    withBlurSuppressed: (fn) => windows.withBlurSuppressed(fn),
   })
 
   // ---------------------------------------------------------------- actions
 
   const openBar = (documentId?: string, viaHotkey = false) =>
     windows.showBar({ listen: true, viaHotkey, ...(documentId ? { documentId } : {}) })
+
+  /**
+   * The first launch has no questions (09 § First run): the shell opens the bar by itself, listening, once per
+   * launch while the engine says onboarding isn't completed. The bar says how to talk to it if nothing is said,
+   * and marks onboarding completed after the first turn or when it closes.
+   */
+  let firstRunOpened = false
+  const openFirstRun = () => {
+    if (firstRunOpened) return
+    firstRunOpened = true
+    log('info', 'first run: opening the bar')
+    windows.showBar({ listen: true, viaHotkey: false, firstRun: true })
+  }
+  /** What the engine said about listening and onboarding, remembered for the next launch's first instant. */
+  const rememberEngine = (settings: UserSettings | null, canListen?: boolean) => {
+    const patch: { canListen?: boolean; onboardingCompleted?: boolean } = {}
+    if (canListen !== undefined) patch.canListen = canListen
+    if (typeof settings?.onboarding_completed === 'boolean') patch.onboardingCompleted = settings.onboarding_completed
+    shellState.update(patch)
+    if (settings?.onboarding_completed === false) openFirstRun()
+  }
 
   const reportError = (what: string, err: unknown) => {
     const detail = isEngineError(err) ? err.detail || err.code : (err as Error)?.message || String(err)
@@ -258,16 +297,38 @@ async function main(): Promise<void> {
         return list.items.map((d) => ({ id: d.id, title: d.title, progress: d.progress }))
       },
       openRules: () => windows.openRules(),
+      setShowSpend: (show) => tray.setShowSpend(shellState.update({ traySpend: show }).traySpend),
       quit: () => app.quit(),
     },
   )
+  tray.setShowSpend(shellState.get().traySpend)
   tray.create()
 
   function refreshTray(): void {
     const playing = playback?.state === 'playing' || playback?.state === 'loading'
-    const detail = engineDown ? 'engine not running' : attention
-    tray.update({ listening, playing, attention: engineDown || attention !== null }, detail)
+    const detail = engineDown ? t('tray.engine_down') : attention
+    tray.update({ listening, speaking, playing, attention: engineDown || attention !== null }, detail)
   }
+
+  // This month's spending for the tray: fetched on every (re)connect, then pushed by the engine on change.
+  const refreshBudget = async () => {
+    const c = client()
+    if (!c) return
+    try {
+      tray.setBudget(await unwrap(c.GET('/api/v1/usage/budget')))
+    } catch (err) {
+      log('warn', `loading this month's spending failed: ${(err as Error).message}`)
+    }
+  }
+  link.socket.onStatus((status) => {
+    if (status === 'open') void refreshBudget()
+    else if (speaking) {
+      // The connection dropped mid-sentence: no `ended` will come for it.
+      speaking = false
+      refreshTray()
+    }
+  })
+  link.on('usage.changed', (msg) => tray.setBudget(msg.budget))
 
   // ---------------------------------------------------------------- engine events
 
@@ -302,6 +363,13 @@ async function main(): Promise<void> {
     refreshTray()
     if (!windows.barVisible) notify('Open Speech budget', msg.message)
   })
+  // The engine is talking (a reply, a notice): the tray says so until it has finished.
+  link.on('assistant.speech', (msg) => {
+    const next = msg.state === 'started'
+    if (next === speaking) return
+    speaking = next
+    refreshTray()
+  })
   link.on('error', (msg) => {
     const detail = typeof msg.problem.detail === 'string' ? msg.problem.detail : null
     if (detail && !windows.barVisible) {
@@ -319,11 +387,13 @@ async function main(): Promise<void> {
 
   // ---------------------------------------------------------------- settings → shortcuts, theme, language
 
-  let themePref: 'system' | 'lavender' | 'ember' = 'system'
+  let themePref: ThemePref = pageTheme
   const applyTheme = () => {
     // Native chrome (menus, vibrancy, the web reader's scrollbars) follows the same choice as the pages.
-    nativeTheme.themeSource = themePref === 'system' ? 'system' : themePref === 'ember' ? 'dark' : 'light'
+    nativeTheme.themeSource = themeSource(themePref)
     windows.setTheme(themePref === 'system' ? (nativeTheme.shouldUseDarkColors ? 'ember' : 'lavender') : themePref)
+    // Remembered for the next launch, and for pages opened from now on.
+    pageTheme = shellState.update({ themePref }).themePref
   }
   nativeTheme.on('updated', applyTheme)
 
@@ -337,11 +407,19 @@ async function main(): Promise<void> {
     if (result?.failed.length) log('warn', `shortcuts not registered: ${result.failed.join(', ')}`)
     themePref = settings.appearance?.theme ?? 'system'
     applyTheme()
-    if (language) setLanguage(language) // the tray menu is built in this language when it opens
+    if (language) {
+      setLanguage(language) // the tray menu is built in this language when it opens
+      refreshTray()
+    }
   }
 
   // A voice command, the settings card or a hand edit changed settings: apply at once, no restart.
-  link.on('settings.changed', (msg) => useSettings(msg.settings as UserSettings, msg.language))
+  link.on('settings.changed', (msg) => {
+    useSettings(msg.settings as UserSettings, msg.language)
+    rememberEngine(msg.settings as UserSettings)
+  })
+  // The local speech model finished installing (or went away): the next open knows at once.
+  link.on('capabilities.changed', (msg) => rememberEngine(null, msg.capabilities.speech_input?.available))
 
   const applySettings = async () => {
     const c = client()
@@ -349,6 +427,7 @@ async function main(): Promise<void> {
     try {
       const [settings, capabilities] = await Promise.all([unwrap(c.GET('/api/v1/settings')), unwrap(c.GET('/api/v1/capabilities'))])
       useSettings(settings, capabilities.language)
+      rememberEngine(settings, capabilities.speech_input?.available)
     } catch (err) {
       log('warn', `loading settings failed: ${(err as Error).message}`)
     }
@@ -384,8 +463,10 @@ async function main(): Promise<void> {
     getEngine: () => link.endpoint,
     hideBar: () => windows.hideBar(),
     resizeBar: (h) => windows.resizeBar(h),
-    setListening: (value) => {
+    barShown: (shown) => windows.barShown(shown),
+    setListening: (value, isRecording = false) => {
       listening = value
+      recording = value && isRecording
       refreshTray()
     },
     openBar: (req) => windows.showBar({ listen: req.listen ?? true, viaHotkey: false, ...(req.documentId ? { documentId: req.documentId } : {}) }),
@@ -409,6 +490,9 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------- windows + engine
 
   windows.createBar()
+  // A profile known not to be onboarded opens at once, before the engine answers: the bar listens from its
+  // first frame and keeps what is said until the engine is there. A profile never seen waits for the engine.
+  if (shellState.get().onboardingCompleted === false) openFirstRun()
 
   let supervisor: EngineSupervisor | null = null
   const attachUrl = process.env.OPEN_SPEECH_ENGINE_URL

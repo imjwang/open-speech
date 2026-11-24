@@ -1,0 +1,81 @@
+{
+  "revision": "dd4401a9add81ac692d20e240d22ec9dda82cc29",
+  "variants": {
+    "q8": {
+      "variant": "q8",
+      "file": "onnx/model_quantized.onnx",
+      "size_mb": 92.4,
+      "session_load_s": 0.262,
+      "peak_rss_mb": 771.3,
+      "rss_growth_mb": 733.9,
+      "first_audio_ms": {
+        "22": 165.4,
+        "64": 422.2,
+        "89": 566.2,
+        "200": 1487.8
+      },
+      "rtf": 0.1075,
+      "pause_noise_4_12k_db": -97.7,
+      "lsd_vs_fp32_db": 2.734,
+      "wer_en": 0.0181,
+      "wer_es": 0.0048
+    },
+    "fp16": {
+      "variant": "fp16",
+      "file": "onnx/model_fp16.onnx",
+      "size_mb": 163.2,
+      "session_load_s": 0.339,
+      "peak_rss_mb": 1039.0,
+      "rss_growth_mb": 838.3,
+      "first_audio_ms": {
+        "22": 432.1,
+        "64": 976.9,
+        "89": 1250.6,
+        "200": 3256.7
+      },
+      "rtf": 0.273,
+      "pause_noise_4_12k_db": -97.0,
+      "lsd_vs_fp32_db": NaN,
+      "wer_en": 0.1219,
+      "wer_es": 0.1722
+    },
+    "q8f16": {
+      "variant": "q8f16",
+      "file": "onnx/model_q8f16.onnx",
+      "size_mb": 86.1,
+      "session_load_s": 0.494,
+      "peak_rss_mb": 807.6,
+      "rss_growth_mb": 684.0,
+      "first_audio_ms": {
+        "22": 181.1,
+        "64": 471.7,
+        "89": 598.0,
+        "200": 1415.4
+      },
+      "rtf": 0.1244,
+      "pause_noise_4_12k_db": -98.3,
+      "lsd_vs_fp32_db": 2.835,
+      "wer_en": 0.0158,
+      "wer_es": 0.0048
+    },
+    "fp32": {
+      "variant": "fp32",
+      "file": "onnx/model.onnx",
+      "size_mb": 325.5,
+      "session_load_s": 0.414,
+      "peak_rss_mb": 1093.6,
+      "rss_growth_mb": 730.5,
+      "first_audio_ms": {
+        "22": 437.3,
+        "64": 1051.3,
+        "89": 1402.2,
+        "200": 3727.5
+      },
+      "rtf": 0.2802,
+      "pause_noise_4_12k_db": -97.9,
+      "lsd_vs_fp32_db": 0.0,
+      "wer_en": 0.0181,
+      "wer_es": 0.0048
+    }
+  }
+}

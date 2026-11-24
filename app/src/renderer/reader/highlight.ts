@@ -177,3 +177,31 @@ export function scriptEntries(script: ScriptOut, blockOrder: ReadonlyMap<string,
   })
   return entries.sort((a, b) => a.order - b.order)
 }
+
+/** The playing word, as far as one block's highlight is concerned. */
+export interface LiveWord {
+  anchor: Anchor
+  sentenceAnchors: readonly Anchor[]
+}
+
+/** Whether the playing word or its sentence touches this block (only those blocks re-render per word). */
+export function involvesBlock(word: LiveWord | null | undefined, blockId: string): boolean {
+  if (!word) return false
+  if (word.anchor.block_id === blockId) return true
+  for (const a of word.sentenceAnchors) if (a.block_id === blockId) return true
+  return false
+}
+
+/** A block's marks with the live sentence and word added to its static ones (rule removals, utterances). */
+export function liveMarks(blockId: string, text: string, base: BlockMarks, word: LiveWord | null | undefined): { marks: BlockMarks; outlined: boolean } {
+  if (!word || !involvesBlock(word, blockId)) return { marks: base, outlined: false }
+  const len = codePointLength(text)
+  return {
+    marks: {
+      ...base,
+      sentence: sentenceRanges(blockId, word.sentenceAnchors.filter((a) => a.char_start != null), len),
+      word: wordRange(blockId, word.anchor, len),
+    },
+    outlined: outlinedBlocks(word.sentenceAnchors).has(blockId),
+  }
+}

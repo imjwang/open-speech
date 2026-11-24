@@ -25,13 +25,17 @@ Summoned by a global hotkey from anywhere. It opens **already listening**.
 ├━━━━━━━━━━━━━━━━━━━━━━━━━━──────────────────────────────────────┤  ← progress
 │ ⏮  ⏯  ⏭   ▤ report.pdf · 1 more queued     12m left  − 1.8x + │  ← transport strip
 ├──────────────────────────────────────────────────────────────┤
-│ 📎  📋  ⟲  │  ♪  ☑  👛  ⚙                               ⌥Space │  ← toolbar
+│ 📎  📋  ⟲  │  ♪  ☑  ⚙                                  ◔ $0.12 │  ← toolbar · this month's spending
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**The orb** is the microphone and the state of the conversation in one control: idle (press to talk),
-listening (it moves with the voice), working, speaking. When this Mac can't listen yet it says so, and
-offers the one-press download of the speech model if that is what is missing.
+**The orb** is the microphone and the state of the conversation in one control: listening (it moves with the
+voice), working, speaking ("Speaking. Press to stop and talk."), and idle (quiet: the conversation is over and
+the microphone is released). Pressing it does what Tab does. Its tooltip also gives the shortcut that opens the
+bar from anywhere (⌥Space). When this Mac can't listen it says so, and offers the one-press download of the
+speech model if that is what is missing. Short notes (connecting, a microphone error, why listening isn't
+possible) are the composer's placeholder, not rows of their own, so the bar doesn't grow and shrink; when idle
+the placeholder says how to talk again ("Tab or ⌥Space to talk").
 
 **The composer** is a small text editor (Lexical), not a text field.
 - **Badges.** Files, links and long pasted text sit inline as badges with an icon for their kind (document, image, link, text). A badge is removed like a character, or with its ✕.
@@ -40,18 +44,34 @@ offers the one-press download of the speech model if that is what is missing.
 - **Sending.** ↵ sends what is in the composer; ⇧↵ adds a line. Badges alone mean "read these". Words around badges make a command about them ("summarize [report.pdf]").
 - **Never locked.** The composer stays editable while an utterance is being recognized or a turn is being answered. What is typed meanwhile is kept for the next command.
 
-**Speaking.**
-- **Open:** ⌥Space (configurable). The bar appears centered in ≤ 150 ms with the mic live. Reading pauses while it listens.
-- **A command:** with nothing typed, what you say streams into the composer and is sent when you stop (800 ms of silence, releasing a held hotkey, or ↵), together with any badges.
+**Speaking: a conversation, one way at a time.**
+- **Open:** ⌥Space (configurable). The bar appears centered in ≤ 150 ms already listening: the microphone opens
+  the instant the bar opens, unless this Mac is known not to be able to listen. Nothing said in the first instant
+  is lost: audio is kept (up to 30 s) until the engine has accepted it, even while the engine is still starting,
+  and an utterance that ended before then is sent the moment it is. Reading pauses while a conversation is on.
+- **A command:** with nothing typed, what you say streams into the composer and is sent when you stop (800 ms of
+  silence, releasing a held hotkey, or ↵), together with any badges. The orb shows it working.
+- **The answer is spoken** (typed commands and toolbar presses too), and shown. While the assistant speaks the
+  orb says so and nothing from the microphone is sent: the reply plays through the speakers, where the
+  microphone's echo cancellation can't hear it (07 § Turn-taking).
+- **Then it listens again** for a follow-up, for 7 s (10 s when a confirmation card is waiting for "yes" or
+  "no"), from the same open microphone. If nothing comes, the conversation goes **idle**: the orb goes quiet,
+  the microphone is released, reading resumes. No note, no row. Tab, the orb or the hotkey talks again.
+- **A command whose effect is reading** ("resume", "read my clipboard", "faster" while reading) ends the
+  conversation instead, so what it did is heard at once. So do the transport buttons.
+- **Interrupting:** Tab, the orb or the hotkey while the assistant speaks stops it at once and listens; Esc stops
+  it and ends the conversation. (Speaking over it doesn't interrupt yet: 07 § Turn-taking.)
 - **Dictation:** with text already typed, what you say is added to the text, and nothing is sent until ↵.
-- **Type instead:** any keystroke stops the mic and leaves the transcript as editable text. Tab toggles back to listening.
-- The microphone turns itself off after 15 s without speech; press the orb, Tab or the hotkey to talk again.
+- **Type instead:** any keystroke stops listening and leaves the transcript as editable text; the assistant
+  doesn't listen again until what is typed is sent. Tab toggles back to listening.
+- **What the bar says itself** is spoken in the interface language and shown: "Sorry, I didn't catch that"
+  (then it listens once more, then goes idle), no answer, the budget warning, why it can't listen.
 
 **Results** are rows (shadcn `Command` / cmdk), newest exchange showing and earlier ones folded behind a
 single "earlier" row:
 - **What you said**, with its badges; ↵ replays your recording.
 - **The reply**, spoken and shown; ↵ replays it. "Not part of this build" reads as information, not as an error.
-- **A confirmation card** for anything that lasts: one line saying what will change and where, a speech-diff excerpt for rules, and two named buttons. ↵, ⌘↵ or saying "yes" confirms; Esc or "no" cancels. While listening, the card is read aloud and the bar waits for the answer.
+- **A confirmation card** for anything that lasts: one line saying what will change and where, a speech-diff excerpt for rules, and two named buttons. ↵, ⌘↵ or saying "yes" confirms; Esc or "no" cancels. The question is spoken; once it has been heard the bar listens for the answer.
 - **Cards** (below).
 - With something typed or attached, nothing is selected: ↵ always sends the composer unless you moved to a row yourself.
 
@@ -59,27 +79,40 @@ single "earlier" row:
 the document (press to show it in the reader), how many more are queued, time left, and speed with − and +.
 
 **The toolbar** is everything the bar can do without a command, as icons: add a file, read the clipboard,
-recent documents · voices, rules, spending, settings. Each can also be asked for by voice. A toolbar press
+recent documents · voices, rules, settings. Each can also be asked for by voice. A toolbar press
 shows its result without a "you said" line.
 
+**The spend chip** ends the toolbar: this month's spending, always in view. A ring fills with the share of the
+budget (amber from the warning level, red at the budget), or, while nothing has been spent, with the share of
+the free voice allowance in a muted colour; there is no ring when nothing is used and there is no budget. The
+amount reads "Free" (exactly nothing), "<$0.01", or dollars and cents ("$0.12"; whole dollars from $100). Its
+name for screen readers says it in words: "Spent this month: about 12 cents of your 10 dollar budget,
+estimated. Free voice: 120,000 of 1,000,000 characters." Pressing it shows the spending card. It follows the
+engine (`GET /usage/budget` on connect and on every open, `usage.changed` between).
+
+**Steady on screen.** Opening the bar never shows the previous open: the window appears only once the new
+state has painted, at its final height. The window is resized synchronously with the content (no band below the
+panel, no height bouncing), and a listening orb re-renders nothing (the level is a CSS variable).
+
 **Rows, not screens.** Things that are normally settings pages are cards here, and the cards are controls:
-- **Voices** → one row per voice with a play button to hear it, its language, where it runs (on this Mac / cloud), and a mark on the current one; ↵ uses it for this document, ⌘↵ makes it the default.
-- **Settings** → the few that matter, each changed in place: theme (three icons: follow the Mac, Lavender, Ember), language (follow the Mac, EN, ES), voice, speed (− +), cleanup mode, text size (− +). Changes apply at once in every window.
-- **Auto-skip** → the presets as chips with icons; a lit chip is being skipped; press to toggle.
+- **Voices** → one row per voice with a play button to hear it, its language, where it runs (on this Mac / cloud), and a mark on the current one; ↵ uses it for this document, ⌘↵ makes it the default. The user's own voices have a person icon (a designed one, sparkles) and a trash button (asked on a card first). The card ends with "More voices" and **＋ Clone a voice** (the same as saying "clone my voice").
+- **Settings** → the few that matter, each changed in place: theme (three icons: follow the Mac, Lavender, Ember), language (follow the Mac, EN, ES), voice, speed (− +), cleanup mode, text size (− +). While a Qwen voice is in use or Qwen weights are on the Mac, also **local voice size** (Small 0.6B, Large 1.7B) and **local voice precision** (4-bit … Full); an option that needs a download shows ⤓ and says its size, and choosing it asks to download. Changes apply at once in every window.
 - **Rules** → the active rules, each with an on/off switch; ⌘↵ opens the rule in the rules editor.
-- **Spending** → one figure for the month with a budget ring, always marked "estimated", plus what the cache saved.
+- **Spending** → one figure for the month with a budget ring, always marked "estimated", free allowances in use ("Free voice: 120,000 of 1,000,000 characters · resets Dec 1"), plus what the cache saved.
 - **Queue** and **Recent** → documents; ↵ plays, ⌘↵ shows in the reader.
-- **Local models** → size and whether it is installed; ↵ asks before downloading.
+- **Local models** → size and whether it is installed; ↵ asks before downloading. Qwen weights read as their family ("Qwen voices", "Qwen voice cloning", "Qwen voice design") with size and precision chips and a mark on the one the settings choose.
+- **Clone your voice** (the passage card, after "clone my voice") → the two sentences to read, in a larger type; one red record control; the consent line under it ("This is my voice, or I have the speaker's permission to clone it. Clones stay on this Mac."), which the record press (or saying "ready") confirms. While recording the orb turns red and breathes with the level, the card shows a stop button, a level bar and the time; silence after the reading ends the take (or the orb, Tab, Enter). The conversation microphone is closed meanwhile: the take uses its own capture path with echo cancellation, noise suppression and gain control off. Then "Making your voice…" with the job's progress, the new voice saying its test sentence, and a "Keep “My voice”" card with ▶ to hear it again; "yes" keeps it and reads with it, "no" deletes it. A take with no speech says so and the card offers to record again; a recording the engine refuses says why and shows the next passage.
+- **Designed voices** → after "make a voice that sounds like …": three rows ("Voice 1–3") with ▶; saying "the second one" (or ↵ on a row) keeps that one.
 - **Where am I** → document, position and time left.
 
-**Esc** cancels a pending card, else closes the bar; reading resumes.
+**Esc** stops the assistant speaking, cancels a pending card, else closes the bar; reading resumes.
 **Empty bar:** recent documents, so the last thing can be resumed with ↵.
 
 ## 2. Menu bar
 
-- **Icon states:** idle (outline), listening (filled + pulse), playing (waveform), attention (dot: budget warning or error). Respects reduced motion.
+- **Icon states:** idle (outline), listening (filled + pulse), speaking (a speech bubble, while the assistant talks), playing (waveform), attention (dot: budget warning or error). Respects reduced motion. The icon and tooltip change only when what they show changes.
 - **Click** opens the command bar.
-- **Menu:** Open Open Speech · Play / Pause · Recent ▸ · Rules… · Quit, in the interface language.
+- **Menu:** a first line with this month's spending ("This month: $0.12 · estimated", also in the tooltip) · Open Open Speech · Play / Pause · Recent ▸ · Rules… · Show spending in the menu bar · Quit, in the interface language. "Show spending in the menu bar" (off by default) puts the amount beside the icon.
 - Playback continues with every window closed.
 
 ## 3. Reader
@@ -99,6 +132,7 @@ Opens only for content worth seeing: PDFs, web pages, images, and long text.
 └────────────────────────────────────────────────────────────────┘
 ```
 
+- **Steady while reading.** Only the text block (or PDF page) the word is in redraws as reading moves; a PDF page already drawn is never blanked when it scrolls back into view; opening another document keeps the current one on screen until the new one is ready. While the command bar is up, the reader opens without taking focus (the bar stays).
 - **Content only.** No sidebars or toolbars. The title strip has play/pause, the title, speed and time left (and the page for PDFs), and two icons: **what is spoken** (Script view) and **the command bar**.
 - **Highlight:** the current sentence has a soft tint; the current word is stronger (exact on Kokoro, estimated on cloud voices). Lower-fidelity utterances outline the block, section or figure instead.
 - **Follow mode:** auto-scroll keeps the sentence in view. A manual scroll releases it and shows a small "back to where it is reading" chip.
@@ -127,9 +161,9 @@ button, "open the rules" / "abre las reglas", ⌘↵ on a rule row, or when the 
 └──────────────┴───────────────────────────────────────────────┘
 ```
 
-- **Left:** the standing preferences, the pronunciation list, your rules (and "New rule"), then the built-in presets, each with its icon and an on/off switch. Built-in names follow the interface language.
-- **Right:** the open file as plain text. For a rule that is what it says, in your words; the engine works out how to apply it when it is saved (free and instant when it can, AI Enhanced when it needs judgment). `{ }` shows the whole file, header included, for those who want it.
-- **A rule's header strip:** how it is applied (instant, or by AI Enhanced), its name (editable: renames the file), where it applies, its switch, the whole-file toggle, delete (asks once more).
+- **Left:** the reading instructions, the pronunciation list, then your rules (and "New rule"), each with its icon and an on/off switch. Built-in names follow the interface language.
+- **Right:** the open file as plain text. For a rule that is what it says, in your words; the engine works out how to apply it when it is saved (free and instant when it can, by Claude when it needs judgment). `{ }` shows the whole file, header included, for those who want it.
+- **A rule's header strip:** how it is applied (instant, or by Claude), its name (editable: renames the file), where it applies, its switch, the whole-file toggle, delete (asks once more).
 - **Saving is automatic,** shortly after typing stops, on ⌘S, and when the window loses focus. The status line says Saved, Saving, Not saved yet, or the reason a save was refused; the text stays in the editor either way.
 - **Dictation:** the microphone button adds what you say at the caret.
 - **New rule:** ＋ or ⌘N, then write or say what it should do ("skip the author names under each headline"). An empty rule creates nothing.
@@ -143,14 +177,14 @@ Global shortcuts are remappable in `settings.toml` under `[shortcuts]` and take 
 
 | Action | Default | Scope |
 |---|---|---|
-| Open command bar (listening) | ⌥Space | Global |
+| Open command bar (listening); while it speaks: stop it and listen; while it listens: close | ⌥Space | Global |
 | Push-to-talk | Hold ⌥Space | Global |
 | Play / pause | ⌥⇧Space, media keys | Global |
 | Read clipboard (text or image) | ⌥⇧R | Global |
 | Read selection in any app (P1) | ⌥A | Global (Speechify-compatible) |
 | Screenshot to listen (P1) | ⌥X | Global (Speechify-compatible) |
 | Send / new line | ↵ / ⇧↵ | Bar |
-| Toggle typing / listening | Tab | Bar |
+| Toggle typing / listening; while the assistant speaks: stop it and listen | Tab | Bar |
 | Find a file | @ | Bar |
 | Confirm / cancel a card | ↵ or ⌘↵ / Esc | Bar |
 | Second action on a row (make default, show in reader, open in editor) | ⌘↵ | Bar |
@@ -171,7 +205,7 @@ Global shortcuts are remappable in `settings.toml` under `[shortcuts]` and take 
   - **System** (the default) follows the Mac: Lavender by day, Ember in dark mode.
 - A theme change applies at once to every open window and the bar's vibrancy, whether it came from a voice command ("dark theme", "tema claro", "match the system"), the settings card, the assistant, or an edit to `settings.toml`.
 - The command bar uses native macOS vibrancy. Radius 12 px, generous spacing, one accent color for listening and highlight.
-- Icons are lucide, one per thing: each preset, each kind of badge, each setting has its own.
+- Icons are lucide, one per thing: each kind of badge and each setting has its own.
 - Highlight colors meet 3:1 contrast against both themes. The current word is never conveyed by color alone (it's also underlined).
 - Reader options (by voice or `settings.toml`): font size, line spacing, a dyslexia-friendly font (e.g. OpenDyslexic or Atkinson Hyperlegible), high contrast.
 - Motion is minimal and disabled under reduced motion.
@@ -186,17 +220,13 @@ Global shortcuts are remappable in `settings.toml` under `[shortcuts]` and take 
 - **AI-voice disclosure:** first run and the voices list state that voices are AI-generated (provider policy).
 - **No time limits** on confirmations; spoken prompts repeat on "say that again".
 
-## 8. First run (onboarding: ≤ 3 steps, spoken by Kokoro, skippable)
+## 8. First run (no questions)
 
-Runs the first time the bar opens. The voices and the speech recognizer are in the app, so it speaks and
-listens at once. There is no step about keys or accounts.
+The first time Open Speech starts, the bar opens by itself, already listening. The voices and the speech
+recognizer are in the app, so it can talk and listen at once; defaults stand in for questions (the default voice,
+the default reading instructions), and everything can be changed later by voice. There is no step about keys or accounts.
 
-1. **Voice by ear:** up to three sample voices in the interface language, each a big play button. "Pick a voice. Say one, two or three." With only one voice to offer, this step is skipped.
-2. **Cleanup:** "Should I skip headers, footers, page numbers and citations? Say yes or no." Builds with AI Enhanced also offer "smart".
-
-Then: "All set. Press Option-Space any time and tell me what to read." and the bar is listening for the
-first real command.
-
-Each question can be answered by voice (in either language: "two", "la segunda", "sí", "no"), by a key
-(1–3, Y / S / N, ↵) or by pressing a tile. "Skip setup" leaves at any point. If the microphone times out
-while the user is thinking, the tiles and keys still work and the orb turns it back on.
+If nothing is said for 4 s it says, once, in the interface language: "Hi, I'm listening. Tell me what to read,
+like 'read my clipboard'. Press Option-Space any time to call me." (also shown), then listens for a reply like
+after any answer. The first finished turn, or closing the bar, completes the first run (`onboarding_completed`).
+The macOS microphone prompt, if it appears, doesn't make the bar disappear.

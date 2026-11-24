@@ -1,14 +1,14 @@
-import { AudioLines, EyeOff, Sparkles, Zap } from 'lucide-react'
-import type { CSSProperties } from 'react'
+import { AudioLines, CircleSlash, EyeOff, Sparkles } from 'lucide-react'
+import { memo, type CSSProperties } from 'react'
 
-import type { Block, ScriptOut } from '@shared/api/client'
+import type { Block, ScriptOut, Utterance } from '@shared/api/client'
 import { codePointIndexTable, cpToUtf16 } from '@shared/text'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { scriptEntries } from '../highlight'
-import type { WordState } from '../store'
+import { useReaderStore } from '../store'
 
 function UtteranceText({ text, word }: { text: string; word: { start: number; end: number } | null }) {
   if (!word || word.end <= word.start) return <>{text}</>
@@ -26,6 +26,28 @@ function UtteranceText({ text, word }: { text: string; word: { start: number; en
   )
 }
 
+/** One spoken utterance. It follows the playing word itself, so only the current one re-renders per word. */
+const ScriptUtterance = memo(function ScriptUtterance({ u, onStart }: { u: Utterance; onStart(utteranceId: string): void }) {
+  const word = useReaderStore((s) => (s.word?.utteranceId === u.id ? s.word : null))
+  const current = word !== null
+  const replacements = (u.rule_trace ?? []).filter((h) => h.action === 'replace')
+  return (
+    <p
+      className={cn('cursor-pointer rounded-sm', u.is_heading && 'mt-4 font-semibold', current && 'bg-hl-sentence text-hl-sentence-foreground')}
+      data-current-sentence={current ? 'true' : undefined}
+      data-utterance-id={u.id}
+      onClick={() => onStart(u.id)}
+    >
+      <UtteranceText text={u.text} word={word ? { start: word.spokenStart, end: word.spokenEnd } : null} />
+      {replacements.map((h, i) => (
+        <span key={i} className="ml-2 rounded border px-1 text-[0.75em] text-muted-foreground" title={h.rule_name}>
+          {h.original} → {h.replacement}
+        </span>
+      ))}
+    </p>
+  )
+})
+
 /**
  * Script view (FR-RULE-5, 09 § Reader): exactly what will be spoken, in order, with the spans rules
  * removed shown dimmed; each removal names its rule on hover or keyboard focus.
@@ -33,25 +55,27 @@ function UtteranceText({ text, word }: { text: string; word: { start: number; en
 export function ScriptView({
   script,
   blocks,
-  word,
   onStart,
   style,
 }: {
   script: ScriptOut
   blocks: readonly Block[]
-  word: WordState | null
   onStart(utteranceId: string): void
   style?: CSSProperties
 }) {
   const t = useT()
   const order = new Map(blocks.map((b) => [b.id, b.order]))
   const entries = scriptEntries(script, order)
+  // `mode` is "ai_enhanced" when Claude cleaned the text, "classic" when it couldn't run; the warnings say why.
+  const aiCleanup = script.mode === 'ai_enhanced'
+  const cleanupLabel = t(aiCleanup ? 'cleanup.ai' : 'cleanup.unavailable')
+  const why = aiCleanup ? undefined : script.warnings?.[0]
   return (
     <article className="mx-auto max-w-[72ch] px-6 py-8" style={style} aria-label={t('reader.script')} data-testid="script-view">
       <p className="mb-4 flex items-center gap-3 text-xs text-muted-foreground" data-testid="script-summary">
-        <span className="inline-flex items-center gap-1" title={t(script.mode === 'ai_enhanced' ? 'mode.ai_enhanced' : 'mode.classic')}>
-          {script.mode === 'ai_enhanced' ? <Sparkles aria-hidden="true" className="size-3.5" /> : <Zap aria-hidden="true" className="size-3.5" />}
-          <span className="sr-only">{t(script.mode === 'ai_enhanced' ? 'mode.ai_enhanced' : 'mode.classic')}</span>
+        <span className="inline-flex items-center gap-1" title={why ? `${cleanupLabel}\n${why}` : cleanupLabel} data-cleanup={aiCleanup ? 'ai' : 'unavailable'}>
+          {aiCleanup ? <Sparkles aria-hidden="true" className="size-3.5" /> : <CircleSlash aria-hidden="true" className="size-3.5 opacity-60" />}
+          <span className="sr-only">{cleanupLabel}</span>
         </span>
         <span className="inline-flex items-center gap-1 tabular-nums">
           <AudioLines aria-hidden="true" className="size-3.5" />
@@ -71,31 +95,7 @@ export function ScriptView({
       )}
       <div className="space-y-[0.6em]">
         {entries.map((entry) => {
-          if (entry.kind === 'utterance' && entry.utterance) {
-            const u = entry.utterance
-            const current = word?.utteranceId === u.id
-            const replacements = (u.rule_trace ?? []).filter((h) => h.action === 'replace')
-            return (
-              <p
-                key={entry.key}
-                className={cn(
-                  'cursor-pointer rounded-sm',
-                  u.is_heading && 'mt-4 font-semibold',
-                  current && 'bg-hl-sentence text-hl-sentence-foreground',
-                )}
-                data-current-sentence={current ? 'true' : undefined}
-                data-utterance-id={u.id}
-                onClick={() => onStart(u.id)}
-              >
-                <UtteranceText text={u.text} word={current && word ? { start: word.spokenStart, end: word.spokenEnd } : null} />
-                {replacements.map((h, i) => (
-                  <span key={i} className="ml-2 rounded border px-1 text-[0.75em] text-muted-foreground" title={h.rule_name}>
-                    {h.original} → {h.replacement}
-                  </span>
-                ))}
-              </p>
-            )
-          }
+          if (entry.kind === 'utterance' && entry.utterance) return <ScriptUtterance key={entry.key} u={entry.utterance} onStart={onStart} />
           const hit = entry.hit
           if (!hit) return null
           const text = hit.original || blocks.find((b) => b.id === hit.block_id)?.text || ''

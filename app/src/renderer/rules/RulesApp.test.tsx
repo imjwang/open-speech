@@ -13,19 +13,29 @@ import { EngineProvider, useEngineStore, type LiveEngine } from '../shared/engin
 import { RulesApp } from './RulesApp'
 
 const LEGACY_PREFERENCES = '<!--\nSPEECH.md: standing preferences…\n-->\n'
+/** What a new install starts with: the reading instructions ship with sections (shortened here). */
+const DEFAULT_PREFERENCES = '<!--\nYour reading instructions.\n-->\n# Reading instructions\n\n## Leave out\n- Skip footnotes and footnote markers.\n\n## About me\n'
 
-/** A small rules folder, served the way the engine serves it. */
-function rulesFolder() {
+/**
+ * A small rules folder, served the way the engine serves it. `preferences` is what SPEECH.md holds; the engine
+ * opens a file that holds only the old explanatory comment as empty.
+ */
+function rulesFolder(preferences = LEGACY_PREFERENCES) {
   const files: Record<string, RuleFileContent> = {
-    preferences: { id: 'preferences', kind: 'preferences', name: 'Preferences', path: '/r/SPEECH.md', description: '', enabled: true, text: LEGACY_PREFERENCES, body: '' },
+    preferences: {
+      id: 'preferences', kind: 'preferences', name: 'Reading instructions', path: '/r/SPEECH.md', description: '', enabled: true,
+      text: preferences, body: preferences === LEGACY_PREFERENCES ? '' : preferences,
+    },
     lexicon: { id: 'lexicon', kind: 'lexicon', name: 'Pronunciations', path: '/r/lexicon.csv', description: '', enabled: true, text: 'term,spoken,scope\n', body: 'term,spoken,scope\n' },
     'rule_no-footnotes': {
       id: 'rule_no-footnotes', kind: 'rule', name: 'no-footnotes', path: '/r/no-footnotes.md', description: "Don't read footnotes on arxiv.org.",
       enabled: true, tier: 'filter', scope: { sites: ['arxiv.org'], types: [], docs: [], languages: [] },
       text: '---\nname: no-footnotes\ntier: filter\n---\nSkip the footnotes on arxiv.org\n', body: 'Skip the footnotes on arxiv.org',
     },
-    'rule_page-numbers': { id: 'rule_page-numbers', kind: 'preset', name: 'page-numbers', path: '/r/page-numbers.md', description: '', enabled: true, tier: 'filter', text: '---\nname: page-numbers\n---\nSkip page numbers\n', body: 'Skip page numbers' },
-    rule_tables: { id: 'rule_tables', kind: 'preset', name: 'tables', path: '/r/tables.md', description: '', enabled: false, tier: 'filter', text: '---\nname: tables\n---\nSkip tables\n', body: 'Skip tables' },
+    rule_captions: {
+      id: 'rule_captions', kind: 'rule', name: 'captions', path: '/r/captions.md', description: 'Skip captions in PDFs.', enabled: false,
+      tier: 'filter', scope: { sites: [], types: ['pdf'], docs: [], languages: [] }, text: '---\nname: captions\ntier: filter\n---\nSkip captions in PDFs\n', body: 'Skip captions in PDFs',
+    },
   }
   const summary = ({ text: _t, body: _b, ...file }: RuleFileContent): RuleFile => file
   const idOf = (call: RecordedCall) => decodeURIComponent(call.path.split('/').pop() ?? '')
@@ -56,8 +66,8 @@ function rulesFolder() {
   return { engine, files }
 }
 
-function mount() {
-  const { engine, files } = rulesFolder()
+function mount(preferences?: string) {
+  const { engine, files } = rulesFolder(preferences)
   useEngineStore.setState({ endpoint: { baseUrl: 'http://127.0.0.1:9999', token: 'test-token-0123456789', version: '0.1.0' } })
   render(
     <EngineProvider engine={engine}>
@@ -91,26 +101,46 @@ afterEach(() => {
 })
 
 describe('the rules editor', () => {
-  it('lists the files in groups and opens the preferences, empty, with an explanation instead of a template', async () => {
-    const app = mount()
-    expect(await screen.findByRole('button', { name: 'Preferences' })).toHaveAttribute('aria-current', 'true')
+  it('lists the files and opens the reading instructions as written, with what they are for', async () => {
+    const app = mount(DEFAULT_PREFERENCES)
+    expect(await screen.findByRole('button', { name: 'Reading instructions' })).toHaveAttribute('aria-current', 'true')
     expect(screen.getByRole('button', { name: 'Pronunciations' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'No footnotes' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Page numbers' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Captions' })).toBeInTheDocument()
+    await waitFor(() => expect(app.editorText()).toContain('## Leave out'))
+    expect(screen.getByTestId('rules-explainer')).toHaveTextContent(
+      'How Open Speech cleans up what it reads. Claude follows these on every document. Edit them here, or ask the assistant ("stop reading captions").',
+    )
+  })
+
+  it('the reading instructions are saved whole, notes and all', async () => {
+    const app = mount(DEFAULT_PREFERENCES)
+    await waitFor(() => expect(app.editorText()).toContain('## Leave out'))
+    app.type('Skip captions.')
+    await waitFor(() => expect(app.calls('PUT').at(-1)?.body).toEqual({ text: 'Skip captions.' }), { timeout: 3000 })
+    expect(app.calls('PUT').at(-1)?.path).toBe('/api/v1/rules/files/preferences')
+  })
+
+  it('an old file that only held the explanatory comment opens empty, with a hint instead of a template', async () => {
+    const app = mount(LEGACY_PREFERENCES)
+    expect(await screen.findByRole('button', { name: 'Reading instructions' })).toHaveAttribute('aria-current', 'true')
     // The old explanatory comment is not shown as if the user had written it.
     await waitFor(() => expect(app.editorText()).toBe(''))
-    expect(screen.getByText(/Standing preferences, in your own words/)).toBeInTheDocument()
+    expect(screen.getByText(/How Open Speech should read to you, in your own words/)).toBeInTheDocument()
   })
 
   it('each rule has a switch named after it, and flipping it saves at once', async () => {
     const app = mount()
-    const tables = await screen.findByRole('switch', { name: 'Tables' })
-    expect(tables).not.toBeChecked()
-    expect(screen.getByRole('switch', { name: 'Page numbers' })).toBeChecked()
-    fireEvent.click(tables)
+    const captions = await screen.findByRole('switch', { name: 'Captions' })
+    expect(captions).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: 'No footnotes' })).toBeChecked()
+    // The reading instructions and the pronunciations are always on.
+    expect(screen.queryByRole('switch', { name: 'Reading instructions' })).toBeNull()
+    expect(screen.queryByRole('switch', { name: 'Pronunciations' })).toBeNull()
+    fireEvent.click(captions)
     await waitFor(() => expect(app.calls('PUT').at(-1)?.body).toEqual({ enabled: true }))
-    expect(app.calls('PUT').at(-1)?.path).toBe('/api/v1/rules/files/rule_tables')
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Tables' })).toBeChecked())
+    expect(app.calls('PUT').at(-1)?.path).toBe('/api/v1/rules/files/rule_captions')
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Captions' })).toBeChecked())
   })
 
   it('a rule opens as what it says, not as its file header; typing saves by itself', async () => {
@@ -186,12 +216,12 @@ describe('the rules editor', () => {
     expect(app.editorText()).toBe('my own unsaved words')
   })
 
-  it('built-in rules are named in the interface language', async () => {
-    mount()
-    await screen.findByRole('switch', { name: 'Tables' })
+  it('the reading instructions are named and explained in the interface language', async () => {
+    mount(DEFAULT_PREFERENCES)
+    await screen.findByRole('button', { name: 'Reading instructions' })
     act(() => setLanguage('es'))
-    expect(await screen.findByRole('switch', { name: 'Tablas' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Números de página' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Instrucciones de lectura' })).toBeInTheDocument()
+    expect(screen.getByTestId('rules-explainer')).toHaveTextContent(/^Cómo limpia Open Speech lo que lee\./)
     expect(screen.getAllByRole('button', { name: 'Nueva regla' }).length).toBeGreaterThan(0)
   })
 })

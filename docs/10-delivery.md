@@ -17,7 +17,7 @@ open-speech/
     tests/
       unit/  contract/  integration/  golden/  fixtures/
   app/                         Electron shell
-    package.json  pnpm-lock.yaml  electron.vite.config.ts
+    package.json  bun.lock  electron.vite.config.ts
     scripts/bundle-engine.sh   builds the engine runtime for packaging: Python, dependencies, Kokoro,
                                the speech model, and provider.env from the build's keys
     src/main/                  tray, shortcuts, engine supervisor, windows, file search for the @ menu

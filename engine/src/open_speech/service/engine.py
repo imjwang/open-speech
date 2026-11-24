@@ -19,6 +19,8 @@ from open_speech.store.db import Database
 
 log = logging.getLogger("open_speech.engine")
 
+WARM_AFTER_IDLE_S = 60.0  # re-open the Anthropic connection when the bar opens after this long without a call
+
 
 class Engine:
     def __init__(
@@ -41,17 +43,23 @@ class Engine:
         from open_speech.rules.files import RuleStore
         from open_speech.service.assistant import AssistantService
         from open_speech.service.clipboard import ClipboardReader
+        from open_speech.service.clones import CloneService
         from open_speech.service.documents import DocumentService
+        from open_speech.service.jobs import Jobs
         from open_speech.service.misc import ModelService, RecordingService, UsageService, VoiceService
         from open_speech.service.playback import PlaybackService
+        from open_speech.service.reply_speech import ReplySpeech
         from open_speech.service.rules import RuleService
         from open_speech.service.settings import SettingsService
+        from open_speech.service.settings_migrations import run_settings_migrations
         from open_speech.service.voice_input import VoiceInputService
         from open_speech.store.assets import AssetStore
         from open_speech.store.pages import PageStore
         from open_speech.usage.budget import BudgetGuard
+        from open_speech.usage.free_tier import FreeTierGuard, FreeTierRegistry
         from open_speech.usage.ledger import Ledger
         from open_speech.usage.pricing import Pricing
+        from open_speech.usage.watch import UsageWatcher
 
         self.started_at = time.monotonic()
         self.env = env or EngineEnv()
@@ -59,19 +67,28 @@ class Engine:
         self.db = Database(self.paths.db)
         self.events = EventBus()
         self.settings = SettingsService(self.paths, self.env)
+        run_settings_migrations(self.settings, self.db)  # before anything reads a setting
         self._agent_runner_factory = agent_runner_factory
 
         # runtime (workstream B)
         self.catalog = ModelCatalog.load(self.paths)
         self.keys = ProviderKeys(self.env)
-        self.registry = ProviderRegistry(self.env, self.paths, self.catalog, self.keys, settings=self.settings.get)
+        self.registry = ProviderRegistry(self.env, self.paths, self.catalog, self.keys, settings=self.settings.get,
+                                         kv=self.db)
         self.pricing = Pricing.load(self.paths)
         self.ledger = Ledger(self.db, self.pricing)
-        self.budget = BudgetGuard(self.ledger, self.settings.get, self.events)
+        self.budget = BudgetGuard(self.ledger, self.settings.get, self.events)  # alerts after every ledger row
+        self.free_tiers = FreeTierRegistry()  # providers with a free monthly allowance register here
+        # Google's free Chirp characters (pricing.toml `free_chars_per_month`): priced by the ledger, enforced here.
+        self.free_tier = FreeTierGuard(self.ledger, self.settings.get, self.events, available=self._provider_usable)
+        self.free_tiers.register(self.free_tier)
+        self.ledger.add_listener(self.free_tier.after_record)
+        self.registry.on_voices_changed = self._voices_changed  # e.g. Google's voices start (or stop) working
         self.assets = AssetStore(self.paths.cache, self.db)
         self.audio_cache = AudioCache(self.assets)
         self.synth = Synthesizer(
-            self.registry, self.audio_cache, self.ledger, self.budget, self.settings.get, self.events
+            self.registry, self.audio_cache, self.ledger, self.budget, self.settings.get, self.events,
+            free_tier=self.free_tier,
         )
         self.model_manager = LocalModelManager(
             self.paths, self.catalog, self.events, on_change=self._models_changed
@@ -104,11 +121,20 @@ class Engine:
         self.voices = VoiceService(self)
         self.rules = RuleService(self)
         self.assistant = AssistantService(self)
+        # Every reply, prompt and spoken notice goes through one sentence-by-sentence voice (07 § Reply speech).
+        self.reply_speech = ReplySpeech(self)
+        self.transport.speak_notice = self.reply_speech.notice
         self.usage = UsageService(self)
         self.models = ModelService(self)
         self.recordings = RecordingService(self)
+        self.jobs = Jobs(self.events)  # clone and design jobs (model downloads keep their own: model_manager)
+        self.clones = CloneService(self)  # cloned and designed voices; registers itself as Qwen3's clone store
         self.voice_input = VoiceInputService(self)
+        self.usage_watcher = UsageWatcher(self.usage.budget, self.ledger.month_key, self.events)
+        self.ledger.add_listener(self.usage_watcher.poke)
+        self.settings.on_change(lambda old, new: self.usage_watcher.poke() if old.budget != new.budget else None)
         self._bg: list[asyncio.Task[Any]] = []
+        self._warming: asyncio.Task[Any] | None = None
         self._ensure_default_voice()
         set_default_language(resolve_language(self.settings.get().language))
         self.settings.on_change(self._settings_changed)
@@ -179,12 +205,54 @@ class Engine:
         self.registry.refresh()
         self.events.publish(CapabilitiesChanged(capabilities=self.capabilities()))
 
+    def _provider_usable(self, provider: str) -> bool:
+        """The build can use this provider's voices now (Google: a key the API doesn't refuse)."""
+        if provider == "google":
+            return self.registry.google_usable()
+        return self.keys.configured(provider)
+
+    def _voices_changed(self) -> None:
+        """Which cloud voices can be used changed (the Google check): tell clients, refresh the spend chip."""
+        from open_speech.api.ws_schema import CapabilitiesChanged
+
+        self.events.publish(CapabilitiesChanged(capabilities=self.capabilities()))
+        self.usage_watcher.poke()
+
+    def _free_tier_policy_month(self, new: Any, old: Any | None = None) -> None:
+        """"Keep paying for the Google voice" holds for one billing month. Turning it on (a card, a hand edit, the
+        assistant) stamps the current month, whatever month an earlier "pay" left behind; a "pay" that was already
+        on from an earlier month goes back to "local". `old` is None at startup (nothing was just turned on)."""
+        pb = new.playback
+        allowance = next(iter(self.pricing.free_allowances()), None)
+        if allowance is None or pb.beyond_free_tier != "pay":
+            return
+        month = self.ledger.free_period(allowance).key
+        if pb.beyond_free_tier_month == month:
+            return
+        just_turned_on = old is not None and old.playback.beyond_free_tier != "pay"
+        patch: dict[str, Any] = (
+            {"beyond_free_tier_month": month}
+            if just_turned_on or pb.beyond_free_tier_month is None
+            else {"beyond_free_tier": "local", "beyond_free_tier_month": None}
+        )
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.settings.replace(new.model_copy(update={"playback": pb.model_copy(update=patch)}))
+            return
+        loop.create_task(self.settings.patch({"playback": patch}))
+
     def _settings_changed(self, old: Any, new: Any) -> None:
         """settings.toml changed (voice command, API, hand edit): speak the new language and tell clients."""
         from open_speech.api.ws_schema import CapabilitiesChanged, SettingsChanged
 
         language = set_default_language(resolve_language(new.language))
         self.events.publish(SettingsChanged(settings=new, language=language))
+        if old.playback.beyond_free_tier != new.playback.beyond_free_tier or (
+            old.playback.beyond_free_tier_month != new.playback.beyond_free_tier_month
+        ):
+            self._free_tier_policy_month(new, old)
+            self.usage_watcher.poke()
         if old.voice_input.stt_provider != new.voice_input.stt_provider or old.language != new.language:
             self.registry.refresh()
             self.events.publish(CapabilitiesChanged(capabilities=self.capabilities()))
@@ -224,7 +292,7 @@ class Engine:
 
     def record_llm(self, op: str, call: LlmCall, *, document_id: str | None = None, turn_id: str | None = None) -> None:
         provider = "fixture" if call.model.startswith("fixture") else "anthropic"
-        self.ledger.record(
+        self.ledger.record(  # the budget guard and the usage watcher hear about it from the ledger
             provider=provider,
             model=call.model,
             op=op,
@@ -233,7 +301,6 @@ class Engine:
             turn_id=turn_id,
             local=provider == "fixture",
         )
-        self.budget.after_record()
 
     def has_agent(self) -> bool:
         return self._agent_runner_factory is not None or self.keys.configured("anthropic")
@@ -241,12 +308,37 @@ class Engine:
     def agent_runner(self) -> Any | None:
         if self._agent_runner_factory is not None:
             return self._agent_runner_factory()
-        key = self.keys.get("anthropic") if self.keys.configured("anthropic") else None
-        if not key:
+        client = self.registry.anthropic_client()
+        if client is None:
             return None
         from open_speech.providers.anthropic_agent import AnthropicAgentRunner
 
-        return AnthropicAgentRunner(key)
+        return AnthropicAgentRunner(client=client, catalog=self.catalog)
+
+    def warm_llm(self) -> None:
+        """The bar opened. If nothing has been sent to Anthropic for over a minute, re-open a pooled
+        connection in the background with a free Models API call, so the turn the user is about to speak
+        doesn't wait for TCP and TLS."""
+        if self._agent_runner_factory is not None or self.registry.anthropic_idle_s() <= WARM_AFTER_IDLE_S:
+            return
+        if self._warming is not None and not self._warming.done():
+            return
+        if self.registry.anthropic_client() is None:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._warming = loop.create_task(self.registry.warm_anthropic(self.settings.get().llm.model))
+
+    async def stop_speech(self, turn_id: str | None = None, *, reason: Any = "stopped") -> None:
+        """Stop whatever the engine is saying (barge-in by key): everything, or one turn's speech. It fades out
+        over ~15 ms and `assistant.speech` ended(reason="stopped") follows once the fade has been heard. Reply
+        speech (service/reply_speech.py) also cancels its pending synthesis here."""
+        stopper = getattr(self, "reply_speech", None)
+        if stopper is not None:
+            await stopper.stop(turn_id, reason=reason)
+        self.transport.stop_speech(turn_id, reason=reason)
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -257,6 +349,12 @@ class Engine:
         def on_rules_changed() -> None:
             loop.create_task(self.rules.rules_changed("rule file edited"))
 
+        self.usage_watcher.start(loop)
+        self._free_tier_policy_month(self.settings.get())  # a "keep paying" from an earlier month ends
+        google = self.registry.google_check()
+        if google is not None:  # is Cloud Text-to-Speech allowed for this build's key? (free; re-checked later)
+            google.scheduled = True  # "auto" waits briefly for its first answer (VoiceService.settle_auto)
+            self._bg.append(asyncio.create_task(google.run()))
         self._bg.append(asyncio.create_task(self.rule_store.watch(on_rules_changed)))
         self._bg.append(asyncio.create_task(self.recordings.prune_loop()))
         self._bg.append(asyncio.create_task(self._cache_janitor()))
@@ -280,15 +378,20 @@ class Engine:
 
             if json.loads(self.paths.engine_json.read_text()).get("pid") == os.getpid():
                 self.paths.engine_json.unlink()
-        for t in self._bg:
+        self.usage_watcher.stop()
+        tasks = [*self._bg, *([self._warming] if self._warming is not None else [])]
+        for t in tasks:
             t.cancel()
-        for t in self._bg:
+        for t in tasks:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await t
         await self.assistant.wait_idle(5)
+        await self.jobs.close()
+        await self.reply_speech.close()
         await self.playback.close()
         with contextlib.suppress(Exception):
             await self.transport.close()
+        await self.registry.aclose()
         self.db.close()
 
     def capabilities(self) -> s.Capabilities:
@@ -311,7 +414,7 @@ class Engine:
             assistant=self.has_agent(),
             ai_cleanup=self.registry.llm() is not None,
             vision=self.registry.vision() is not None,
-            cloud_voices=[p for p in KEYED_TTS if self.keys.configured(p)],
+            cloud_voices=[p for p in KEYED_TTS if self._provider_usable(p)],
             languages=list(LANGUAGES),
             language=resolve_language(self.settings.get().language),
         )

@@ -140,7 +140,10 @@ def test_fast_path_transport_commands(api: tuple[Any, TestClient]) -> None:
         r = turn(client, reader, "where am I", source="spoken")
         assert "left" in r["done"]["text"] or "percent" in r["done"]["text"]
         assert r["cards"] and r["cards"][0]["kind"] == "where"
-        assert r["done"]["reply_recording_id"], "spoken turns get a spoken, replayable reply"
+        assert r["done"]["speaks"] is True
+        ended = reader.of_type("assistant.speech", state="ended", turn_id=r["done"]["turn_id"])
+        assert ended["kind"] == "reply" and ended["reason"] == "finished"
+        assert ended["recording_id"], "every reply is spoken and kept for replay"
         turn(client, reader, "stop")
         assert wait_state(client, {"stopped", "idle"})
 
@@ -201,7 +204,7 @@ def test_stop_reading_footnotes_on_this_site(api: tuple[Any, TestClient], home: 
     with ws_connect(client) as ws:
         reader = WsReader(ws)
         # Footnotes are skipped everywhere by default; this user reads them, except on arxiv.org.
-        client.put("/api/v1/rules/presets", json={"presets": {"Footnotes": False}}).raise_for_status()
+        _edit_instructions(client, "- Skip footnotes and footnote markers.", None)
         res = client.post("/api/v1/documents", json={"kind": "html_blocks", "html_blocks": ARXIV_BLOCKS, "play": True})
         doc_id = res.json()["document"]["id"]
         assert res.json()["document"]["site"] == "arxiv.org"
@@ -238,21 +241,28 @@ def test_cancelling_a_rule_leaves_no_trace(api: tuple[Any, TestClient], home: Pa
     assert client.get("/api/v1/actions").json() == []
 
 
-def test_preset_toggle_and_lexicon(api: tuple[Any, TestClient]) -> None:
+def _edit_instructions(client: TestClient, line_start: str, replacement: str | None) -> None:
+    """Change the line of the reading instructions that starts with `line_start`, the way the rules editor does."""
+    text = client.get("/api/v1/rules/files/preferences").json()["text"]
+    lines = text.splitlines()
+    i = next(n for n, ln in enumerate(lines) if ln.startswith(line_start))
+    lines[i : i + 1] = [] if replacement is None else [replacement]
+    client.put("/api/v1/rules/files/preferences", json={"text": "\n".join(lines) + "\n"}).raise_for_status()
+
+
+def test_editing_the_reading_instructions_and_lexicon(api: tuple[Any, TestClient]) -> None:
     engine, client = api
     with ws_connect(client) as ws:
         reader = WsReader(ws)
-        r = turn(client, reader, "skip citations")  # on by default: no card, just an answer
-        assert not r["actions"] and "already" in r["done"]["text"]
-        client.put("/api/v1/rules/presets", json={"presets": {"Citations": False}}).raise_for_status()
         doc_id = _create_text(client, play=True)["document"]["id"]
+        assert "[12]" not in _script_text(client, doc_id)  # "- Skip citations." is in the default instructions
+        _edit_instructions(client, "- Skip citations.", None)
         assert "[12]" in _script_text(client, doc_id)
-        r = turn(client, reader, "skip citations")
-        assert r["actions"] and r["actions"][0]["kind"] == "set_preset"
-        turn(client, reader, "yes")
+        _edit_instructions(client, "## Leave out", "## Leave out\n- Skip citations.")
         assert "[12]" not in _script_text(client, doc_id)
-        presets = {p["name"]: p["enabled"] for p in client.get("/api/v1/rules/presets").json()["presets"]}
-        assert presets["Citations"] is True
+        files = client.get("/api/v1/rules/files").json()["items"]
+        assert [f["kind"] for f in files[:2]] == ["preferences", "lexicon"]
+        assert all(f["kind"] == "rule" for f in files[2:])  # no presets any more
         r = turn(client, reader, "say SQL as sequel")
         assert r["actions"] and r["actions"][0]["kind"] == "add_pronunciation"
         turn(client, reader, "do it")
@@ -373,7 +383,7 @@ def test_resume_position_survives_restart(engine_factory: Any) -> None:
 
 
 @pytest.mark.parametrize(
-    "cmd", ["show voices", "show rules", "show recents", "show presets", "show settings", "show queue"]
+    "cmd", ["show voices", "show rules", "show recents", "show settings", "show queue"]
 )
 def test_rows_not_screens(api: tuple[Any, TestClient], cmd: str) -> None:
     engine, client = api
@@ -381,3 +391,45 @@ def test_rows_not_screens(api: tuple[Any, TestClient], cmd: str) -> None:
         reader = WsReader(ws)
         r = turn(client, reader, cmd)
         assert r["cards"], f"{cmd} renders as rows"
+
+
+def test_audio_diagnostics_after_reading(api: tuple[Any, TestClient]) -> None:
+    """GET /diagnostics/audio reports what the audio path counted (05 § 9); reading gapless audio from fixtures
+    never starves the renderer."""
+    _, client = api
+    before = client.get("/api/v1/diagnostics/audio")
+    assert before.status_code == 200 and before.json()["callbacks"] == 0
+    r = client.post("/api/v1/documents", json={"kind": "text", "text": "One short sentence. And another one."})
+    doc_id = r.json()["document"]["id"]
+    client.post("/api/v1/playback/play", json={"document_id": doc_id})
+    wait_state(client, {"playing"})
+    d = client.get("/api/v1/diagnostics/audio").json()
+    assert d["callbacks"] > 0 and d["mode"] == "null"
+    assert d["render_starvations"] == 0 and d["output_underflows"] == 0
+
+
+def test_install_the_small_qwen_voice_by_voice(api: tuple[Any, TestClient]) -> None:
+    """"Install the small Qwen voice": a confirmation card with the download size (Apple Silicon), then the models card
+    lists the Qwen row the settings choose."""
+    engine, client = api
+    with ws_connect(client) as ws:
+        reader = WsReader(ws)
+        r = turn(client, reader, "install the small Qwen voice")
+        text = r["done"].get("text") or "".join(d.get("text", "") for d in r["deltas"])
+        if not engine.registry.qwen3() or not engine.registry.qwen3().voices():
+            assert "Apple Silicon" in text  # an Intel Mac or Linux: nothing to install
+            return
+        assert r["actions"], text
+        action = r["actions"][0]
+        assert action["kind"] == "install_model" and action["summary"] == "Install Qwen voices — 0.6B 8-bit · 1883 MB"
+        assert "gigabytes" in action["spoken"] and "small Qwen voices" in action["spoken"]
+        cards = turn(client, reader, "show models")["cards"]
+    rows = {row["id"]: row for row in cards[0]["rows"]}
+    small = rows["qwen3-tts-0.6b-customvoice-8bit"]
+    # The family is the title; size and precision are the row's chips.
+    assert small["title"] == "Qwen voices" and small["data"]["chosen"] and not small["data"]["installed"]
+    assert (small["data"]["size"], small["data"]["precision"]) == ("0.6b", "8bit")
+    listed = client.get("/api/v1/models/local").json()["items"]
+    every = client.get("/api/v1/models/local", params={"all": 1}).json()["items"]
+    qwen_all = [m for m in every if m["provider"] == "qwen3"]
+    assert len(qwen_all) == 25 > len([m for m in listed if m["provider"] == "qwen3"])

@@ -43,31 +43,31 @@ H References
 ¶ P. Park. Tables are hard. Workshop on Document Intelligence, 2022.
 
 --- removed (28)
-headers drop_block blk_0: Journal of Synthetic Results · Vol. 7
-headers drop_block blk_1: Lee and Park
-citations skip blk_8: [1]
-citations skip blk_8: [2, 3]
-citations skip blk_8: [4–6]
-citations skip blk_9: (Smith et al., 2020)
-citations skip blk_9: (Lee and Kim, 2019; Garcia 2021)
-footnotes skip blk_9: 1
-citations skip blk_14: (2020)
-footnotes skip blk_16: 2
-urls skip blk_18: https://example.org/method
-footnotes drop_block blk_22: 1 Code and data are available from the authors on request.
-footnotes drop_block blk_23: 2 A band is a horizontal slice of the page between two full-width lines.
-footers drop_block blk_24: © 2026 The Authors. Licensed under CC BY 4.0.
-page-numbers drop_block blk_25: Page 1 of 2
-headers drop_block blk_26: Journal of Synthetic Results · Vol. 7
-headers drop_block blk_27: Lee and Park
-citations skip blk_29: [7]
-citations skip blk_30: (Park, 2022)
-citations skip blk_38: [1]
-citations skip blk_39: [2]
-citations skip blk_40: [3]
-citations skip blk_41: [4]
-citations skip blk_42: [5]
-citations skip blk_43: [6]
-citations skip blk_44: [7]
-footers drop_block blk_45: © 2026 The Authors. Licensed under CC BY 4.0.
-page-numbers drop_block blk_46: Page 2 of 2
+Don't read headers, footers and page numbers drop_block blk_0: Journal of Synthetic Results · Vol. 7
+Don't read headers, footers and page numbers drop_block blk_1: Lee and Park
+Don't read citations skip blk_8: [1]
+Don't read citations skip blk_8: [2, 3]
+Don't read citations skip blk_8: [4–6]
+Don't read citations skip blk_9: (Smith et al., 2020)
+Don't read citations skip blk_9: (Lee and Kim, 2019; Garcia 2021)
+Don't read footnotes and footnote markers skip blk_9: 1
+Don't read citations skip blk_14: (2020)
+Don't read footnotes and footnote markers skip blk_16: 2
+Don't read URLs skip blk_18: https://example.org/method
+Don't read footnotes and footnote markers drop_block blk_22: 1 Code and data are available from the authors on request.
+Don't read footnotes and footnote markers drop_block blk_23: 2 A band is a horizontal slice of the page between two full-width lines.
+Don't read headers, footers and page numbers drop_block blk_24: © 2026 The Authors. Licensed under CC BY 4.0.
+Don't read headers, footers and page numbers drop_block blk_25: Page 1 of 2
+Don't read headers, footers and page numbers drop_block blk_26: Journal of Synthetic Results · Vol. 7
+Don't read headers, footers and page numbers drop_block blk_27: Lee and Park
+Don't read citations skip blk_29: [7]
+Don't read citations skip blk_30: (Park, 2022)
+Don't read citations skip blk_38: [1]
+Don't read citations skip blk_39: [2]
+Don't read citations skip blk_40: [3]
+Don't read citations skip blk_41: [4]
+Don't read citations skip blk_42: [5]
+Don't read citations skip blk_43: [6]
+Don't read citations skip blk_44: [7]
+Don't read headers, footers and page numbers drop_block blk_45: © 2026 The Authors. Licensed under CC BY 4.0.
+Don't read headers, footers and page numbers drop_block blk_46: Page 2 of 2

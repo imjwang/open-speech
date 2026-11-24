@@ -1,8 +1,8 @@
 /**
  * The rules editor (06): every rule is a plain text file, and this window is a text editor over them.
  *
- * Left: the files (standing preferences, pronunciations, the user's rules, the built-in presets), each with
- * its on/off switch. Right: the text of the one that is open. Typing saves by itself; for a rule, saving
+ * Left: the files (the reading instructions, pronunciations, the user's rules), each rule with its on/off
+ * switch. Right: the text of the one that is open. Typing saves by itself; for a rule, saving
  * what it *says* makes the engine work out again how to apply it, so the two never drift apart. `{ }` shows
  * the whole file, header included, for anyone who wants it. The microphone dictates into the text.
  */
@@ -32,9 +32,8 @@ import { Switch } from '@/components/ui/switch'
 import { PlainEditor, type PlainEditorHandle } from '@/editor/PlainEditor'
 import type { LiveEngine } from '@/engine'
 import { useEngineStore, useServerEvent } from '@/engine'
-import { useT, useTMaybe } from '@/i18n'
+import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
-import { PRESET_ICONS } from '../commandbar/components/icons'
 import { useDictation } from './dictation'
 
 const SAVE_AFTER_MS = 700
@@ -42,24 +41,18 @@ const NEW = '+new'
 
 type Status = { kind: 'saved' } | { kind: 'dirty' } | { kind: 'saving' } | { kind: 'error'; message: string }
 
-/** Preset file names ("page-numbers") → the preset's icon. */
-const PRESET_BY_FILE: Record<string, LucideIcon | undefined> = Object.fromEntries(
-  Object.entries(PRESET_ICONS).map(([title, icon]) => [title.toLowerCase().replace(/\s+/g, '-'), icon]),
-)
-
 function fileIcon(file: Pick<RuleFile, 'kind' | 'name' | 'tier'>): LucideIcon {
   if (file.kind === 'preferences') return NotebookPen
   if (file.kind === 'lexicon') return BookA
-  if (file.kind === 'preset') return PRESET_BY_FILE[file.name] ?? Zap
   return file.tier === 'filter' ? Zap : Sparkles
 }
 
-/** The name shown for a file: the built-in kinds in the interface language, a rule by its own name. */
-function pretty(file: Pick<RuleFile, 'kind' | 'name'>, tMaybe: ReturnType<typeof useTMaybe>): string {
-  if (file.kind === 'preferences' || file.kind === 'lexicon') return file.name
+/** The name shown for a file: the reading instructions in the interface language, a rule by its own name. */
+function pretty(file: Pick<RuleFile, 'kind' | 'name'>, t: ReturnType<typeof useT>): string {
+  if (file.kind === 'preferences') return t('rules.preferences.name')
+  if (file.kind === 'lexicon') return file.name
   const words = file.name.replace(/-/g, ' ')
-  const name = words.charAt(0).toUpperCase() + words.slice(1)
-  return file.kind === 'preset' ? tMaybe(`preset.${name === 'Urls' ? 'URLs' : name}`, name) : name
+  return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
 function scopeText(file: RuleFile, everywhere: string): string {
@@ -79,7 +72,6 @@ function errorText(err: unknown): string {
 
 export function RulesApp({ bridge, engine }: { bridge: Bridge; engine: LiveEngine }) {
   const t = useT()
-  const tMaybe = useTMaybe()
   const endpoint = useEngineStore((s) => s.endpoint)
   const [files, setFiles] = useState<RuleFile[]>([])
   const [openId, setOpenId] = useState<string | null>(null)
@@ -267,7 +259,6 @@ export function RulesApp({ bridge, engine }: { bridge: Bridge; engine: LiveEngin
   const placeholder = kind === 'preferences' ? t('rules.preferences.placeholder') : kind === 'lexicon' ? t('rules.lexicon.placeholder') : t('rules.new.placeholder')
   const special = files.filter((f) => f.kind === 'preferences' || f.kind === 'lexicon')
   const yours = files.filter((f) => f.kind === 'rule')
-  const builtin = files.filter((f) => f.kind === 'preset')
   const TierIcon = open && !plain ? (open.tier === 'filter' ? Zap : Sparkles) : null
 
   const item = (file: RuleFile) => {
@@ -289,12 +280,12 @@ export function RulesApp({ bridge, engine }: { bridge: Bridge; engine: LiveEngin
             onClick={() => void select(file.id)}
           >
             <Icon aria-hidden="true" className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
-            <span className="truncate">{pretty(file, tMaybe)}</span>
+            <span className="truncate">{pretty(file, t)}</span>
           </button>
-          {(file.kind === 'rule' || file.kind === 'preset') && (
+          {file.kind === 'rule' && (
             <Switch
               checked={file.enabled}
-              aria-label={pretty(file, tMaybe)}
+              aria-label={pretty(file, t)}
               onCheckedChange={(enabled) => void patch(file.id, { enabled })}
               className="scale-75"
             />
@@ -340,11 +331,9 @@ export function RulesApp({ bridge, engine }: { bridge: Bridge; engine: LiveEngin
               </button>
             </li>
           </ul>
-          <h2 className="mt-3 px-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{t('rules.group.builtin')}</h2>
-          <ul className="space-y-0.5">{builtin.map(item)}</ul>
         </nav>
 
-        <section className="flex min-w-0 flex-1 flex-col" aria-label={open ? pretty(open, tMaybe) : t('rules.new')}>
+        <section className="flex min-w-0 flex-1 flex-col" aria-label={open ? pretty(open, t) : t('rules.new')}>
           <div className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
             {open && !plain ? (
               <>
@@ -358,7 +347,6 @@ export function RulesApp({ bridge, engine }: { bridge: Bridge; engine: LiveEngin
                   defaultValue={open.name}
                   aria-label={t('rules.name')}
                   spellCheck={false}
-                  readOnly={open.kind === 'preset'}
                   className="min-w-0 flex-1 truncate bg-transparent font-mono text-sm outline-none focus-visible:underline"
                   onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                   onBlur={(e) => {
@@ -390,7 +378,7 @@ export function RulesApp({ bridge, engine }: { bridge: Bridge; engine: LiveEngin
                 {open ? (
                   <>
                     {open.kind === 'preferences' ? <NotebookPen aria-hidden="true" className="size-4 text-primary" /> : <BookA aria-hidden="true" className="size-4 text-primary" />}
-                    {open.name}
+                    {pretty(open, t)}
                   </>
                 ) : (
                   <>
@@ -401,13 +389,18 @@ export function RulesApp({ bridge, engine }: { bridge: Bridge; engine: LiveEngin
               </span>
             )}
           </div>
+          {open?.kind === 'preferences' && (
+            <p className="shrink-0 border-b px-4 py-2 text-xs text-muted-foreground" data-testid="rules-explainer">
+              {t('rules.preferences.explainer')}
+            </p>
+          )}
           <div className="min-h-0 flex-1">
             <PlainEditor
               ref={editor}
               docKey={`${openId ?? ''}:${editorKey}`}
               value={text.current}
               onChange={onChange}
-              label={open ? pretty(open, tMaybe) : t('rules.new')}
+              label={open ? pretty(open, t) : t('rules.new')}
               placeholder={placeholder}
               mono={raw || kind === 'lexicon'}
             />

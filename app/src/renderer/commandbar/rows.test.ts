@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { DocumentOut } from '@shared/api/client'
 
-import { buildRows, cardRowEnabled, defaultSelection, findRow, turnRows, type RowGroup, type RowInputs } from './rows'
+import { buildRows, cardRowEnabled, defaultSelection, findRow, sameRow, turnRows, type RowGroup, type RowInputs } from './rows'
 import { initialBarState, type ActionModel, type BarState, type CardModel, type TurnModel } from './store'
 
 const state = (patch: Partial<BarState> = {}): BarState => ({ ...initialBarState, open: true, ...patch })
@@ -119,9 +119,9 @@ describe('buildRows', () => {
 
 describe('turnRows', () => {
   it('lists user, reply, actions, then cards: lists as one row per item, figures as one block', () => {
-    const turn = turnModel('t1', { actionIds: ['a1'], cards: [card('voices'), card('usage'), card('presets', 13), card('where')] })
+    const turn = turnModel('t1', { actionIds: ['a1'], cards: [card('voices'), card('usage', 13), card('where')] })
     const rows = turnRows(turn, { a1: actionModel('a1', 't1') })
-    expect(rows.map((r) => r.kind)).toEqual(['user', 'reply', 'action', 'card-row', 'card-row', 'card', 'card', 'card'])
+    expect(rows.map((r) => r.kind)).toEqual(['user', 'reply', 'action', 'card-row', 'card-row', 'card', 'card'])
   })
 
   it('a toolbar press shows its card without a "you said" line or a repeated summary', () => {
@@ -172,7 +172,7 @@ describe('defaultSelection', () => {
 
   it('never defaults to the pending placeholder, a block card or the history row', () => {
     expect(sel(state({ pending: { text: 'x', attachments: [] } }))).toBe('')
-    const pressed = turnModel('t2', { source: 'button', reply: '', cards: [card('presets')] })
+    const pressed = turnModel('t2', { source: 'button', reply: '', cards: [card('usage')] })
     expect(sel(state({ turns: [turnModel('t1'), pressed] }))).toBe('')
     const listed = turnModel('t3', { source: 'button', reply: '', cards: [card('voices')] })
     expect(sel(state({ turns: [turnModel('t1'), listed] }))).toBe('card:t1:voices:r0')
@@ -184,5 +184,34 @@ describe('cardRowEnabled', () => {
     expect(cardRowEnabled({ id: 'a', title: 'A', selected: true })).toBe(true)
     expect(cardRowEnabled({ id: 'a', title: 'A', selected: true, data: { enabled: false } })).toBe(false)
     expect(cardRowEnabled({ id: 'a', title: 'A' })).toBe(false)
+  })
+})
+
+describe('sameRow (RowView is memoized on it)', () => {
+  const t1 = { turnId: 't1', sessionId: null, source: 'typed' as const, text: 'show voices', attachments: [], recordingId: null, reply: '', replyRecordingId: null, done: false, error: null, cards: [], actionIds: [] }
+
+  it('rebuilt rows that point at the same models are the same row', () => {
+    const s = { ...initialBarState, turns: [t1] }
+    const a = buildRows(s, { recents: [], search: null })
+    const b = buildRows(s, { recents: [], search: null })
+    const rowsA = a.flatMap((g) => g.rows)
+    const rowsB = b.flatMap((g) => g.rows)
+    expect(rowsA.length).toBeGreaterThan(0)
+    rowsA.forEach((row, i) => expect(sameRow(row, rowsB[i] as typeof row)).toBe(true))
+  })
+
+  it('a reply streaming in re-renders the reply, not the "you said" line', () => {
+    const before = buildRows({ ...initialBarState, turns: [t1] }, { recents: [], search: null }).flatMap((g) => g.rows)
+    const t1b = { ...t1, reply: 'Here are' }
+    const after = buildRows({ ...initialBarState, turns: [t1b] }, { recents: [], search: null }).flatMap((g) => g.rows)
+    const user = (rows: typeof before) => rows.find((r) => r.kind === 'user')
+    const reply = (rows: typeof before) => rows.find((r) => r.kind === 'reply')
+    expect(sameRow(user(before)!, user(after)!)).toBe(true)
+    expect(sameRow(reply(before)!, reply(after)!)).toBe(false)
+  })
+
+  it('different rows are never the same', () => {
+    const rows = buildRows({ ...initialBarState, turns: [t1] }, { recents: [], search: null }).flatMap((g) => g.rows)
+    expect(sameRow(rows[0]!, rows[1]!)).toBe(false)
   })
 })

@@ -150,3 +150,25 @@ async def test_one_turn_can_answer_in_another_language_without_changing_the_rest
     assert spanish.startswith("Di o escribe")
     assert english.startswith("Say or type")
     assert i18n.current_language() == "en"
+
+
+def test_tiny_month_spend_is_said_plainly_not_as_zero_percent() -> None:
+    from decimal import Decimal
+
+    from open_speech.i18n import use_language
+    from open_speech.usage.spoken import usage_sentence
+
+    use_language("en")
+    said = usage_sentence(
+        Decimal("0.0011"), "month", top=("anthropic", "assistant"), top_share=1.0,
+        budget=Decimal("10"), month_pct=0.0001, savings=Decimal("0"),
+    )
+    assert "0 percent" not in said
+    assert "well under your ten dollar budget" in said
+    use_language("es")
+    said_es = usage_sentence(
+        Decimal("0.0011"), "month", top=("anthropic", "assistant"), top_share=1.0,
+        budget=Decimal("10"), month_pct=0.0001, savings=Decimal("0"),
+    )
+    assert "muy por debajo" in said_es
+    use_language("en")

@@ -1,0 +1,147 @@
+{
+  "model": "Qwen3-TTS-12Hz-1.7B-CustomVoice-6bit",
+  "load": {
+    "op": "loaded",
+    "id": 1,
+    "load_s": 2.77,
+    "warm_s": 1.06,
+    "active_gb": 2.759,
+    "sample_rate": 24000,
+    "type": "custom_voice",
+    "size": "1b7",
+    "speakers": [
+      "serena",
+      "vivian",
+      "uncle_fu",
+      "ryan",
+      "aiden",
+      "ono_anna",
+      "sohee",
+      "eric",
+      "dylan"
+    ],
+    "languages": [
+      "chinese",
+      "english",
+      "german",
+      "italian",
+      "portuguese",
+      "spanish",
+      "japanese",
+      "korean",
+      "french",
+      "russian"
+    ],
+    "wall_s": 3.88
+  },
+  "voice": "Ryan",
+  "quality": {
+    "en": {
+      "wer": 0.0,
+      "words": 226,
+      "f0_median_hz": 145.0,
+      "f0_spread_pct": 11.0,
+      "timbre_similarity_mean": 0.959,
+      "timbre_similarity_min": 0.853,
+      "worst": [
+        {
+          "wer": 0.0,
+          "ref": "Water boils at one hundred degrees Celsius at sea level.",
+          "hyp": "Water boils at one hundred degrees Celsius at sea level."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Turn left at the next light.",
+          "hyp": "Turn left at the next light."
+        },
+        {
+          "wer": 0.0,
+          "ref": "To reset your password, follow the link we sent to your email address.",
+          "hyp": "To reset your password, follow the link we sent to your email address."
+        }
+      ]
+    },
+    "es": {
+      "wer": 0.04,
+      "words": 100,
+      "f0_median_hz": 146.7,
+      "f0_spread_pct": 16.9,
+      "timbre_similarity_mean": 0.964,
+      "timbre_similarity_min": 0.902,
+      "worst": [
+        {
+          "wer": 0.429,
+          "ref": "La reuni\u00f3n se ha cambiado al jueves.",
+          "hyp": "La Eruno Eniocor La reuni\u00f3n se ha cambiado al jueves."
+        },
+        {
+          "wer": 0.125,
+          "ref": "Gire a la izquierda en el pr\u00f3ximo sem\u00e1foro.",
+          "hyp": "Gui a la izquierda en el pr\u00f3ximo sem\u00e1foro."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos.",
+          "hyp": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas. Lo que sorprendi\u00f3 a todos."
+        }
+      ]
+    },
+    "es-auto": {
+      "wer": 0.07,
+      "words": 100,
+      "f0_median_hz": 135.1,
+      "f0_spread_pct": 7.4,
+      "timbre_similarity_mean": 0.934,
+      "timbre_similarity_min": 0.828,
+      "worst": [
+        {
+          "wer": 0.3,
+          "ref": "Por favor, guarde su trabajo antes de cerrar la ventana.",
+          "hyp": "Por favor, quard su trabajo antes de ser la Bentana."
+        },
+        {
+          "wer": 0.143,
+          "ref": "La reuni\u00f3n se ha cambiado al jueves.",
+          "hyp": "La uni\u00f3n se ha cambiado al jueves."
+        },
+        {
+          "wer": 0.125,
+          "ref": "Gire a la izquierda en el pr\u00f3ximo sem\u00e1foro.",
+          "hyp": "Guir a la izquierda en el pr\u00f3ximo sem\u00e1foro."
+        }
+      ]
+    }
+  },
+  "sustained": {
+    "sentences": 225,
+    "x_rt_overall": 1.829,
+    "x_rt_last3min": 1.824,
+    "x_rt_per_minute": [
+      1.853,
+      1.826,
+      1.859,
+      1.822,
+      1.83,
+      1.812,
+      1.814,
+      1.823,
+      1.796,
+      1.851
+    ],
+    "load_avg_per_minute": [
+      2.0,
+      1.8,
+      2.1,
+      2.9,
+      2.7,
+      2.4,
+      2.1,
+      2.2,
+      2.6,
+      2.5
+    ],
+    "first_audio_p50_s": 0.299,
+    "first_audio_p90_s": 0.306,
+    "peak_gb": 3.394
+  }
+}

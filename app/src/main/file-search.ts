@@ -36,6 +36,14 @@ const KINDS: Record<string, FileKind> = {
   '.jpeg': 'image',
   '.webp': 'image',
   '.gif': 'image',
+  // A recording to make a voice from ("clone this voice").
+  '.wav': 'audio',
+  '.m4a': 'audio',
+  '.mp3': 'audio',
+  '.aiff': 'audio',
+  '.aif': 'audio',
+  '.flac': 'audio',
+  '.caf': 'audio',
 }
 /** Folders that are really one item (apps, libraries): not places to browse for documents. */
 const BUNDLE = /\.(app|bundle|framework|photoslibrary|musiclibrary|tvlibrary|xcodeproj|xcworkspace|lproj|pkg|kext|plugin)$/i

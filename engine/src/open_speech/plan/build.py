@@ -190,8 +190,7 @@ async def run_annotate(
         missing = [st for st in batch if annotate_key(sig, st) not in memo.annotate]
         if not missing:
             continue
-        if llm is None:
-            spec.warnings.append(t("unavailable.ai_cleanup"))
+        if llm is None:  # the caller knows why (no Claude in this build, budget) and says so
             return False
         blocks = [
             st.block.model_copy(update={"text": annotate_text(st), "marks": [], "word_boxes": []}) for st in missing
@@ -427,7 +426,7 @@ class _Assembler:
             self.removed.append(
                 RuleHit(
                     rule_id=rule.id,
-                    rule_name=rule.name,
+                    rule_name=rule.label,
                     action="transform",
                     block_id=st.block.id,
                     src_start=0,
@@ -459,7 +458,7 @@ class _Assembler:
                     rule_trace=[
                         RuleHit(
                             rule_id=rule.id,
-                            rule_name=rule.name,
+                            rule_name=rule.label,
                             action="transform",
                             block_id=anchors_ids[0],
                             replacement=spoken[cs:ce],
@@ -522,7 +521,7 @@ async def build_script(
                 covered = sec[-1].block.order
         complete = len(transformed) == len(secs)
         annotated_upto = covered if not complete else max((b.order for b in doc.blocks), default=-1)
-    elif spec.mode == "ai_enhanced" and spec.annotate:
+    elif spec.mode == "ai_enhanced" and (spec.annotate or spec.speech_md.strip()):
         batches = make_batches(states)
         upto = (
             max((b.order for b in doc.blocks), default=-1)

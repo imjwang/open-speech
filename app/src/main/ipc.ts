@@ -8,6 +8,7 @@ import {
   BarListeningSchema,
   BarOpenSchema,
   BarResizeSchema,
+  BarShownSchema,
   FileSearchSchema,
   HtmlBlocksPayloadSchema,
   IPC,
@@ -18,6 +19,7 @@ import {
   WebFollowSchema,
   WebModeSchema,
   type BarOpenRequest,
+  type BarShownEvent,
   type ClipboardContent,
   type EngineInfo,
   type FileHit,
@@ -34,6 +36,8 @@ export interface SenderLike {
 
 export interface IpcEventLike {
   sender: SenderLike
+  /** The answer to a `sendSync`; it must be set on every path, or the page waits forever. */
+  returnValue?: unknown
 }
 
 /** The subset of `ipcMain` used here (lets tests drive the handlers without Electron). */
@@ -48,8 +52,10 @@ export interface IpcDeps {
   isWebPage(sender: SenderLike): boolean
   getEngine(): EngineInfo | null
   hideBar(): void
-  resizeBar(height: number): void
-  setListening(listening: boolean): void
+  /** Returns the height the window has now. */
+  resizeBar(height: number): number
+  barShown(shown: BarShownEvent): void
+  setListening(listening: boolean, recording?: boolean): void
   openBar(request: BarOpenRequest): void
   openReader(target: ReaderTarget): void
   openExternal(url: string): void
@@ -91,16 +97,24 @@ export function registerIpc(ipc: IpcMainLike, deps: IpcDeps): void {
   ipc.on(IPC.barHide, (event) => {
     if (deps.isBar(event.sender)) deps.hideBar()
   })
+  // Synchronous: the page is blocked until this returns, so `returnValue` is set on every path.
   ipc.on(IPC.barResize, (event, payload) => {
+    event.returnValue = null
     if (!deps.isBar(event.sender)) return
     const parsed = parseIpc(BarResizeSchema, payload)
-    if (parsed) deps.resizeBar(parsed.height)
+    if (parsed) event.returnValue = deps.resizeBar(parsed.height)
     else deps.warn('ipc bar:resize: invalid payload')
+  })
+  ipc.on(IPC.barShown, (event, payload) => {
+    if (!deps.isBar(event.sender)) return
+    const parsed = parseIpc(BarShownSchema, payload)
+    if (parsed) deps.barShown(parsed)
+    else deps.warn('ipc bar:shown: invalid payload')
   })
   ipc.on(IPC.barListening, (event, payload) => {
     if (!deps.isBar(event.sender)) return
     const parsed = parseIpc(BarListeningSchema, payload)
-    if (parsed) deps.setListening(parsed.listening)
+    if (parsed) deps.setListening(parsed.listening, parsed.recording === true)
   })
 
   // ---- bar or reader

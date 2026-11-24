@@ -1,5 +1,5 @@
-# electron-builder: the macOS arm64 build (10 § M5, NFR-6). `pnpm dist:mac` runs `pnpm build` (out/) and
-# `pnpm engine:bundle` (engine-runtime/, see scripts/bundle-engine.sh) first.
+# electron-builder: the macOS arm64 build (10 § M5, NFR-6). `bun run dist:mac` runs `bun run build` (out/)
+# and `bun run engine:bundle` (engine-runtime/, see scripts/bundle-engine.sh) first.
 #
 # Signing: ad-hoc ("-"); no Developer ID, no notarization yet (10 § R17). A copy downloaded from the internet
 # is quarantined and blocked by Gatekeeper until the user allows it: System Settings → Privacy & Security →

@@ -1,0 +1,112 @@
+{
+  "about": "Hand labels for the AI Enhanced accuracy gate (tests/live/test_annotate_eval.py). Each document is planned in AI Enhanced mode with the default presets and an empty SPEECH.md; the labels are checked against what would be spoken, whitespace collapsed. must_keep: text the listener must still hear (content next to removed spans, cited authors who are the subject, years and parentheses that carry meaning). must_drop: spans the presets ask AI Enhanced to remove that the Classic filters leave in (author-year forms, inline page-number fragments, a running head fused into a paragraph, the path of a bare address, odd note markers). tests/unit/pipeline/test_annotate_eval_labels.py checks that every label holds in the Classic output, so must_drop measures only what the model does.",
+  "documents": {
+    "academic.pdf": {
+      "must_keep": [
+        "Ana Lee and Ben Park",
+        "Department of Listening, Example University",
+        "yet most tools still read everything on the page",
+        "Smith et al. showed that the gap between columns is the strongest signal, and we follow their observation",
+        "together with the evaluation scripts",
+        "Errors were concentrated in pages with wide tables",
+        "A short pilot with six listeners confirmed that the output was easy to follow"
+      ],
+      "must_drop": []
+    },
+    "report.pdf": {
+      "must_keep": [
+        "Production rose to 41 tonnes",
+        "Detailed figures are published",
+        "for partners",
+        "which rose sharply in September",
+        "the full price series"
+      ],
+      "must_drop": []
+    },
+    "footnotes.docx": {
+      "must_keep": [
+        "Each lot was scored by four tasters",
+        "The full protocol is described",
+        "Clarity beats intensity when the cups cool"
+      ],
+      "must_drop": []
+    },
+    "news.html_blocks": {
+      "must_keep": [
+        "said council member Rosa Diaz, who has pushed for park funding since 2019",
+        "about $5 million in total",
+        "Road repairs get $3 million",
+        "We will deliver on our promises"
+      ],
+      "must_drop": []
+    },
+    "notes.md": {
+      "must_keep": [
+        "A paper filter, rinsed",
+        "ratio = water / coffee",
+        "Taste first, then adjust the grind"
+      ],
+      "must_drop": []
+    },
+    "wikipedia_lead": {
+      "must_keep": [
+        "10 December 1815",
+        "Lovelace is often considered the first computer programmer",
+        "She married William King in 1835",
+        "1st Earl of Lovelace in 1838",
+        "On 16 January 1816",
+        "He died in 1824 when she was eight years old"
+      ],
+      "must_drop": []
+    },
+    "hard-cases": {
+      "title": "Hard cases",
+      "blocks": [
+        ["header", "Journal of Synthetic Results · Vol. 7"],
+        ["paragraph", "Smith and colleagues (2020) showed that gaps matter (for a review, see Lee and Kim, 2019, and Garcia 2021)."],
+        ["paragraph", "As Nguyen (2018) argued, listening is an active skill, and Lee and Kim (2019) disagree only about its limits."],
+        ["paragraph", "Speech rate affects comprehension (Okafor et al. 2017; Brandt, 2015), but only above three words per second."],
+        ["paragraph", "The method is described below. Page 4 of 18 It relies on simple geometry."],
+        ["header", "Journal of Synthetic Results · Vol. 7"],
+        ["paragraph", "Journal of Synthetic Results · Vol. 7 Lines that cross every gutter are treated as full-width."],
+        ["paragraph", "For the data, see example.org/docs/latest/index.html today."],
+        ["paragraph", "The effect held in every lab.† It vanished in field tests, as noted by Brandt.‡"],
+        ["paragraph", "In 2020, the council approved the plan, and version 2.0 (released in 2021) added Spanish."],
+        ["paragraph", "The study (n = 48) found a small effect that example.com later replicated with 300 readers."],
+        ["paragraph", "Earlier work [Okafor 2017] had found no effect."]
+      ],
+      "must_keep": [
+        "Smith and colleagues",
+        "showed that gaps matter",
+        "As Nguyen argued, listening is an active skill",
+        "Lee and Kim disagree only about its limits",
+        "Speech rate affects comprehension",
+        "only above three words per second",
+        "The method is described below.",
+        "It relies on simple geometry",
+        "Lines that cross every gutter are treated as full-width",
+        "For the data, see",
+        "today",
+        "The effect held in every lab",
+        "It vanished in field tests, as noted by Brandt",
+        "In 2020, the council approved the plan",
+        "released in 2021",
+        "n = 48",
+        "example.com later replicated with 300 readers",
+        "Earlier work",
+        "had found no effect"
+      ],
+      "must_drop": [
+        "(2020)",
+        "Lee and Kim, 2019",
+        "Garcia 2021",
+        "Page 4 of 18",
+        "Journal of Synthetic Results",
+        "docs/latest",
+        "†",
+        "‡",
+        "Okafor 2017"
+      ]
+    }
+  }
+}

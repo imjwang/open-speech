@@ -26,7 +26,9 @@ class SettingsService:
     def __init__(self, paths: Paths, env: EngineEnv) -> None:
         self.paths = paths
         self._settings = load_user_settings(paths.settings_toml, env)
-        if not paths.settings_toml.exists():
+        # A profile whose settings.toml this start creates holds today's defaults: no settings migration applies.
+        self.created = not paths.settings_toml.exists()
+        if self.created:
             save_user_settings(paths.settings_toml, self._settings)
         self._mtime = paths.settings_toml.stat().st_mtime
         self._listeners: list[Callable[[UserSettings, UserSettings], None]] = []
@@ -80,6 +82,14 @@ class SettingsService:
             self._write(new)
             self._notify(old, new)
             return new
+
+    def replace(self, new: UserSettings) -> None:
+        """Write a whole validated settings object outside the event loop (settings migrations at startup)."""
+        old = self.get()
+        if new == old:
+            return
+        self._write(new)
+        self._notify(old, new)
 
     def _write(self, new: UserSettings) -> None:
         save_user_settings(self.paths.settings_toml, new)

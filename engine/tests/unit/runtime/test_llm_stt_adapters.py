@@ -11,6 +11,7 @@ import httpx2
 import numpy as np
 import pytest
 
+from open_speech.config import Paths
 from open_speech.document.model import Block, BlockType
 from open_speech.local.catalog import ModelCatalog
 from open_speech.providers.anthropic_llm import AnthropicLlm
@@ -51,9 +52,12 @@ async def test_annotate_request_shape(catalog: ModelCatalog, recorder: Recorder,
     auth = req.headers.get("x-api-key") or req.headers.get("authorization", "")
     assert auth.endswith("sk-ant-test")
     body = json.loads(req.content)
-    assert body["model"] == "claude-sonnet-5-5"
-    assert body["thinking"] == {"type": "between_tools"}
+    assert body["model"] == "claude-haiku-5-5"
+    # The accuracy gate's choice for Haiku (models.toml `annotate_thinking`): adaptive, with room to think.
+    assert body["thinking"] == {"type": "adaptive"}
+    assert body["max_tokens"] == 4096 + 4096
     assert body["output_config"]["effort"] == "low"
+    assert not {"temperature", "top_p", "top_k"} & set(body)  # sampling parameters are a 400 on Haiku 5.5
     fmt = body["output_config"]["format"]
     assert fmt["type"] == "json_schema"
     item = fmt["schema"]["properties"]["ops"]["items"]
@@ -71,7 +75,54 @@ async def test_annotate_request_shape(catalog: ModelCatalog, recorder: Recorder,
     ]
     assert call.output[0].rule_id == "rule_citations" and call.output[1].rule_id is None
     assert call.units == Units(in_tok=812, out_tok=138, cache_read_tok=1450, cache_write_tok=0)
-    assert call.model == "claude-sonnet-5-5" and call.stop_reason == "end_turn"
+    assert call.model == "claude-haiku-5-5" and call.stop_reason == "end_turn"
+
+
+@pytest.mark.parametrize(
+    ("model", "thinking", "max_tokens"),
+    [
+        ("claude-haiku-5-5", {"type": "adaptive"}, 4096 + 4096),  # thinking off failed the accuracy gate
+        ("claude-sonnet-5-5", {"type": "between_tools"}, 4096),  # the only model that accepts it
+        ("claude-opus-5-5", {"type": "adaptive"}, 4096 + 4096),  # can't turn thinking off: room to think
+        ("claude-someday-9", None, 4096 + 4096),  # unknown model: the safe default
+    ],
+)
+async def test_annotate_thinking_follows_the_model(
+    catalog: ModelCatalog, recorder: Recorder, settings: SettingsBox, model: str, thinking: Any, max_tokens: int
+) -> None:
+    recorder.add("POST", "/v1/messages", lambda r: httpx2.Response(200, json=_json("anthropic_annotate.json")))
+    settings.set("llm.model", model)
+    llm = _llm(catalog, recorder, model=lambda: settings().llm.model)
+    call = await llm.annotate(BLOCKS, RULES, "")
+    body = recorder.json_body()
+    assert body["model"] == model and call.model == model
+    assert body.get("thinking") == thinking and body["max_tokens"] == max_tokens
+    assert not {"temperature", "top_p", "top_k"} & set(body)
+
+
+async def test_annotate_thinking_off_is_the_models_own_form(paths: Paths, recorder: Recorder) -> None:
+    """The accuracy gate's choice lives in the catalog (`annotate_thinking`), overridable in app data; "off" on
+    Haiku 5.5 is `{"type": "disabled"}` (`between_tools` is a 400 there), with no thinking reserve."""
+    paths.models_toml.write_text('[llm.anthropic.models."claude-haiku-5-5"]\nannotate_thinking = "off"\n')
+    catalog = ModelCatalog.load(paths)
+    responses = iter([_json("anthropic_annotate.json"), _json("anthropic_compile.json")])
+    recorder.add("POST", "/v1/messages", lambda r: httpx2.Response(200, json=next(responses)))
+    llm = _llm(catalog, recorder)
+    await llm.annotate(BLOCKS, RULES, "")
+    body = recorder.json_body()
+    assert body["thinking"] == {"type": "disabled"} and body["max_tokens"] == 4096
+    await llm.compile_rule("skip footnotes", {})
+    assert recorder.json_body()["thinking"] == {"type": "disabled"}  # compile and vision always run thinking off
+
+
+async def test_a_response_that_starts_with_thinking_is_read_by_block_type(
+    catalog: ModelCatalog, recorder: Recorder
+) -> None:
+    raw = _json("anthropic_annotate.json")
+    raw["content"] = [{"type": "thinking", "thinking": "", "signature": "sig"}, *raw["content"]]
+    recorder.add("POST", "/v1/messages", lambda r: httpx2.Response(200, json=raw))
+    call = await _llm(catalog, recorder).annotate(BLOCKS, RULES, "")
+    assert [o.quote for o in call.output] == [" (Smith et al., 2020)", "e.g."]
 
 
 async def test_annotate_uses_settings_model_and_effort(catalog: ModelCatalog, recorder: Recorder,
@@ -119,7 +170,8 @@ async def test_compile_rule(catalog: ModelCatalog, recorder: Recorder) -> None:
     call = await _llm(catalog, recorder).compile_rule(
         "stop reading the footnotes on this site", {"site": "arxiv.org", "doc_kind": "pdf", "doc_id": None})
     body = recorder.json_body()
-    assert body["thinking"] == {"type": "between_tools"} and body["output_config"]["effort"] == "low"
+    assert body["thinking"] == {"type": "disabled"} and body["output_config"]["effort"] == "low"
+    assert body["max_tokens"] == 2048
     assert "arxiv.org" in body["messages"][0]["content"] and "doc_id" not in body["messages"][0]["content"]
     d = call.output
     assert d.name == "Skip footnotes" and d.tier == "filter"

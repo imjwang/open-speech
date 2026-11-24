@@ -1,0 +1,58 @@
+{
+  "model": "Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit",
+  "load": {
+    "op": "loaded",
+    "id": 1,
+    "load_s": 2.251,
+    "warm_s": 0.872,
+    "active_gb": 2.036,
+    "sample_rate": 24000,
+    "type": "custom_voice",
+    "size": "0b6",
+    "speakers": [
+      "serena",
+      "vivian",
+      "uncle_fu",
+      "ryan",
+      "aiden",
+      "ono_anna",
+      "sohee",
+      "eric",
+      "dylan"
+    ],
+    "languages": [
+      "chinese",
+      "english",
+      "german",
+      "italian",
+      "portuguese",
+      "spanish",
+      "japanese",
+      "korean",
+      "french",
+      "russian"
+    ],
+    "wall_s": 3.16
+  },
+  "voice": "Ryan",
+  "sustained": {
+    "sentences": 146,
+    "x_rt_overall": 1.338,
+    "x_rt_last3min": 1.176,
+    "x_rt_per_minute": [
+      2.25,
+      2.225,
+      1.149,
+      1.082,
+      1.193,
+      1.02,
+      0.964,
+      1.196,
+      1.184,
+      1.169
+    ],
+    "first_audio_p50_s": 0.374,
+    "first_audio_p90_s": 0.608,
+    "peak_gb": 2.672
+  }
+}

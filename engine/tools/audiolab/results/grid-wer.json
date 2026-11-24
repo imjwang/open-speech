@@ -1,0 +1,99 @@
+{
+  "wer": [
+    {
+      "config": "unstretched",
+      "speed": 1.0,
+      "wer": 0.0181
+    },
+    {
+      "config": "legacy",
+      "speed": 2.0,
+      "wer": 0.0293
+    },
+    {
+      "config": "legacy",
+      "speed": 3.0,
+      "wer": 0.4266
+    },
+    {
+      "config": "30ms/\u00b115ms/overlap",
+      "speed": 2.0,
+      "wer": 0.0203
+    },
+    {
+      "config": "30ms/\u00b115ms/overlap",
+      "speed": 3.0,
+      "wer": 0.4357
+    },
+    {
+      "config": "30ms/\u00b120ms/overlap",
+      "speed": 2.0,
+      "wer": 0.0361
+    },
+    {
+      "config": "30ms/\u00b120ms/overlap",
+      "speed": 3.0,
+      "wer": 0.4763
+    },
+    {
+      "config": "40ms/\u00b115ms/overlap",
+      "speed": 2.0,
+      "wer": 0.0203
+    },
+    {
+      "config": "40ms/\u00b115ms/overlap",
+      "speed": 3.0,
+      "wer": 0.5169
+    },
+    {
+      "config": "40ms/\u00b120ms/overlap",
+      "speed": 2.0,
+      "wer": 0.0384
+    },
+    {
+      "config": "40ms/\u00b120ms/overlap",
+      "speed": 3.0,
+      "wer": 0.6117
+    },
+    {
+      "config": "50ms/\u00b115ms/overlap",
+      "speed": 2.0,
+      "wer": 0.0248
+    },
+    {
+      "config": "50ms/\u00b115ms/overlap",
+      "speed": 3.0,
+      "wer": 0.5824
+    },
+    {
+      "config": "50ms/\u00b120ms/overlap",
+      "speed": 2.0,
+      "wer": 0.0384
+    },
+    {
+      "config": "50ms/\u00b120ms/overlap",
+      "speed": 3.0,
+      "wer": 0.6208
+    },
+    {
+      "config": "60ms/\u00b115ms/overlap",
+      "speed": 2.0,
+      "wer": 0.0384
+    },
+    {
+      "config": "60ms/\u00b115ms/overlap",
+      "speed": 3.0,
+      "wer": 0.6704
+    },
+    {
+      "config": "60ms/\u00b120ms/overlap",
+      "speed": 2.0,
+      "wer": 0.0519
+    },
+    {
+      "config": "60ms/\u00b120ms/overlap",
+      "speed": 3.0,
+      "wer": 0.6795
+    }
+  ]
+}

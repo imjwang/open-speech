@@ -70,7 +70,11 @@ def test_providers_the_build_has_no_key_for_are_absent(paths: Paths, db: Databas
     assert not any(v.provider in ("openai", "gemini") for v in vs)
     assert not by["kokoro:kokoro-82m-v1.0:af_heart"].available  # weights absent here
     assert not any(v.provider == "fixture" for v in vs)  # test voices only in fixture mode
-    assert not any(v.provider == "qwen3" for v in vs)  # P2: listed by the model manager only
+    # Qwen voices are offered on Apple Silicon (local, no key), unavailable until their weights are downloaded.
+    qwen = [v for v in vs if v.provider == "qwen3"]
+    assert all(not v.available and v.local for v in qwen)
+    if qwen:
+        assert "Download the Qwen voices" in (qwen[0].unavailable_reason or "")
     with pytest.raises(Unavailable) as missing:
         r.tts_for("openai:gpt-4o-mini-tts:coral")
     assert "key" not in missing.value.detail.lower()
@@ -238,3 +242,19 @@ async def test_cached_lookup_has_no_side_effects(rt: Runtime) -> None:
     before = rt.ledger.rows().total
     assert rt.synth.cached("Nothing yet.", PAID) is not None
     assert rt.ledger.rows().total == before
+
+
+async def test_kokoro_audio_is_keyed_by_its_weights(paths: Paths, db: Database, settings: SettingsBox,
+                                                   events: EventBus) -> None:
+    """The cache key records Kokoro's precision (`model/quant`), so changing the shipped weights re-synthesizes
+    only Kokoro audio; other providers keep their keys."""
+    from open_speech.providers.base import cache_identity
+
+    install_fake_weights(paths)
+    rt = build(paths, db, settings, events, fixture=False)
+    voice = "kokoro:kokoro-82m-v1.0:af_heart"
+    prov, tmpl = rt.registry.tts_for(voice)
+    assert cache_identity(prov, tmpl) == "kokoro-82m-v1.0/q8"
+    assert rt.synth.cached("hello", voice) is None
+    key = AudioCache.key("hello", "kokoro", "kokoro-82m-v1.0/q8", "af_heart")
+    assert key != AudioCache.key("hello", "kokoro", "kokoro-82m-v1.0", "af_heart")

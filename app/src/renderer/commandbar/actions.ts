@@ -16,7 +16,7 @@ import type { CardModel } from './store'
 
 export type RowModifier = 'primary' | 'secondary' | 'tertiary'
 /** Toolbar presses that ask the engine for a list. The words are a fixed protocol, not interface text. */
-export type Show = 'voices' | 'rules' | 'usage' | 'recents' | 'settings' | 'presets' | 'queue' | 'models'
+export type Show = 'voices' | 'rules' | 'usage' | 'recents' | 'settings' | 'queue' | 'models'
 
 function errorText(err: unknown): string {
   if (err instanceof EngineApiError) return err.detail || err.code
@@ -132,6 +132,8 @@ export class BarActions {
         if (row.turn.replyRecordingId) return this.replay(row.turn.replyRecordingId)
         return
       case 'action':
+        // The passage card's Enter is its record button (pressing it confirms the consent line on the card).
+        if (row.action.kind === 'clone_record') return this.recordClone(row.action.actionId)
         if (row.action.status === 'pending') return this.confirmAction(row.action.actionId)
         return
       case 'card-row':
@@ -161,7 +163,11 @@ export class BarActions {
     })
   }
 
+  // The transport strip: the user wants reading, not the conversation. Each press ends the conversation first
+  // (the assistant stops talking, the microphone is released) so what it does to reading is heard at once.
+
   togglePlayback(p: PlaybackState): Promise<void> {
+    this.controller.endConversation()
     return this.run('', async () => {
       const c = this.client()
       if (p.state === 'playing' || p.state === 'loading') await unwrap(c.POST('/api/v1/playback/pause'))
@@ -171,12 +177,14 @@ export class BarActions {
   }
 
   skip(count: number): Promise<void> {
+    this.controller.endConversation()
     return this.run('', async () => {
       await unwrap(this.client().POST('/api/v1/playback/skip', { body: { unit: 'sentence', count } }))
     })
   }
 
   changeSpeed(p: PlaybackState, delta: number): Promise<void> {
+    this.controller.endConversation()
     return this.run('', async () => {
       const speed = Math.max(0.5, Math.min(5, Math.round((p.speed + delta) * 100) / 100))
       await unwrap(this.client().PUT('/api/v1/playback/speed', { body: { speed } }))
@@ -184,6 +192,7 @@ export class BarActions {
   }
 
   nextDocument(): Promise<void> {
+    this.controller.endConversation()
     return this.run('', async () => {
       await unwrap(this.client().POST('/api/v1/playback/next'))
     })
@@ -198,7 +207,22 @@ export class BarActions {
 
   // ---------------------------------------------------------------- confirmation cards
 
+  /**
+   * A card whose answer is long or worth hearing (a voice being made, voices designed, a voice kept or deleted):
+   * answered as a turn, as if "yes" or "no" had been said, so the result is spoken in the conversation.
+   * The words are the protocol's, not interface text (the engine understands them in every language).
+   */
+  private viaTurn(actionId: string): boolean {
+    return this.controller.store.getState().actions[actionId]?.details?.via_turn === true
+  }
+
   confirmAction(actionId: string): Promise<void> {
+    if (this.viaTurn(actionId)) {
+      this.controller.setActionStatus(actionId, 'confirming')
+      // Not sent (the engine isn't connected): the card stays answerable instead of hanging on "confirming…".
+      if (!this.controller.submitCommand('yes', [], { source: 'button' })) this.controller.setActionStatus(actionId, 'pending')
+      return Promise.resolve()
+    }
     this.controller.setActionStatus(actionId, 'confirming')
     return this.run('', async () => {
       try {
@@ -214,6 +238,12 @@ export class BarActions {
   }
 
   cancelAction(actionId: string): Promise<void> {
+    if (this.viaTurn(actionId)) {
+      this.controller.setActionStatus(actionId, 'cancelling')
+      // Not sent (the engine isn't connected): the card stays answerable instead of hanging on "cancelling…".
+      if (!this.controller.submitCommand('no', [], { source: 'button' })) this.controller.setActionStatus(actionId, 'pending')
+      return Promise.resolve()
+    }
     this.controller.setActionStatus(actionId, 'cancelling')
     return this.run('', async () => {
       try {
@@ -228,11 +258,51 @@ export class BarActions {
     })
   }
 
+  // ---------------------------------------------------------------- cloning a voice
+
+  /**
+   * The passage card's record button. The first press confirms the card (its consent line); the engine says so
+   * (`action_resolved`) and the bar records at once. Pressed again after a take that didn't work, it just records.
+   */
+  recordClone(actionId: string): Promise<void> {
+    const action = this.controller.store.getState().actions[actionId]
+    if (!action) return Promise.resolve()
+    if (action.status !== 'pending') {
+      this.controller.armCapture(actionId)
+      return Promise.resolve()
+    }
+    this.controller.setActionStatus(actionId, 'confirming')
+    return this.run('', async () => {
+      try {
+        const res = await unwrap(
+          this.client().POST('/api/v1/actions/{action_id}/confirm', { params: { path: { action_id: actionId } } }),
+        )
+        this.controller.setActionStatus(actionId, res.status, res.message)
+        if (res.status === 'confirmed') this.controller.armCapture(actionId)
+      } catch (err) {
+        this.controller.setActionStatus(actionId, 'pending')
+        throw err
+      }
+    })
+  }
+
+  /** A trash button on one of the user's own voices: asked on a card first (the engine's "delete the voice …"). */
+  deleteVoice(row: CardRow): void {
+    const command = rowString(row, 'delete_command')
+    if (command) this.controller.submitCommand(command, [], { source: 'button' })
+  }
+
   // ---------------------------------------------------------------- cards
 
   async runCardRow(card: CardModel, row: CardRow, modifier: RowModifier): Promise<void> {
     switch (card.kind) {
       case 'voices': {
+        // A row that is a command, not a voice ("More voices"): ask for it as if pressed on the toolbar.
+        const command = rowString(row, 'command')
+        if (command) {
+          this.controller.submitCommand(command, [], { source: 'button' })
+          return
+        }
         const voiceId = rowString(row, 'voice_id') ?? row.id
         if (modifier === 'tertiary') return this.previewVoice(voiceId)
         return this.setVoice(voiceId, modifier === 'secondary' ? 'default' : 'document')
@@ -241,6 +311,14 @@ export class BarActions {
         const ruleId = rowString(row, 'rule_id') ?? row.id
         if (modifier === 'secondary') return this.openRules(ruleId)
         return this.toggleRule(card, ruleId, !cardRowEnabled(row))
+      }
+      case 'design': {
+        // A designed candidate: ↵ keeps it (said as a command, so the result is spoken), ⇧↵ plays it.
+        const recordingId = rowString(row, 'recording_id')
+        if (modifier === 'tertiary' && recordingId) return this.replay(recordingId)
+        const command = rowString(row, 'command')
+        if (command) this.controller.submitCommand(command, [], { source: 'button' })
+        return
       }
       case 'models': {
         if (row.data?.installed === true) return
@@ -304,23 +382,23 @@ export class BarActions {
     })
   }
 
-  togglePreset(card: CardModel, row: CardRow): Promise<void> {
-    const name = rowString(row, 'name') ?? row.title
-    const enabled = !cardRowEnabled(row)
-    return this.run('', async () => {
-      await unwrap(this.client().PUT('/api/v1/rules/presets', { body: { presets: { [name]: enabled } } }))
-      this.patchCard(card.id, (rows) => rows.map((r) => (r.id === row.id ? { ...r, selected: enabled } : r)))
-    })
-  }
-
   /** A settings row: set a value directly (a segment was clicked) … */
   setSetting(card: CardModel, row: CardRow, value: unknown): Promise<void> {
     const key = rowString(row, 'key') ?? row.id
     return this.run('', async () => {
       await patchSettings(this.engine, settingPatch(key, value))
       this.patchCard(card.id, (rows) =>
-        rows.map((r) => (r.id === row.id ? { ...r, value: String(value), data: { ...r.data, value } } : r)),
+        rows.map((r) => (r.id === row.id ? { ...r, value: String(value), data: { ...r.data, value, auto: false } } : r)),
       )
+      // A local voice size or precision that isn't downloaded yet: offer the download right away (its size shown).
+      const downloads = row.data?.downloads as Record<string, { model_id?: unknown; size?: unknown }> | undefined
+      const need = downloads?.[String(value)]
+      if (need && typeof need.model_id === 'string') {
+        this.controller.store.setState({
+          localConfirm: { kind: 'install_model', modelId: need.model_id, title: row.title, detail: typeof need.size === 'string' ? need.size : '' },
+          selected: 'local-confirm',
+        })
+      }
     })
   }
 

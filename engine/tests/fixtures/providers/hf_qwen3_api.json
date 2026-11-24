@@ -1,0 +1,1184 @@
+{
+ "https://huggingface.co/api/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit": {
+  "id": "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit",
+  "sha": "049ef77fe8816b536193c0c25f9a214d17921282",
+  "siblings": [
+   {
+    "rfilename": ".gitattributes"
+   },
+   {
+    "rfilename": "README.md"
+   },
+   {
+    "rfilename": "config.json"
+   },
+   {
+    "rfilename": "generation_config.json"
+   },
+   {
+    "rfilename": "merges.txt"
+   },
+   {
+    "rfilename": "model.safetensors"
+   },
+   {
+    "rfilename": "model.safetensors.index.json"
+   },
+   {
+    "rfilename": "preprocessor_config.json"
+   },
+   {
+    "rfilename": "speech_tokenizer/config.json"
+   },
+   {
+    "rfilename": "speech_tokenizer/configuration.json"
+   },
+   {
+    "rfilename": "speech_tokenizer/model.safetensors"
+   },
+   {
+    "rfilename": "speech_tokenizer/preprocessor_config.json"
+   },
+   {
+    "rfilename": "tokenizer_config.json"
+   },
+   {
+    "rfilename": "vocab.json"
+   }
+  ]
+ },
+ "https://huggingface.co/api/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/tree/049ef77fe8816b536193c0c25f9a214d17921282?recursive=true&expand=true": [
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:01:40.000Z",
+    "id": "797a760ef9974b36992078ff9baf957e91de8ded",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "8f3aec276b0528061530b27f969f64cf2ab39368",
+   "path": "speech_tokenizer",
+   "size": 0,
+   "type": "directory"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T19:56:19.000Z",
+    "id": "c4ec0459c8488f2972c27861b7d1609bdac2c77f",
+    "title": "initial commit"
+   },
+   "oid": "a6344aac8c09253b3b630fb776ae94478aa0275b",
+   "path": ".gitattributes",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=a6344aac8c09253b3b630fb776ae94478aa0275b&utm_source=huggingface",
+     "status": "unscanned"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 1519,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-25T21:57:29.000Z",
+    "id": "049ef77fe8816b536193c0c25f9a214d17921282",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "4b233d49b2b0b30ff7b81200946e5f56a6c1676e",
+   "path": "README.md",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=4b233d49b2b0b30ff7b81200946e5f56a6c1676e&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 1068,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:38:02.000Z",
+    "id": "002eec487f52c603fa89d5b7c4fd0de05d46a321",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "f41acc3813e68cfa5e683412db8baeb97dbd5c29",
+   "path": "config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=f41acc3813e68cfa5e683412db8baeb97dbd5c29&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 6058,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:01:40.000Z",
+    "id": "797a760ef9974b36992078ff9baf957e91de8ded",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+   "path": "generation_config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=1872b16d4535564abf2db5d6debe6cddd82b7f2e&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 245,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:01:40.000Z",
+    "id": "797a760ef9974b36992078ff9baf957e91de8ded",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+   "path": "merges.txt",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0&utm_source=huggingface",
+     "status": "unscanned"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 1671839,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-25T21:57:29.000Z",
+    "id": "049ef77fe8816b536193c0c25f9a214d17921282",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "lfs": {
+    "oid": "3bcb2c4a127e6243e81a30b7126c7865f686d3559de4f938e5d3b150c6a9560d",
+    "pointerSize": 135,
+    "size": 1286743170
+   },
+   "oid": "e18d8cca59a3a6c873c3f563a6974e6c35035a0b",
+   "path": "model.safetensors",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Safe model, does not support code execution on load.",
+     "reportLink": "https://research.jfrog.com/model-threats/noautoload-suscode?utm_source=huggingface",
+     "status": "safe"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=e18d8cca59a3a6c873c3f563a6974e6c35035a0b&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "message": "File not scanned in VirusTotal",
+     "reportLink": "https://www.virustotal.com/gui/file/3bcb2c4a127e6243e81a30b7126c7865f686d3559de4f938e5d3b150c6a9560d?utm_source=huggingface",
+     "status": "unscanned"
+    }
+   },
+   "size": 1286743170,
+   "type": "file",
+   "xetHash": "4203266e01e634d07046abfd5e76f5a4535a04d82b1ae8c4999c95dd22fb4496"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-25T21:57:29.000Z",
+    "id": "049ef77fe8816b536193c0c25f9a214d17921282",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "052700b2b4b0904b445ed8167fbeb47826f07f25",
+   "path": "model.safetensors.index.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=052700b2b4b0904b445ed8167fbeb47826f07f25&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 71447,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:01:40.000Z",
+    "id": "797a760ef9974b36992078ff9baf957e91de8ded",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "0525dd953bb9241912f7147666f0d535165d5d4f",
+   "path": "preprocessor_config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=0525dd953bb9241912f7147666f0d535165d5d4f&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 127,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:01:40.000Z",
+    "id": "797a760ef9974b36992078ff9baf957e91de8ded",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+   "path": "speech_tokenizer/config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=06cc8dc4c5ec8a1929086b71b98c313020d9268b&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 2336,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:01:40.000Z",
+    "id": "797a760ef9974b36992078ff9baf957e91de8ded",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+   "path": "speech_tokenizer/configuration.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 76,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:01:40.000Z",
+    "id": "797a760ef9974b36992078ff9baf957e91de8ded",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "lfs": {
+    "oid": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+    "pointerSize": 134,
+    "size": 682293092
+   },
+   "oid": "026d66bfb5d730dcfd56450c5e9e51b3ef4e0712",
+   "path": "speech_tokenizer/model.safetensors",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Safe model, does not support code execution on load.",
+     "reportLink": "https://research.jfrog.com/model-threats/noautoload-suscode?utm_source=huggingface",
+     "status": "safe"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=026d66bfb5d730dcfd56450c5e9e51b3ef4e0712&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "message": "0/74 engines detect it as malicious.",
+     "reportLink": "https://www.virustotal.com/gui/file/836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258?utm_source=huggingface",
+     "status": "safe"
+    }
+   },
+   "size": 682293092,
+   "type": "file",
+   "xetHash": "7aa53fdcc3e45f61e82ffc7bceea9098fdd5af143033df2dc722f91c67d17020"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:01:40.000Z",
+    "id": "797a760ef9974b36992078ff9baf957e91de8ded",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+   "path": "speech_tokenizer/preprocessor_config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=ba40914f4f49ab98a8ca545d4892ef7291a39592&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 234,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:01:40.000Z",
+    "id": "797a760ef9974b36992078ff9baf957e91de8ded",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+   "path": "tokenizer_config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=6ff9fd60cc623bb54bbd603cbd418c97a11528d7&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 7344,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T20:01:40.000Z",
+    "id": "797a760ef9974b36992078ff9baf957e91de8ded",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "4783fe10ac3adce15ac8f358ef5462739852c569",
+   "path": "vocab.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/049ef77fe8816b536193c0c25f9a214d17921282/files?blob-id=4783fe10ac3adce15ac8f358ef5462739852c569&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 2776833,
+   "type": "file"
+  }
+ ],
+ "https://huggingface.co/api/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit": {
+  "id": "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit",
+  "sha": "f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee",
+  "siblings": [
+   {
+    "rfilename": ".gitattributes"
+   },
+   {
+    "rfilename": "README.md"
+   },
+   {
+    "rfilename": "config.json"
+   },
+   {
+    "rfilename": "generation_config.json"
+   },
+   {
+    "rfilename": "merges.txt"
+   },
+   {
+    "rfilename": "model.safetensors"
+   },
+   {
+    "rfilename": "model.safetensors.index.json"
+   },
+   {
+    "rfilename": "preprocessor_config.json"
+   },
+   {
+    "rfilename": "speech_tokenizer/config.json"
+   },
+   {
+    "rfilename": "speech_tokenizer/configuration.json"
+   },
+   {
+    "rfilename": "speech_tokenizer/model.safetensors"
+   },
+   {
+    "rfilename": "speech_tokenizer/preprocessor_config.json"
+   },
+   {
+    "rfilename": "tokenizer_config.json"
+   },
+   {
+    "rfilename": "vocab.json"
+   }
+  ]
+ },
+ "https://huggingface.co/api/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/tree/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee?recursive=true&expand=true": [
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "8f3aec276b0528061530b27f969f64cf2ab39368",
+   "path": "speech_tokenizer",
+   "size": 0,
+   "type": "directory"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:26:16.000Z",
+    "id": "664064c2c440a50761ee12c1083a74a4e95c8f8f",
+    "title": "initial commit"
+   },
+   "oid": "a6344aac8c09253b3b630fb776ae94478aa0275b",
+   "path": ".gitattributes",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=a6344aac8c09253b3b630fb776ae94478aa0275b&utm_source=huggingface",
+     "status": "unscanned"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 1519,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-25T22:07:32.000Z",
+    "id": "f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "69b9442df21004b3e0d4340fa4c7e5dd4f76fcfd",
+   "path": "README.md",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=69b9442df21004b3e0d4340fa4c7e5dd4f76fcfd&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 1068,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "8e04ff963444df154a83ad767e6bc2b9d0a40c03",
+   "path": "config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=8e04ff963444df154a83ad767e6bc2b9d0a40c03&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 5437,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+   "path": "generation_config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=1872b16d4535564abf2db5d6debe6cddd82b7f2e&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 245,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+   "path": "merges.txt",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0&utm_source=huggingface",
+     "status": "unscanned"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 1671839,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-25T22:07:32.000Z",
+    "id": "f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "lfs": {
+    "oid": "1a84179d87c972353ccdd9b48f3c4422509b3d1b11030d32358312fb0f3800d7",
+    "pointerSize": 135,
+    "size": 2393308931
+   },
+   "oid": "93d001b3e0e3c28ecc92d3fd94302c1512e0d5f7",
+   "path": "model.safetensors",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "",
+     "status": "unscanned",
+     "version": "1.5.1/27897"
+    },
+    "jFrogScan": {
+     "message": "Safe model, does not support code execution on load.",
+     "reportLink": "https://research.jfrog.com/model-threats/noautoload-suscode?utm_source=huggingface",
+     "status": "safe"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=93d001b3e0e3c28ecc92d3fd94302c1512e0d5f7&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "message": "File not scanned in VirusTotal",
+     "reportLink": "https://www.virustotal.com/gui/file/1a84179d87c972353ccdd9b48f3c4422509b3d1b11030d32358312fb0f3800d7?utm_source=huggingface",
+     "status": "unscanned"
+    }
+   },
+   "size": 2393308931,
+   "type": "file",
+   "xetHash": "016ad0dc6154b810a050d08f184b5829d4996a99a53a0099562169e95cb3d009"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-25T22:07:32.000Z",
+    "id": "f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "00d72d3b1f0a86f8f0d2ba37646953f2e6b82691",
+   "path": "model.safetensors.index.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=00d72d3b1f0a86f8f0d2ba37646953f2e6b82691&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 71786,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "0525dd953bb9241912f7147666f0d535165d5d4f",
+   "path": "preprocessor_config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=0525dd953bb9241912f7147666f0d535165d5d4f&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 127,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+   "path": "speech_tokenizer/config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=06cc8dc4c5ec8a1929086b71b98c313020d9268b&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 2336,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+   "path": "speech_tokenizer/configuration.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 76,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "lfs": {
+    "oid": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+    "pointerSize": 134,
+    "size": 682293092
+   },
+   "oid": "026d66bfb5d730dcfd56450c5e9e51b3ef4e0712",
+   "path": "speech_tokenizer/model.safetensors",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Safe model, does not support code execution on load.",
+     "reportLink": "https://research.jfrog.com/model-threats/noautoload-suscode?utm_source=huggingface",
+     "status": "safe"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=026d66bfb5d730dcfd56450c5e9e51b3ef4e0712&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "message": "0/74 engines detect it as malicious.",
+     "reportLink": "https://www.virustotal.com/gui/file/836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258?utm_source=huggingface",
+     "status": "safe"
+    }
+   },
+   "size": 682293092,
+   "type": "file",
+   "xetHash": "7aa53fdcc3e45f61e82ffc7bceea9098fdd5af143033df2dc722f91c67d17020"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+   "path": "speech_tokenizer/preprocessor_config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=ba40914f4f49ab98a8ca545d4892ef7291a39592&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 234,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+   "path": "tokenizer_config.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=6ff9fd60cc623bb54bbd603cbd418c97a11528d7&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 7344,
+   "type": "file"
+  },
+  {
+   "lastCommit": {
+    "date": "2026-01-22T21:53:04.000Z",
+    "id": "ede11c2fe8f782c4435d5b605f9ef667a2d3af42",
+    "title": "Upload folder using huggingface_hub"
+   },
+   "oid": "4783fe10ac3adce15ac8f358ef5462739852c569",
+   "path": "vocab.json",
+   "securityFileStatus": {
+    "avScan": {
+     "message": "No security issues detected",
+     "reportLink": "https://fdtn.ai/ai-supply-chain/hugging-face?utm_source=huggingface",
+     "status": "safe"
+    },
+    "jFrogScan": {
+     "message": "Not a machine-learning model",
+     "status": "unscanned"
+    },
+    "pickleImportScan": {
+     "pickleImports": [],
+     "status": "unscanned",
+     "version": "0.0.0"
+    },
+    "protectAiScan": {
+     "message": "This file has no security findings.",
+     "reportLink": "https://insights-db.paloaltonetworks.com/models/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/files?blob-id=4783fe10ac3adce15ac8f358ef5462739852c569&utm_source=huggingface",
+     "status": "safe"
+    },
+    "status": "safe",
+    "virusTotalScan": {
+     "status": "unscanned"
+    }
+   },
+   "size": 2776833,
+   "type": "file"
+  }
+ ],
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/resolve/049ef77fe8816b536193c0c25f9a214d17921282/config.json": "{\n    \"architectures\": [\n        \"Qwen3TTSForConditionalGeneration\"\n    ],\n    \"assistant_token_id\": 77091,\n    \"im_end_token_id\": 151645,\n    \"im_start_token_id\": 151644,\n    \"model_type\": \"qwen3_tts\",\n    \"quantization\": {\n        \"group_size\": 64,\n        \"bits\": 8,\n        \"mode\": \"affine\"\n    },\n    \"quantization_config\": {\n        \"group_size\": 64,\n        \"bits\": 8,\n        \"mode\": \"affine\"\n    },\n    \"talker_config\": {\n        \"attention_bias\": false,\n        \"attention_dropout\": 0,\n        \"code_predictor_config\": {\n            \"_name_or_path\": \"\",\n            \"add_cross_attention\": false,\n            \"architectures\": null,\n            \"attention_bias\": false,\n            \"attention_dropout\": 0,\n            \"bad_words_ids\": null,\n            \"begin_suppress_tokens\": null,\n            \"bos_token_id\": null,\n            \"chunk_size_feed_forward\": 0,\n            \"cross_attention_hidden_size\": null,\n            \"decoder_start_token_id\": null,\n            \"diversity_penalty\": 0.0,\n            \"do_sample\": false,\n            \"early_stopping\": false,\n            \"encoder_no_repeat_ngram_size\": 0,\n            \"eos_token_id\": null,\n            \"exponential_decay_length_penalty\": null,\n            \"finetuning_task\": null,\n            \"forced_bos_token_id\": null,\n            \"forced_eos_token_id\": null,\n            \"head_dim\": 128,\n            \"hidden_act\": \"silu\",\n            \"hidden_size\": 1024,\n            \"id2label\": {\n                \"0\": \"LABEL_0\",\n                \"1\": \"LABEL_1\"\n            },\n            \"initializer_range\": 0.02,\n            \"intermediate_size\": 3072,\n            \"is_decoder\": false,\n            \"is_encoder_decoder\": false,\n            \"label2id\": {\n                \"LABEL_0\": 0,\n                \"LABEL_1\": 1\n            },\n            \"layer_types\": [\n                \"full_attention\",\n                \"full_attention\",\n                \"full_attention\",\n                \"full_attention\",\n                \"full_attention\"\n            ],\n            \"length_penalty\": 1.0,\n            \"max_length\": 20,\n            \"max_position_embeddings\": 65536,\n            \"max_window_layers\": 28,\n            \"min_length\": 0,\n            \"model_type\": \"qwen3_tts_talker_code_predictor\",\n            \"no_repeat_ngram_size\": 0,\n            \"num_attention_heads\": 16,\n            \"num_beam_groups\": 1,\n            \"num_beams\": 1,\n            \"num_code_groups\": 16,\n            \"num_hidden_layers\": 5,\n            \"num_key_value_heads\": 8,\n            \"num_return_sequences\": 1,\n            \"output_attentions\": false,\n            \"output_hidden_states\": false,\n            \"output_scores\": false,\n            \"pad_token_id\": null,\n            \"prefix\": null,\n            \"problem_type\": null,\n            \"pruned_heads\": {},\n            \"remove_invalid_values\": false,\n            \"repetition_penalty\": 1.0,\n            \"return_dict\": true,\n            \"return_dict_in_generate\": false,\n            \"rms_norm_eps\": 1e-06,\n            \"rope_scaling\": null,\n            \"rope_theta\": 1000000,\n            \"sep_token_id\": null,\n            \"sliding_window\": null,\n            \"suppress_tokens\": null,\n            \"task_specific_params\": null,\n            \"temperature\": 1.0,\n            \"tf_legacy_loss\": false,\n            \"tie_encoder_decoder\": false,\n            \"tie_word_embeddings\": false,\n            \"tokenizer_class\": null,\n            \"top_k\": 50,\n            \"top_p\": 1.0,\n            \"dtype\": null,\n            \"torchscript\": false,\n            \"typical_p\": 1.0,\n            \"use_bfloat16\": false,\n            \"use_cache\": true,\n            \"use_sliding_window\": false,\n            \"vocab_size\": 2048\n        },\n        \"codec_bos_id\": 2149,\n        \"codec_eos_token_id\": 2150,\n        \"codec_think_id\": 2154,\n        \"codec_language_id\": {\n            \"chinese\": 2055,\n            \"english\": 2050,\n            \"german\": 2053,\n            \"italian\": 2070,\n            \"portuguese\": 2071,\n            \"spanish\": 2054,\n            \"japanese\": 2058,\n            \"korean\": 2064,\n            \"french\": 2061,\n            \"russian\": 2069,\n            \"beijing_dialect\": 2074,\n            \"sichuan_dialect\": 2062\n        },\n        \"codec_nothink_id\": 2155,\n        \"codec_pad_id\": 2148,\n        \"codec_think_bos_id\": 2156,\n        \"codec_think_eos_id\": 2157,\n        \"spk_id\": {\n            \"serena\": 3066,\n            \"vivian\": 3065,\n            \"uncle_fu\": 3010,\n            \"ryan\": 3061,\n            \"aiden\": 2861,\n            \"ono_anna\": 2873,\n            \"sohee\": 2864,\n            \"eric\": 2875,\n            \"dylan\": 2878\n        },\n        \"spk_is_dialect\": {\n            \"serena\": false,\n            \"vivian\": false,\n            \"uncle_fu\": false,\n            \"ryan\": false,\n            \"aiden\": false,\n            \"ono_anna\": false,\n            \"sohee\": false,\n            \"eric\": \"sichuan_dialect\",\n            \"dylan\": \"beijing_dialect\"\n        },\n        \"head_dim\": 128,\n        \"hidden_act\": \"silu\",\n        \"hidden_size\": 1024,\n        \"initializer_range\": 0.02,\n        \"intermediate_size\": 3072,\n        \"max_position_embeddings\": 32768,\n        \"model_type\": \"qwen3_tts_talker\",\n        \"num_attention_heads\": 16,\n        \"num_code_groups\": 16,\n        \"num_hidden_layers\": 28,\n        \"num_key_value_heads\": 8,\n        \"position_id_per_seconds\": 13,\n        \"rms_norm_eps\": 1e-06,\n        \"rope_scaling\": {\n            \"interleaved\": true,\n            \"mrope_section\": [\n                24,\n                20,\n                20\n            ],\n            \"rope_type\": \"default\",\n            \"type\": \"default\"\n        },\n        \"rope_theta\": 1000000,\n        \"sliding_window\": null,\n        \"text_hidden_size\": 2048,\n        \"text_vocab_size\": 151936,\n        \"use_cache\": true,\n        \"use_sliding_window\": false,\n        \"vocab_size\": 3072\n    },\n    \"tokenizer_type\": \"qwen3_tts_tokenizer_12hz\",\n    \"transformers_version\": \"4.57.3\",\n    \"tts_bos_token_id\": 151672,\n    \"tts_eos_token_id\": 151673,\n    \"tts_model_size\": \"0b6\",\n    \"tts_model_type\": \"custom_voice\",\n    \"tts_pad_token_id\": 151671\n}",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/resolve/049ef77fe8816b536193c0c25f9a214d17921282/generation_config.json": "{\n  \"do_sample\": true,\n  \"repetition_penalty\": 1.05,\n  \"temperature\": 0.9,\n  \"top_p\": 1.0,\n  \"top_k\": 50,\n  \"subtalker_dosample\": true,\n  \"subtalker_temperature\": 0.9,\n  \"subtalker_top_p\": 1.0,\n  \"subtalker_top_k\": 50,\n  \"max_new_tokens\": 8192\n}",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/resolve/049ef77fe8816b536193c0c25f9a214d17921282/merges.txt": "\u0120 \u0120\n\u0120\u0120 \u0120\u0120\ni n\n\u0120 t\n\u0120\u0120\u0120\u0120 \u0120\u0120\u0120\u0120\ne r\n\u0120\u0120 \u0120\no n\n\u0120 a\nr e\na t\ns t\ne n\no r\n\u0120t h\n\u010a \u010a\n\u0120 c\nl e\n\u0120 s\ni t\na n\na r\na l\n\u0120th e\n; \u010a\n\u0120 p\n\u0120 f\no u\n\u0120 =\ni s\n\u0120\u0120\u0120\u0120 \u0120\u0120\u0120\nin g\ne s\n\u0120 w\ni on\ne d\ni c\n\u0120 b\n\u0120 d\ne t\n\u0120 m\n\u0120 o\n\u0109 \u0109\nr o\na s\ne\n(truncated in this test fixture)\n",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/resolve/049ef77fe8816b536193c0c25f9a214d17921282/model.safetensors.index.json": "{\n    \"metadata\": {\n        \"total_size\": 1286633984,\n        \"total_parameters\": 905788672\n    },\n    \"weight_map\": {\n        \"talker.code_predictor.lm_head.0.biases\": \"model.safetensors\",\n        \"t\n(truncated in this test fixture)\n",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/resolve/049ef77fe8816b536193c0c25f9a214d17921282/preprocessor_config.json": "{\n  \"padding_side\": \"left\",\n  \"padding_value\": 0.0,\n  \"processor_class\": \"Qwen3TTSProcessor\",\n  \"return_attention_mask\": true\n}",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/resolve/049ef77fe8816b536193c0c25f9a214d17921282/speech_tokenizer/config.json": "{\n  \"architectures\": [\n    \"Qwen3TTSTokenizerV2Model\"\n  ],\n  \"model_type\": \"qwen3_tts_tokenizer_12hz\",\n  \"encoder_valid_num_quantizers\": 16,\n  \"input_sample_rate\": 24000,\n  \"output_sample_rate\": 24000,\n  \"decode_upsample_rate\": 1920,\n  \"encode_downsample_rate\": 1920,\n  \"decoder_config\": {\n    \"attention_bias\": false,\n    \"attention_dropout\": 0.0,\n    \"latent_dim\": 1024,\n    \"codebook_dim\": 512,\n    \"codebook_size\": 2048,\n    \"decoder_dim\": 1536,\n    \"hidden_act\": \"silu\",\n    \"hidden_size\": 512,\n    \"intermediate_size\": 1024,\n    \"layer_scale_initial_scale\": 0.01,\n    \"max_position_embeddings\": 8000,\n    \"head_dim\": 64,\n    \"num_attention_heads\": 16,\n    \"num_hidden_layers\": 8,\n    \"num_key_value_heads\": 16,\n    \"num_quantizers\": 16,\n    \"num_semantic_quantizers\": 1,\n    \"rms_norm_eps\": 1e-05,\n    \"rope_theta\": 10000,\n    \"semantic_codebook_size\": 4096,\n    \"sliding_window\": 72,\n    \"upsample_rates\": [\n      8,\n      5,\n      4,\n      3\n    ],\n    \"upsampling_ratios\": [\n      2,\n      2\n    ],\n    \"vector_quantization_hidden_dimension\": 512\n  },\n  \"encoder_config\": {\n    \"_frame_rate\": 12.5,\n    \"attention_bias\": false,\n    \"attention_dropout\": 0.0,\n    \"audio_channels\": 1,\n    \"codebook_dim\": 256,\n    \"codebook_size\": 2048,\n    \"compress\": 2,\n    \"dilation_growth_rate\": 2,\n    \"dtype\": \"float32\",\n    \"head_dim\": 64,\n    \"hidden_act\": \"gelu\",\n    \"hidden_size\": 512,\n    \"initializer_range\": 0.02,\n    \"intermediate_size\": 2048,\n    \"kernel_size\": 7,\n    \"last_kernel_size\": 3,\n    \"layer_scale_initial_scale\": 0.01,\n    \"max_position_embeddings\": 8000,\n    \"norm_eps\": 1e-05,\n    \"normalize\": false,\n    \"num_attention_heads\": 8,\n    \"num_filters\": 64,\n    \"num_hidden_layers\": 8,\n    \"num_key_value_heads\": 8,\n    \"num_quantizers\": 32,\n    \"num_residual_layers\": 1,\n    \"num_semantic_quantizers\": 1,\n    \"pad_mode\": \"constant\",\n    \"residual_kernel_size\": 3,\n    \"rope_theta\": 10000.0,\n    \"sampling_rate\": 24000,\n    \"sliding_window\": 250,\n    \"transformers_version\": \"4.57.0.dev0\",\n    \"trim_right_ratio\": 1.0,\n    \"upsample_groups\": 512,\n    \"upsampling_ratios\": [\n      8,\n      6,\n      5,\n      4\n    ],\n    \"use_cache\": false,\n    \"use_causal_conv\": true,\n    \"use_conv_shortcut\": false,\n    \"use_streaming\": false,\n    \"vector_quantization_hidden_dimension\": 256\n  },\n  \"transformers_version\": \"4.57.3\"\n}\n",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/resolve/049ef77fe8816b536193c0c25f9a214d17921282/speech_tokenizer/configuration.json": "{\"framework\": \"pytorch\", \"task\": \"feature-extraction\", \"allow_remote\": true}",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/resolve/049ef77fe8816b536193c0c25f9a214d17921282/speech_tokenizer/preprocessor_config.json": "{\n  \"chunk_length_s\": null,\n  \"feature_extractor_type\": \"EncodecFeatureExtractor\",\n  \"feature_size\": 1,\n  \"overlap\": null,\n  \"padding_side\": \"right\",\n  \"padding_value\": 0.0,\n  \"return_attention_mask\": true,\n  \"sampling_rate\": 24000\n}\n",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/resolve/049ef77fe8816b536193c0c25f9a214d17921282/tokenizer_config.json": "{\n  \"add_bos_token\": false,\n  \"add_prefix_space\": false,\n  \"added_tokens_decoder\": {\n    \"151643\": {\n      \"content\": \"<|endoftext|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151644\": {\n      \"content\": \"<|im_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151645\": {\n      \"content\": \"<|im_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151646\": {\n      \"content\": \"<|object_ref_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151647\": {\n      \"content\": \"<|object_ref_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151648\": {\n      \"content\": \"<|box_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151649\": {\n      \"content\": \"<|box_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151650\": {\n      \"content\": \"<|quad_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151651\": {\n      \"content\": \"<|quad_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151652\": {\n      \"content\": \"<|vision_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151653\": {\n      \"content\": \"<|vision_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151654\": {\n      \"content\": \"<|vision_pad|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151655\": {\n      \"content\": \"<|image_pad|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151656\": {\n      \"content\": \"<|video_pad|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151657\": {\n      \"content\": \"<tool_call>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151658\": {\n      \"content\": \"</tool_call>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151659\": {\n      \"content\": \"<|fim_prefix|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151660\": {\n      \"content\": \"<|fim_middle|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151661\": {\n      \"content\": \"<|fim_suffix|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151662\": {\n      \"content\": \"<|fim_pad|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151663\": {\n      \"content\": \"<|repo_name|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151664\": {\n      \"content\": \"<|file_sep|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151665\": {\n      \"content\": \"<tool_response>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151666\": {\n      \"content\": \"</tool_response>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151667\": {\n      \"content\": \"<think>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151668\": {\n      \"content\": \"</think>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151669\": {\n      \"content\": \"<|audio_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151670\": {\n      \"content\": \"<|audio_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151671\": {\n      \"content\": \"<tts_pad>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151672\": {\n      \"content\": \"<tts_text_bos>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151673\": {\n      \"content\": \"<tts_text_eod>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151674\": {\n      \"content\": \"<tts_text_bos_single>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151675\": {\n      \"content\": \"<|audio_pad|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    }\n  },\n  \"additional_special_tokens\": [\n    \"<|im_start|>\",\n    \"<|im_end|>\",\n    \"<|object_ref_start|>\",\n    \"<|object_ref_end|>\",\n    \"<|box_start|>\",\n    \"<|box_end|>\",\n    \"<|quad_start|>\",\n    \"<|quad_end|>\",\n    \"<|vision_start|>\",\n    \"<|vision_end|>\",\n    \"<|vision_pad|>\",\n    \"<|image_pad|>\",\n    \"<|video_pad|>\",\n    \"<|audio_start|>\",\n    \"<|audio_end|>\",\n    \"<tts_pad>\",\n    \"<tts_text_bos>\",\n    \"<tts_text_bos_single>\",\n    \"<|audio_pad|>\"\n  ],\n  \"extra_special_tokens\": {\n    \"image_token\": \"<|image_pad|>\",\n    \"audio_token\": \"<|audio_pad|>\",\n    \"video_token\": \"<|video_pad|>\",\n    \"vision_bos_token\": \"<|vision_start|>\",\n    \"vision_eos_token\": \"<|vision_end|>\",\n    \"audio_bos_token\": \"<|audio_start|>\",\n    \"audio_eos_token\": \"<|audio_end|>\"\n  },\n  \"bos_token\": null,\n  \"clean_up_tokenization_spaces\": false,\n  \"eos_token\": \"<|im_end|>\",\n  \"errors\": \"replace\",\n  \"model_max_length\": 131072,\n  \"pad_token\": \"<|endoftext|>\",\n  \"split_special_tokens\": false,\n  \"tokenizer_class\": \"Qwen2Tokenizer\",\n  \"unk_token\": null,\n  \"image_token\": \"<|image_pad|>\",\n  \"audio_token\": \"<|audio_pad|>\",\n  \"video_token\": \"<|video_pad|>\",\n  \"vision_bos_token\": \"<|vision_start|>\",\n  \"vision_eos_token\": \"<|vision_end|>\",\n  \"audio_bos_token\": \"<|audio_start|>\",\n  \"audio_eos_token\": \"<|audio_end|>\"\n}",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit/resolve/049ef77fe8816b536193c0c25f9a214d17921282/vocab.json": "{\"!\":0,\"\\\"\":1,\"#\":2,\"$\":3,\"%\":4,\"&\":5,\"'\":6,\"(\":7,\")\":8,\"*\":9,\"+\":10,\",\":11,\"-\":12,\".\":13,\"/\":14,\"0\":15,\"1\":16,\"2\":17,\"3\":18,\"4\":19,\"5\":20,\"6\":21,\"7\":22,\"8\":23,\"9\":24,\":\":25,\";\":26,\"<\":27,\"=\":28,\">\":2\n(truncated in this test fixture)\n",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/resolve/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/config.json": "{\n    \"architectures\": [\n        \"Qwen3TTSForConditionalGeneration\"\n    ],\n    \"assistant_token_id\": 77091,\n    \"im_end_token_id\": 151645,\n    \"im_start_token_id\": 151644,\n    \"model_type\": \"qwen3_tts\",\n    \"quantization\": {\n        \"group_size\": 64,\n        \"bits\": 8,\n        \"mode\": \"affine\"\n    },\n    \"quantization_config\": {\n        \"group_size\": 64,\n        \"bits\": 8,\n        \"mode\": \"affine\"\n    },\n    \"talker_config\": {\n        \"attention_bias\": false,\n        \"attention_dropout\": 0,\n        \"code_predictor_config\": {\n            \"_name_or_path\": \"\",\n            \"add_cross_attention\": false,\n            \"architectures\": null,\n            \"attention_bias\": false,\n            \"attention_dropout\": 0,\n            \"bad_words_ids\": null,\n            \"begin_suppress_tokens\": null,\n            \"bos_token_id\": null,\n            \"chunk_size_feed_forward\": 0,\n            \"cross_attention_hidden_size\": null,\n            \"decoder_start_token_id\": null,\n            \"diversity_penalty\": 0.0,\n            \"do_sample\": false,\n            \"early_stopping\": false,\n            \"encoder_no_repeat_ngram_size\": 0,\n            \"eos_token_id\": null,\n            \"exponential_decay_length_penalty\": null,\n            \"finetuning_task\": null,\n            \"forced_bos_token_id\": null,\n            \"forced_eos_token_id\": null,\n            \"head_dim\": 128,\n            \"hidden_act\": \"silu\",\n            \"hidden_size\": 1024,\n            \"id2label\": {\n                \"0\": \"LABEL_0\",\n                \"1\": \"LABEL_1\"\n            },\n            \"initializer_range\": 0.02,\n            \"intermediate_size\": 3072,\n            \"is_decoder\": false,\n            \"is_encoder_decoder\": false,\n            \"label2id\": {\n                \"LABEL_0\": 0,\n                \"LABEL_1\": 1\n            },\n            \"layer_types\": [\n                \"full_attention\",\n                \"full_attention\",\n                \"full_attention\",\n                \"full_attention\",\n                \"full_attention\"\n            ],\n            \"length_penalty\": 1.0,\n            \"max_length\": 20,\n            \"max_position_embeddings\": 65536,\n            \"max_window_layers\": 28,\n            \"min_length\": 0,\n            \"model_type\": \"qwen3_tts_talker_code_predictor\",\n            \"no_repeat_ngram_size\": 0,\n            \"num_attention_heads\": 16,\n            \"num_beam_groups\": 1,\n            \"num_beams\": 1,\n            \"num_code_groups\": 16,\n            \"num_hidden_layers\": 5,\n            \"num_key_value_heads\": 8,\n            \"num_return_sequences\": 1,\n            \"output_attentions\": false,\n            \"output_hidden_states\": false,\n            \"output_scores\": false,\n            \"pad_token_id\": null,\n            \"prefix\": null,\n            \"problem_type\": null,\n            \"pruned_heads\": {},\n            \"remove_invalid_values\": false,\n            \"repetition_penalty\": 1.0,\n            \"return_dict\": true,\n            \"return_dict_in_generate\": false,\n            \"rms_norm_eps\": 1e-06,\n            \"rope_scaling\": null,\n            \"rope_theta\": 1000000,\n            \"sep_token_id\": null,\n            \"sliding_window\": null,\n            \"suppress_tokens\": null,\n            \"task_specific_params\": null,\n            \"temperature\": 1.0,\n            \"tf_legacy_loss\": false,\n            \"tie_encoder_decoder\": false,\n            \"tie_word_embeddings\": false,\n            \"tokenizer_class\": null,\n            \"top_k\": 50,\n            \"top_p\": 1.0,\n            \"dtype\": null,\n            \"torchscript\": false,\n            \"typical_p\": 1.0,\n            \"use_bfloat16\": false,\n            \"use_cache\": true,\n            \"use_sliding_window\": false,\n            \"vocab_size\": 2048\n        },\n        \"codec_bos_id\": 2149,\n        \"codec_eos_token_id\": 2150,\n        \"codec_think_id\": 2154,\n        \"codec_language_id\": {\n            \"chinese\": 2055,\n            \"english\": 2050,\n            \"german\": 2053,\n            \"italian\": 2070,\n            \"portuguese\": 2071,\n            \"spanish\": 2054,\n            \"japanese\": 2058,\n            \"korean\": 2064,\n            \"french\": 2061,\n            \"russian\": 2069\n        },\n        \"codec_nothink_id\": 2155,\n        \"codec_pad_id\": 2148,\n        \"codec_think_bos_id\": 2156,\n        \"codec_think_eos_id\": 2157,\n        \"spk_id\": {},\n        \"spk_is_dialect\": {},\n        \"head_dim\": 128,\n        \"hidden_act\": \"silu\",\n        \"hidden_size\": 2048,\n        \"initializer_range\": 0.02,\n        \"intermediate_size\": 6144,\n        \"max_position_embeddings\": 32768,\n        \"model_type\": \"qwen3_tts_talker\",\n        \"num_attention_heads\": 16,\n        \"num_code_groups\": 16,\n        \"num_hidden_layers\": 28,\n        \"num_key_value_heads\": 8,\n        \"position_id_per_seconds\": 13,\n        \"rms_norm_eps\": 1e-06,\n        \"rope_scaling\": {\n            \"interleaved\": true,\n            \"mrope_section\": [\n                24,\n                20,\n                20\n            ],\n            \"rope_type\": \"default\",\n            \"type\": \"default\"\n        },\n        \"rope_theta\": 1000000,\n        \"sliding_window\": null,\n        \"text_hidden_size\": 2048,\n        \"text_vocab_size\": 151936,\n        \"use_cache\": true,\n        \"use_sliding_window\": false,\n        \"vocab_size\": 3072\n    },\n    \"tokenizer_type\": \"qwen3_tts_tokenizer_12hz\",\n    \"transformers_version\": \"4.57.3\",\n    \"tts_bos_token_id\": 151672,\n    \"tts_eos_token_id\": 151673,\n    \"tts_model_size\": \"1b7\",\n    \"tts_model_type\": \"voice_design\",\n    \"tts_pad_token_id\": 151671\n}",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/resolve/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/generation_config.json": "{\n  \"do_sample\": true,\n  \"repetition_penalty\": 1.05,\n  \"temperature\": 0.9,\n  \"top_p\": 1.0,\n  \"top_k\": 50,\n  \"subtalker_dosample\": true,\n  \"subtalker_temperature\": 0.9,\n  \"subtalker_top_p\": 1.0,\n  \"subtalker_top_k\": 50,\n  \"max_new_tokens\": 8192\n}",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/resolve/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/merges.txt": "\u0120 \u0120\n\u0120\u0120 \u0120\u0120\ni n\n\u0120 t\n\u0120\u0120\u0120\u0120 \u0120\u0120\u0120\u0120\ne r\n\u0120\u0120 \u0120\no n\n\u0120 a\nr e\na t\ns t\ne n\no r\n\u0120t h\n\u010a \u010a\n\u0120 c\nl e\n\u0120 s\ni t\na n\na r\na l\n\u0120th e\n; \u010a\n\u0120 p\n\u0120 f\no u\n\u0120 =\ni s\n\u0120\u0120\u0120\u0120 \u0120\u0120\u0120\nin g\ne s\n\u0120 w\ni on\ne d\ni c\n\u0120 b\n\u0120 d\ne t\n\u0120 m\n\u0120 o\n\u0109 \u0109\nr o\na s\ne\n(truncated in this test fixture)\n",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/resolve/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/model.safetensors.index.json": "{\n    \"metadata\": {\n        \"total_size\": 2393199104,\n        \"total_parameters\": 1916676352\n    },\n    \"weight_map\": {\n        \"talker.code_predictor.lm_head.0.biases\": \"model.safetensors\",\n        \"\n(truncated in this test fixture)\n",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/resolve/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/preprocessor_config.json": "{\n  \"padding_side\": \"left\",\n  \"padding_value\": 0.0,\n  \"processor_class\": \"Qwen3TTSProcessor\",\n  \"return_attention_mask\": true\n}",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/resolve/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/speech_tokenizer/config.json": "{\n  \"architectures\": [\n    \"Qwen3TTSTokenizerV2Model\"\n  ],\n  \"model_type\": \"qwen3_tts_tokenizer_12hz\",\n  \"encoder_valid_num_quantizers\": 16,\n  \"input_sample_rate\": 24000,\n  \"output_sample_rate\": 24000,\n  \"decode_upsample_rate\": 1920,\n  \"encode_downsample_rate\": 1920,\n  \"decoder_config\": {\n    \"attention_bias\": false,\n    \"attention_dropout\": 0.0,\n    \"latent_dim\": 1024,\n    \"codebook_dim\": 512,\n    \"codebook_size\": 2048,\n    \"decoder_dim\": 1536,\n    \"hidden_act\": \"silu\",\n    \"hidden_size\": 512,\n    \"intermediate_size\": 1024,\n    \"layer_scale_initial_scale\": 0.01,\n    \"max_position_embeddings\": 8000,\n    \"head_dim\": 64,\n    \"num_attention_heads\": 16,\n    \"num_hidden_layers\": 8,\n    \"num_key_value_heads\": 16,\n    \"num_quantizers\": 16,\n    \"num_semantic_quantizers\": 1,\n    \"rms_norm_eps\": 1e-05,\n    \"rope_theta\": 10000,\n    \"semantic_codebook_size\": 4096,\n    \"sliding_window\": 72,\n    \"upsample_rates\": [\n      8,\n      5,\n      4,\n      3\n    ],\n    \"upsampling_ratios\": [\n      2,\n      2\n    ],\n    \"vector_quantization_hidden_dimension\": 512\n  },\n  \"encoder_config\": {\n    \"_frame_rate\": 12.5,\n    \"attention_bias\": false,\n    \"attention_dropout\": 0.0,\n    \"audio_channels\": 1,\n    \"codebook_dim\": 256,\n    \"codebook_size\": 2048,\n    \"compress\": 2,\n    \"dilation_growth_rate\": 2,\n    \"dtype\": \"float32\",\n    \"head_dim\": 64,\n    \"hidden_act\": \"gelu\",\n    \"hidden_size\": 512,\n    \"initializer_range\": 0.02,\n    \"intermediate_size\": 2048,\n    \"kernel_size\": 7,\n    \"last_kernel_size\": 3,\n    \"layer_scale_initial_scale\": 0.01,\n    \"max_position_embeddings\": 8000,\n    \"norm_eps\": 1e-05,\n    \"normalize\": false,\n    \"num_attention_heads\": 8,\n    \"num_filters\": 64,\n    \"num_hidden_layers\": 8,\n    \"num_key_value_heads\": 8,\n    \"num_quantizers\": 32,\n    \"num_residual_layers\": 1,\n    \"num_semantic_quantizers\": 1,\n    \"pad_mode\": \"constant\",\n    \"residual_kernel_size\": 3,\n    \"rope_theta\": 10000.0,\n    \"sampling_rate\": 24000,\n    \"sliding_window\": 250,\n    \"transformers_version\": \"4.57.0.dev0\",\n    \"trim_right_ratio\": 1.0,\n    \"upsample_groups\": 512,\n    \"upsampling_ratios\": [\n      8,\n      6,\n      5,\n      4\n    ],\n    \"use_cache\": false,\n    \"use_causal_conv\": true,\n    \"use_conv_shortcut\": false,\n    \"use_streaming\": false,\n    \"vector_quantization_hidden_dimension\": 256\n  },\n  \"transformers_version\": \"4.57.3\"\n}\n",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/resolve/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/speech_tokenizer/configuration.json": "{\"framework\": \"pytorch\", \"task\": \"feature-extraction\", \"allow_remote\": true}",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/resolve/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/speech_tokenizer/preprocessor_config.json": "{\n  \"chunk_length_s\": null,\n  \"feature_extractor_type\": \"EncodecFeatureExtractor\",\n  \"feature_size\": 1,\n  \"overlap\": null,\n  \"padding_side\": \"right\",\n  \"padding_value\": 0.0,\n  \"return_attention_mask\": true,\n  \"sampling_rate\": 24000\n}\n",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/resolve/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/tokenizer_config.json": "{\n  \"add_bos_token\": false,\n  \"add_prefix_space\": false,\n  \"added_tokens_decoder\": {\n    \"151643\": {\n      \"content\": \"<|endoftext|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151644\": {\n      \"content\": \"<|im_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151645\": {\n      \"content\": \"<|im_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151646\": {\n      \"content\": \"<|object_ref_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151647\": {\n      \"content\": \"<|object_ref_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151648\": {\n      \"content\": \"<|box_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151649\": {\n      \"content\": \"<|box_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151650\": {\n      \"content\": \"<|quad_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151651\": {\n      \"content\": \"<|quad_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151652\": {\n      \"content\": \"<|vision_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151653\": {\n      \"content\": \"<|vision_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151654\": {\n      \"content\": \"<|vision_pad|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151655\": {\n      \"content\": \"<|image_pad|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151656\": {\n      \"content\": \"<|video_pad|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151657\": {\n      \"content\": \"<tool_call>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151658\": {\n      \"content\": \"</tool_call>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151659\": {\n      \"content\": \"<|fim_prefix|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151660\": {\n      \"content\": \"<|fim_middle|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151661\": {\n      \"content\": \"<|fim_suffix|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151662\": {\n      \"content\": \"<|fim_pad|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151663\": {\n      \"content\": \"<|repo_name|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151664\": {\n      \"content\": \"<|file_sep|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151665\": {\n      \"content\": \"<tool_response>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151666\": {\n      \"content\": \"</tool_response>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151667\": {\n      \"content\": \"<think>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151668\": {\n      \"content\": \"</think>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": false\n    },\n    \"151669\": {\n      \"content\": \"<|audio_start|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151670\": {\n      \"content\": \"<|audio_end|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151671\": {\n      \"content\": \"<tts_pad>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151672\": {\n      \"content\": \"<tts_text_bos>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151673\": {\n      \"content\": \"<tts_text_eod>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151674\": {\n      \"content\": \"<tts_text_bos_single>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    },\n    \"151675\": {\n      \"content\": \"<|audio_pad|>\",\n      \"lstrip\": false,\n      \"normalized\": false,\n      \"rstrip\": false,\n      \"single_word\": false,\n      \"special\": true\n    }\n  },\n  \"additional_special_tokens\": [\n    \"<|im_start|>\",\n    \"<|im_end|>\",\n    \"<|object_ref_start|>\",\n    \"<|object_ref_end|>\",\n    \"<|box_start|>\",\n    \"<|box_end|>\",\n    \"<|quad_start|>\",\n    \"<|quad_end|>\",\n    \"<|vision_start|>\",\n    \"<|vision_end|>\",\n    \"<|vision_pad|>\",\n    \"<|image_pad|>\",\n    \"<|video_pad|>\",\n    \"<|audio_start|>\",\n    \"<|audio_end|>\",\n    \"<tts_pad>\",\n    \"<tts_text_bos>\",\n    \"<tts_text_bos_single>\",\n    \"<|audio_pad|>\"\n  ],\n  \"extra_special_tokens\": {\n    \"image_token\": \"<|image_pad|>\",\n    \"audio_token\": \"<|audio_pad|>\",\n    \"video_token\": \"<|video_pad|>\",\n    \"vision_bos_token\": \"<|vision_start|>\",\n    \"vision_eos_token\": \"<|vision_end|>\",\n    \"audio_bos_token\": \"<|audio_start|>\",\n    \"audio_eos_token\": \"<|audio_end|>\"\n  },\n  \"bos_token\": null,\n  \"clean_up_tokenization_spaces\": false,\n  \"eos_token\": \"<|im_end|>\",\n  \"errors\": \"replace\",\n  \"model_max_length\": 131072,\n  \"pad_token\": \"<|endoftext|>\",\n  \"split_special_tokens\": false,\n  \"tokenizer_class\": \"Qwen2Tokenizer\",\n  \"unk_token\": null,\n  \"image_token\": \"<|image_pad|>\",\n  \"audio_token\": \"<|audio_pad|>\",\n  \"video_token\": \"<|video_pad|>\",\n  \"vision_bos_token\": \"<|vision_start|>\",\n  \"vision_eos_token\": \"<|vision_end|>\",\n  \"audio_bos_token\": \"<|audio_start|>\",\n  \"audio_eos_token\": \"<|audio_end|>\"\n}",
+ "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit/resolve/f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee/vocab.json": "{\"!\":0,\"\\\"\":1,\"#\":2,\"$\":3,\"%\":4,\"&\":5,\"'\":6,\"(\":7,\")\":8,\"*\":9,\"+\":10,\",\":11,\"-\":12,\".\":13,\"/\":14,\"0\":15,\"1\":16,\"2\":17,\"3\":18,\"4\":19,\"5\":20,\"6\":21,\"7\":22,\"8\":23,\"9\":24,\":\":25,\";\":26,\"<\":27,\"=\":28,\">\":2\n(truncated in this test fixture)\n"
+}

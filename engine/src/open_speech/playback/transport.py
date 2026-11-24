@@ -1,15 +1,23 @@
 """The one playback transport (03 § Playback transport, 05 § 9, FR-READ-6/8/12/14/17, 07 § Ducking).
 
-Pipeline: utterance audio (cache or synthesis) → decode + resample to 24 kHz → `Renderer` (WSOLA at the
-current speed, ~120 ms ring buffer) → `AudioOutput` (sounddevice, or `NullOutput` headless).
+Pipeline: utterance audio (cache or synthesis) → decode + resample to 24 kHz → `Renderer` (time-stretch at the
+current speed, a bit-exact bypass at 1x; resampled to the device rate; ~0.3 s rings) → `AudioOutput`
+(sounddevice at the device's native rate, or `NullOutput` headless).
 
 Concurrency:
-- Every public method runs on the asyncio loop. Synthesis is async (`Synthesizer`), PCM decoding runs in
-  a worker thread.
-- The audio thread only calls `Renderer.pull()`, which copies from the ring buffer under a short lock and
+- Every public method runs on the asyncio loop. Synthesis is async (`Synthesizer`), at most
+  `max_concurrency` per provider at once (Kokoro 1, cloud 3); PCM decoding runs in a worker thread.
+- The audio thread only calls `Renderer.pull()`, which copies from the rings under a short lock and
   never waits on the loop.
-- A loop task (the *ticker*, every ~20 ms) reads the played position from the renderer and emits
-  `playback.word` events, state/progress, persistence, feeding and prefetch.
+- A loop task (the *ticker*, every ~20 ms) reads the *audible* position from the renderer (latency-corrected)
+  and emits `playback.word` events, state/progress, persistence, feeding and prefetch, and the
+  `assistant.speech` started/ended events for everything said through `open_speech()` (never from the audio
+  thread; they also work under `NullOutput`).
+
+Speech (replies, `/assistant/say`, previews, recordings): `open_speech(kind, turn_id=…)` returns a
+`SpeechHandle` backed by a renderer `ClipStream` (append PCM pieces, `finish()`, `stop()`, `await wait()`).
+`started` is emitted when its first sample is heard (first frame handed out + output latency), `ended` when its
+last sample has been heard plus `voice_input.echo_tail_ms`. `play_clip` is the one-piece form.
 
 States: idle → (load) paused → (play) loading ⇄ playing ⇄ paused → stopped; error on unrecoverable
 synthesis failure. While a duck/clip hold is active the reported state is "paused" and reading resumes
@@ -34,17 +42,21 @@ from typing import Literal
 import numpy as np
 
 from open_speech.api.schemas import PlaybackState, PlaybackStatus, QueueItem
-from open_speech.api.ws_schema import ErrorMsg, PlaybackStateMsg, PlaybackWord
+from open_speech.api.ws_schema import AssistantSpeech, ErrorMsg, PlaybackStateMsg, PlaybackWord
 from open_speech.cache.audio import CachedAudio
 from open_speech.config import UserSettings
 from open_speech.document.model import Anchor
 from open_speech.errors import EngineError
+from open_speech.i18n import say
+from open_speech.i18n import t as tr
 from open_speech.plan.script import SpeechScript, Utterance
+from open_speech.playback import fade
+from open_speech.playback.diagnostics import AudioDiagnostics
 from open_speech.playback.output import AudioOutput
-from open_speech.playback.render import Renderer, RenderItem
+from open_speech.playback.render import ClipStream, GrowingPcm, Renderer, RenderItem
 from open_speech.playback.stretch import clamp_speed
 from open_speech.playback.synth import Synthesizer
-from open_speech.providers.base import WordTiming
+from open_speech.providers.base import WordTiming, max_concurrency
 from open_speech.providers.pcm import read_audio_file, resample
 from open_speech.service.events import EventBus
 
@@ -53,8 +65,11 @@ log = logging.getLogger(__name__)
 AnchorResolver = Callable[[Utterance, int, int], Anchor | None]
 PositionCallback = Callable[[str, int, int], None]
 Intent = Literal["idle", "playing", "paused", "stopped", "error"]
+SpeechKind = Literal["reply", "say", "preview", "recording"]
+SpeechEnd = Literal["finished", "stopped", "superseded", "error"]
 SAMPLE_RATE = 24000
 BACK_RESTART_MS = 2000  # "back" within the first 2 s goes to the previous unit, later restarts this one
+FEED_AHEAD = 2  # utterances handed to the renderer beyond the playhead
 
 
 # ------------------------------------------------------------------------------------------ anchors
@@ -102,6 +117,71 @@ class _Prepared:
     pcm: np.ndarray
     words: list[WordTiming]
     duration_s: float
+    # A streaming local voice (Qwen3) delivers an utterance in pieces: `growing` holds what has arrived and is what
+    # the renderer plays; `done` once the whole utterance (and its word timings) is in.
+    growing: GrowingPcm | None = None
+    done: bool = True
+    fed: bool = False  # handed to the renderer
+
+    @property
+    def source(self) -> np.ndarray | GrowingPcm:
+        return self.growing if self.growing is not None else self.pcm
+
+    @property
+    def available_s(self) -> float:
+        n = self.growing.size if self.growing is not None else self.pcm.size
+        return n / SAMPLE_RATE
+
+
+class SpeechHandle:
+    """Something the engine says, played through one renderer `ClipStream`: append PCM in order (gapless),
+    `finish()` when there is no more, or `stop()` to fade out. `await wait()` returns once `ended` has been
+    emitted (the last sample heard plus the echo tail) with the reason. Loop-thread only."""
+
+    def __init__(self, transport: Transport, stream: ClipStream, kind: SpeechKind, turn_id: str | None,
+                 hold: str | None) -> None:
+        self._t = transport
+        self.stream = stream
+        self.kind: SpeechKind = kind
+        self.turn_id = turn_id
+        self.recording_id: str | None = None
+        self.hold = hold
+        self.started = False  # `started` emitted
+        self.ended = False  # `ended` emitted
+        self.reason: SpeechEnd | None = None
+        self._stop_reason: SpeechEnd | None = None
+        self._heard_end_at: float | None = None
+        self._future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+
+    def append(self, pcm: np.ndarray, sample_rate: int = SAMPLE_RATE) -> None:
+        """Queue audio (mono float32) to play right after what came before."""
+        x = np.asarray(pcm, dtype=np.float32).reshape(-1)
+        if sample_rate != SAMPLE_RATE:
+            x = resample(x, sample_rate, SAMPLE_RATE)
+        self._t._ensure_output()
+        self.stream.append(x)
+
+    def finish(self, *, recording_id: str | None = None) -> None:
+        if recording_id is not None:
+            self.recording_id = recording_id
+        self.stream.finish()
+
+    def stop(self, *, reason: SpeechEnd = "stopped", fade_ms: float = fade.STOP_MS) -> None:
+        if self.ended or self.stream.ended or self._stop_reason is not None:
+            return  # already over (possibly only the echo tail is left): it finished, nothing to stop
+        self._stop_reason = reason
+        self.stream.stop(fade_ms)
+
+    @property
+    def played_ms(self) -> int:
+        return self.stream.played_ms
+
+    @property
+    def done(self) -> bool:
+        return self.ended
+
+    async def wait(self) -> str:
+        return await asyncio.shield(self._future)
 
 
 class Transport:
@@ -120,7 +200,6 @@ class Transport:
         tick_s: float = 0.02,
         progress_interval_s: float = 1.0,
         position_interval_s: float = 5.0,
-        max_parallel_synth: int = 2,
         chars_per_second: float = 15.0,
     ) -> None:
         self.synth = synth
@@ -135,9 +214,21 @@ class Transport:
         self._tick_s = tick_s
         self._progress_s = progress_interval_s
         self._persist_s = position_interval_s
-        self._max_parallel = max(1, max_parallel_synth)
         self._cps = chars_per_second
-        self.renderer = Renderer(sample_rate)
+        self.diagnostics = AudioDiagnostics()
+        out_diag = getattr(output, "diagnostics", "absent")
+        if out_diag is None:
+            output.diagnostics = self.diagnostics  # type: ignore[attr-defined]
+        self.renderer = Renderer(sample_rate, diagnostics=self.diagnostics)
+        if getattr(output, "prepare", "absent") is None:
+            # A device output calls this once a stream is open and before it starts (also when it reopens after
+            # a device change), so the renderer is already at the stream's rate for the first callback.
+            output.prepare = self._prepare_output  # type: ignore[attr-defined]
+        self._speech: list[SpeechHandle] = []
+        self._caps: dict[str, int] = {}
+        self._stop_output_pending = False
+        self._quiet_since: float | None = None
+        self._last_output_check = 0.0
 
         self._script: SpeechScript | None = None
         self._doc_id: str | None = None
@@ -168,6 +259,13 @@ class Transport:
         self._last_prune = 0.0
         self._closed = False
         self._output_on = False
+        # Fallback notices ("This month's free Google voice is used up; reading with the local voice.") are
+        # shown in the playback state and *spoken* once per session per reason through this hook. The engine
+        # sets it (reply speech says the text); the default says nothing.
+        self.speak_notice: Callable[[str], None] = lambda _text: None
+        self._spoken_notices: set[str] = set()
+        self._tinted: set[int] = set()  # utterances shown as a sentence tint while their words weren't known yet
+        self._cps_voice: dict[str, float] = {}  # spoken characters per second, learned per voice (growing starts)
 
     # ================================================================== public API
 
@@ -251,14 +349,13 @@ class Transport:
             return
         self._sync_position()
         self._intent = "stopped"
-        self.renderer.pause_reading(True)
+        self.renderer.pause_reading(True, fade_ms=fade.STOP_MS)
         self.renderer.flush(index=self._index, offset=self._ms_to_samples(self._offset_ms))
         self._feed_index = self._index
         self._feed_start = (self._index, self._offset_ms, None)
         self._eos_marked = False
         self._persist()
-        if not self.renderer.has_clips():
-            self._stop_output()
+        self._stop_output()  # once the 15 ms fade has been heard
         self._publish_state(force=True)
 
     async def seek(self, utterance_index: int, offset_ms: int = 0) -> None:
@@ -290,8 +387,11 @@ class Transport:
 
     async def set_speed(self, speed: float) -> None:
         self._speed = clamp_speed(speed)
-        self.renderer.set_speed(self._speed)  # applied by the render thread within one ~43 ms block
+        self.renderer.set_speed(self._speed)  # re-rendered from the playhead: heard within ~50 ms
         self._publish_state(force=True)
+        if self._intent == "playing" and self._script is not None and self._script.utterances:
+            utts = self._script.utterances
+            self._check_keeps_up(self._voice_for(utts[min(self._index, len(utts) - 1)]))
 
     async def set_voice(self, voice_id: str) -> None:
         self.synth.registry.voice(voice_id)  # NotFound for unknown voices
@@ -335,30 +435,81 @@ class Transport:
             self._reposition(new_index, 0, resume_char=resume_char)
         self._after_reposition()
 
-    async def play_clip(self, audio: CachedAudio | Path, *, duck: bool = True) -> None:
-        """Play an assistant reply / preview / recording. With `duck`, reading pauses and resumes exactly
-        afterwards (07 § Ducking); without it the clip mixes over whatever is playing."""
-        self._ensure_ticker()
+    async def play_clip(
+        self,
+        audio: CachedAudio | Path,
+        *,
+        duck: bool = True,
+        kind: SpeechKind = "recording",
+        turn_id: str | None = None,
+        recording_id: str | None = None,
+    ) -> str:
+        """Play an assistant reply / preview / recording / spoken prompt in one piece and wait until it has been
+        heard (`assistant.speech` ended). With `duck`, reading fades out and resumes exactly afterwards
+        (07 § Ducking); without it the clip mixes over whatever is playing. Returns the end reason."""
         if isinstance(audio, CachedAudio):
             pcm = await asyncio.to_thread(self._load_cached, audio)
         else:
             pcm = await asyncio.to_thread(self._load_path, audio)
-        hold = f"clip:{id(pcm)}"
+        handle = self.open_speech(kind, turn_id=turn_id, duck=duck)
+        handle.append(pcm)
+        handle.finish(recording_id=recording_id)
+        return await handle.wait()
+
+    def open_speech(self, kind: SpeechKind, *, turn_id: str | None = None, duck: bool = True) -> SpeechHandle:
+        """Start saying something (see `SpeechHandle`). With `duck`, reading pauses (12 ms fade) until it ends."""
+        self._ensure_ticker()
+        self._ensure_output()
+        stream = self.renderer.open_stream(kind)
+        hold = None
         if duck:
+            hold = f"speech:{id(stream)}"
             self._holds.add(hold)
             self._apply_hold()
             self._publish_state(force=True)
-        self._ensure_output()
-        done = self.renderer.play_clip(pcm)
+        handle = SpeechHandle(self, stream, kind, turn_id, hold)
+        self._speech.append(handle)
+        return handle
+
+    def stop_speech(self, turn_id: str | None = None, *, reason: SpeechEnd = "stopped",
+                    fade_ms: float = fade.STOP_MS) -> int:
+        """Fade out (15 ms) what is being said — everything, or one turn's speech; `ended` follows with `reason`
+        once the fade has been heard. Returns how many were stopped."""
+        n = 0
+        for h in list(self._speech):
+            if h.ended or (turn_id is not None and h.turn_id != turn_id):
+                continue
+            h.stop(reason=reason, fade_ms=fade_ms)
+            n += 1
+        return n
+
+    def show_notice(self, text: str, reason: str | None = None) -> None:
+        """A fallback notice for what is being read: shown in the playback state (`fallback_notice`) and spoken
+        once (see `announce`)."""
+        self._notice = text
+        self._publish_state(force=True)
+        self.announce(text, reason)
+
+    def announce(self, text: str, reason: str | None = None) -> bool:
+        """Say a fallback notice through `speak_notice`, once per session per reason (a reason heard once isn't
+        repeated for every document or reply; "no_style" is shown only). Returns whether it was handed over."""
+        key = reason or text
+        if reason == "no_style" or key in self._spoken_notices:
+            return False
+        self._spoken_notices.add(key)
         try:
-            await asyncio.to_thread(done.wait)  # set by the render thread at the clip's end, or on close
-        finally:
-            if duck:
-                self._holds.discard(hold)
-                self._apply_hold()
-                self._publish_state(force=True)
-            if self._intent != "playing" and not self.renderer.has_clips():
-                self._stop_output()
+            self.speak_notice(text)
+        except Exception:  # noqa: BLE001 — a notice must never stop reading
+            log.exception("speaking a notice failed")
+        return True
+
+    def speaking(self) -> list[SpeechHandle]:
+        return [h for h in self._speech if not h.ended]
+
+    @property
+    def reading_intended(self) -> bool:
+        """Reading is meant to play: it is playing, or it will resume as soon as speech and the bar let go."""
+        return self._intent == "playing"
 
     async def duck(self, on: bool) -> None:
         """Bar opened (on) / closed (off). Reading pauses while ducked and resumes afterwards unless the
@@ -413,6 +564,8 @@ class Transport:
         for t in list(self._tasks.values()):
             t.cancel()
         self.renderer.close()
+        for h in list(self._speech):
+            self._end_speech(h, h._stop_reason or "stopped")
         with contextlib.suppress(Exception):
             self.output.close()
 
@@ -434,13 +587,61 @@ class Transport:
         self.renderer.pause_reading(not self._active())
 
     def _ensure_output(self) -> None:
+        """Start the device (at its native rate; the renderer resamples) and the render thread."""
+        self._stop_output_pending = False
+        self._quiet_since = None
         if not self._output_on or not self.output.running:
-            self.output.start(self.sample_rate, self.renderer.pull)
+            pref = getattr(self.output, "preferred_rate", None)
+            rate = int(pref()) if callable(pref) else self.sample_rate
+            self.renderer.configure(rate)
+            self.output.start(rate, self.renderer.pull)
+            actual = int(getattr(self.output, "rate", rate) or rate)
+            if actual != self.renderer.rate:
+                self.renderer.configure(actual)
+            self.renderer.set_output_latency(int(getattr(self.output, "latency_frames", 0) or 0))
+            info = getattr(self.output, "info", None)
+            if callable(info):
+                details = info()
+                self.diagnostics.device = details.get("device")
+                self.diagnostics.mode = str(details.get("mode", ""))
+                self.diagnostics.latency_ms = float(details.get("latency_ms", 0.0))
             self._output_on = True
         self.renderer.start()
 
+    def _prepare_output(self, rate: int, latency_frames: int) -> None:
+        self.renderer.configure(rate)
+        self.renderer.set_output_latency(latency_frames)
+
     def _stop_output(self) -> None:
+        """Stop the device once nothing is left to hear: the ticker waits until every fade has been handed out
+        and the output latency has passed (a stop never cuts the last 15 ms)."""
         if self._output_on:
+            self._stop_output_pending = True
+
+    def _tick_output(self, now: float) -> None:
+        if self._output_on:
+            check = getattr(self.output, "check", None)
+            if callable(check) and now - self._last_output_check >= 1.0:
+                self._last_output_check = now
+                try:
+                    if check():
+                        self.renderer.configure(int(getattr(self.output, "rate", self.renderer.rate)))
+                    self.renderer.set_output_latency(int(getattr(self.output, "latency_frames", 0) or 0))
+                except Exception:
+                    log.exception("checking the audio output failed")
+        if not self._stop_output_pending:
+            return
+        if self._active() or self.speaking() or not self.renderer.quiet():
+            self._quiet_since = None
+            if self._active() or self.speaking():
+                self._stop_output_pending = False
+            return
+        if self._quiet_since is None:
+            self._quiet_since = now
+        _, lat = self.renderer.clock()
+        if now - self._quiet_since >= lat / max(1, self.renderer.rate) + 0.03:
+            self._stop_output_pending = False
+            self._quiet_since = None
             with contextlib.suppress(Exception):
                 self.output.stop()
             self._output_on = False
@@ -468,10 +669,12 @@ class Transport:
 
     def _duration_est(self, i: int) -> float:
         p = self._prepared_at(i)
-        if p is not None:
+        if p is not None and p.done:
             return p.duration_s
         assert self._script is not None
-        return max(0.5, len(self._script.utterances[i].text) / self._cps)
+        utt = self._script.utterances[i]
+        est = max(0.5, len(utt.text) / self._cps_voice.get(self._voice_for(utt), self._cps))
+        return max(est, p.available_s) if p is not None else est
 
     def _at_end(self) -> bool:
         if self._script is None or not self._script.utterances:
@@ -480,7 +683,7 @@ class Transport:
         if self._index < last:
             return False
         p = self._prepared_at(last)
-        return p is not None and self._offset_ms >= p.duration_s * 1000 - 50
+        return p is not None and p.done and self._offset_ms >= p.duration_s * 1000 - 50
 
     # ================================================================== positioning
 
@@ -491,8 +694,37 @@ class Transport:
         self._feed_start = (index, offset_ms, resume_char)
         self._eos_marked = False
         self._word_cursor = {}
+        self._tinted.clear()
+        for p in self._prepared.values():
+            p.fed = False
         self.renderer.flush(index=index, offset=self._ms_to_samples(offset_ms))
         self._apply_hold()
+        self._cancel_unneeded(index)
+
+    def _cancel_unneeded(self, index: int) -> None:
+        """After a jump, stop syntheses nobody will hear soon on voices that say so (`cancel_on_seek`: Qwen3 runs
+        one generation at a time, seconds per sentence, so the new position would otherwise wait for it)."""
+        if self._script is None:
+            return
+        n = len(self._script.utterances)
+        keep = {self._key(j) for j in range(index, min(n, index + FEED_AHEAD + 1))}  # what `_feed` may hand over
+        me = asyncio.current_task()  # called from a synthesis task's own callback (a fallback): never cancel it
+        for key, task in list(self._tasks.items()):
+            if key in keep or task.done() or task is me:
+                continue
+            prov = self._provider_obj(key[1])
+            if getattr(prov, "cancel_on_seek", False):
+                task.cancel()
+                self._tasks.pop(key, None)
+                stale = self._prepared.get(key)
+                if stale is not None and not stale.done:
+                    del self._prepared[key]  # a half-made utterance: made again (identically) when needed
+
+    def _provider_obj(self, voice_id: str) -> object | None:
+        try:
+            return self.synth.registry.provider(self._provider_of(voice_id))
+        except Exception:  # noqa: BLE001
+            return None
 
     def _after_reposition(self) -> None:
         if self._intent == "playing":
@@ -594,12 +826,16 @@ class Transport:
         target = min(s.prefetch_seconds * self._speed, float(s.max_ahead_seconds))
         n = len(self._script.utterances)
         ahead = 0.0
-        running = sum(1 for t in self._tasks.values() if not t.done())
         # A local voice is synthesized on this machine's CPU, so a second synthesis running next to the one
         # the listener is waiting for only delays it. Until the playhead has audio it runs alone (NFR-1);
         # cloud voices wait on the network instead and keep prefetching in parallel.
         head = self._key(self._index) if self._index < n else None
         head_alone = head is not None and head not in self._prepared and self._local_voice(head[1])
+        running_by: dict[str, int] = {}
+        for k, t in self._tasks.items():
+            if not t.done():
+                p = self._provider_of(k[1])
+                running_by[p] = running_by.get(p, 0) + 1
         for j in range(self._index, n):
             key = self._key(j)
             est = self._duration_est(j)
@@ -612,11 +848,14 @@ class Transport:
                     break
                 if j != self._index and head_alone:
                     break
-                # After a skip the playhead may run next to prefetch that is still finishing, one over the cap.
-                if running >= self._max_parallel + (1 if j == self._index else 0):
+                # Each provider runs at most its `max_concurrency` syntheses at once (Kokoro shares this
+                # machine's CPU with the audio path; cloud voices wait on the network). After a skip the playhead
+                # may run next to prefetch that is still finishing, one over the cap.
+                prov = self._provider_of(key[1])
+                if running_by.get(prov, 0) >= self._cap(key[1]) + (1 if j == self._index else 0):
                     break
                 self._start_task(j, key)
-                running += 1
+                running_by[prov] = running_by.get(prov, 0) + 1
                 ahead += max(0.0, remaining)
             if ahead >= target and not must:
                 break
@@ -649,20 +888,32 @@ class Transport:
             if sr == self.sample_rate:
                 self._adopt(index, key, voice_id, np.asarray(pcm, dtype=np.float32), words)
 
+        def piece(pcm: np.ndarray, sr: int, voice_id: str, offset: int) -> None:
+            # A streaming voice's audio as it is generated: the utterance may start before it is finished.
+            if sr == self.sample_rate:
+                self._grow(index, key, voice_id, pcm, offset)
+
         try:
-            res = await self.synth.synth(text, voice, style=style, document_id=self._doc_id, op="tts", on_audio=fresh)
+            res = await self.synth.synth(text, voice, style=style, document_id=self._doc_id, op="tts", on_audio=fresh,
+                                         on_chunk=piece)
             if key not in self._prepared:  # a cache hit, or audio at another sample rate: read the stored file
                 pcm = await asyncio.to_thread(self._load_cached, res.audio)
                 self._adopt(index, key, res.voice_id, pcm, list(res.audio.words))
             if res.notice and res.notice != self._notice:
-                self._notice = res.notice
-                self._publish_state(force=True)
+                self.show_notice(res.notice, res.notice_reason)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             err = exc if isinstance(exc, EngineError) else EngineError("provider_error", f"Speech failed: {exc}")
             self._failed[key] = err.detail
             log.warning("synthesis failed for utterance %s: %s", index, err.detail)
+            stale = self._prepared.get(key)
+            if stale is not None and not stale.done:
+                # A streaming voice failed part-way: end what was handed to the renderer (it plays the part it has
+                # and moves on instead of waiting forever) and forget it, so it is retried or reported at the head.
+                if stale.growing is not None:
+                    stale.growing.finish()
+                del self._prepared[key]
             if self._script is not None and 0 <= self._index < len(self._script.utterances) and (
                 self._key(self._index) == key
             ):
@@ -672,7 +923,8 @@ class Transport:
                 self.events.publish(ErrorMsg(problem=err.problem()))
                 self._publish_state(force=True)
         finally:
-            self._tasks.pop(key, None)
+            if self._tasks.get(key) is asyncio.current_task():  # not a newer task started for the same key
+                del self._tasks[key]
         self._feed()
 
     def _adopt(
@@ -680,7 +932,25 @@ class Transport:
     ) -> None:
         """Audio for `key` is ready: remember it, hand it to the renderer, and let prefetch continue."""
         text, voice, _style = key
-        self._prepared[key] = _Prepared(voice_id, pcm, words, pcm.size / self.sample_rate)
+        old = self._prepared.get(key)
+        prepared = _Prepared(voice_id, pcm, words, pcm.size / self.sample_rate)
+        if old is not None and old.growing is not None and not old.done:
+            if old.voice_id == voice_id and old.growing.size <= pcm.size:
+                g = old.growing
+                if pcm.size > g.size:
+                    g.append(pcm[g.size :])
+                g.finish()  # the renderer plays to the end of what it has been playing
+                prepared.growing, prepared.fed = g, old.fed
+            elif old.fed:
+                g = old.growing
+                g.finish()
+                self._replace_fed(index)
+        if prepared.duration_s > 0.5 and pcm.size:
+            v = self._cps_voice.get(voice_id)
+            cps = len(text) / prepared.duration_s
+            self._cps_voice[voice_id] = cps if v is None else 0.7 * v + 0.3 * cps
+        self._prepared[key] = prepared
+        self._check_keeps_up(voice_id)
         utts = self._script.utterances if self._script is not None else []
         if voice_id != voice and 0 <= index < len(utts) and not utts[index].voice_ref:
             # Fell back (budget, outage, missing key): keep using the fallback voice for the rest of the
@@ -691,6 +961,108 @@ class Transport:
                 self._prepared.setdefault(self._key(index), self._prepared[key])
         self._feed()
         self._schedule()
+
+    def _grow(self, index: int, key: tuple[str, str, str | None], voice_id: str, pcm: np.ndarray,
+              offset: int) -> None:
+        """A piece of a streaming voice's utterance arrived (`offset` = samples before it in this attempt)."""
+        p = self._prepared.get(key)
+        if p is not None and p.done:
+            return
+        if p is None or p.growing is None or p.voice_id != voice_id:
+            if offset > 0 and (p is None or p.voice_id == voice_id):
+                return  # its beginning is gone (pruned while generating): the whole audio comes with `_adopt`
+            if p is not None and p.growing is not None and p.fed:
+                p.growing.finish()
+                self._replace_fed(index)
+            p = _Prepared(voice_id, np.zeros(0, dtype=np.float32), [], 0.0,
+                          growing=GrowingPcm(on_change=self.renderer.notify), done=False)
+            self._prepared[key] = p
+        g = p.growing
+        assert g is not None
+        have = g.size
+        if offset + pcm.size <= have:
+            return  # a retry re-delivering audio already here (the same seed gives the same audio)
+        g.append(pcm[max(0, have - offset) :])
+        p.duration_s = g.size / self.sample_rate
+        self._feed()
+
+    def _replace_fed(self, index: int) -> None:
+        """Audio already handed to the renderer for `index` was replaced by another voice's (a crash and a
+        fallback mid-utterance): play again from the current utterance, restarting it if it is the one replaced."""
+        self._sync_position()
+        offset = 0 if index == self._index else self._offset_ms
+        self._reposition(self._index, offset)
+        if self._intent == "playing":
+            self._loading = True
+
+    def _ready_to_start(self, i: int, p: _Prepared, start_s: float) -> bool:
+        """Whether a growing utterance may be handed to the renderer: the audio already here (plus what will be
+        made while earlier audio plays) covers the projected shortfall `max(0.8 s, remaining x (1 - rtf /
+        (speed x 1.1)))`, so it plays through without a gap; whole audio always may."""
+        if p.done:
+            return True
+        assert self._script is not None
+        rtf = self._realtime_factor(p.voice_id)
+        speed = max(0.1, self._speed)
+        avail = p.available_s - start_s
+        remaining = max(0.0, self._duration_est(i) - p.available_s)
+        need = max(0.8, remaining * (1.0 - rtf / (speed * 1.1)))
+        # Audio still queued before this utterance plays first, and generation goes on meanwhile.
+        lead = 0.0
+        for j in range(self._index, i):
+            q = self._prepared_at(j)
+            if q is None:
+                return False
+            lead += max(0.0, q.duration_s - (self._offset_ms / 1000 if j == self._index else 0.0)) / speed
+        return avail + lead * rtf >= need
+
+    def _realtime_factor(self, voice_id: str) -> float:
+        prov = self._provider_obj(voice_id)
+        fn = getattr(prov, "realtime_factor", None)
+        if not callable(fn):
+            return 10.0
+        try:
+            return float(fn(voice_id.split(":")[1] if voice_id.count(":") >= 2 else ""))
+        except Exception:  # noqa: BLE001
+            return 1.0
+
+    def _check_keeps_up(self, voice_id: str) -> None:
+        """Say once when a local voice measurably can't generate as fast as the listener listens (RTF below speed x
+        1.1): "This voice can't keep up at 2 times speed on this Mac…" (Qwen3 on a small Mac)."""
+        if not self._local_voice(voice_id):
+            return
+        prov = self._provider_obj(voice_id)
+        measured = getattr(prov, "rtf_measured", None)
+        if not callable(measured):
+            return
+        model = voice_id.split(":")[1] if voice_id.count(":") >= 2 else ""
+        try:
+            if not measured(model):
+                return
+            rtf = float(getattr(prov, "realtime_factor")(model))  # noqa: B009
+            smallest = bool(getattr(prov, "smallest", lambda _m: True)(model))
+        except Exception:  # noqa: BLE001
+            return
+        if rtf >= self._speed * 1.1:
+            return
+        key = "notice.slow_voice_small" if smallest else "notice.slow_voice"
+        self.announce(tr(key, speed=say.decimal(self._speed)), "slow_voice")
+
+    @staticmethod
+    def _provider_of(voice_id: str) -> str:
+        return voice_id.split(":", 1)[0]
+
+    def _cap(self, voice_id: str) -> int:
+        prov_id = self._provider_of(voice_id)
+        cap = self._caps.get(prov_id)
+        if cap is None:
+            try:
+                prov = self.synth.registry.provider(prov_id)
+            except Exception:  # noqa: BLE001
+                prov = None
+            cap = max_concurrency(prov) if prov is not None else 3
+            self._caps[prov_id] = cap
+        return cap
 
     def _local_voice(self, voice_id: str) -> bool:
         try:
@@ -703,10 +1075,19 @@ class Transport:
         if self._script is None or self._intent not in ("playing", "paused"):
             return
         n = len(self._script.utterances)
-        while self._feed_index < n and self._feed_index <= self._index + 2:
+        while self._feed_index < n and self._feed_index <= self._index + FEED_AHEAD:
             p = self._prepared_at(self._feed_index)
             if p is None:
                 break
+            pending_start = self._feed_start is not None and self._feed_start[0] == self._feed_index
+            if not p.done:
+                # A growing utterance: resuming at a word needs its timings (wait for the end), otherwise start
+                # once enough of it is here to play through.
+                if pending_start and self._feed_start is not None and self._feed_start[2] is not None:
+                    break
+                start_s = self._feed_start[1] / 1000 if pending_start and self._feed_start is not None else 0.0
+                if not self._ready_to_start(self._feed_index, p, start_s):
+                    break
             start = 0
             if self._feed_start is not None and self._feed_start[0] == self._feed_index:
                 _, off_ms, resume_char = self._feed_start
@@ -714,12 +1095,13 @@ class Transport:
                     t0 = next((w.t0 for w in p.words if w.start >= resume_char), 0.0)
                     off_ms = int(t0 * 1000)
                     self._offset_ms = off_ms
-                start = min(self._ms_to_samples(off_ms), p.pcm.size)
+                start = min(self._ms_to_samples(off_ms), p.source.size)
                 self._feed_start = None
                 self.renderer.flush(index=self._feed_index, offset=start)
                 self._apply_hold()
                 self._skip_words_before(self._feed_index, start / self.sample_rate)
-            self.renderer.enqueue(RenderItem(self._feed_index, p.pcm, start))
+            self.renderer.enqueue(RenderItem(self._feed_index, p.source, start))
+            p.fed = True
             self._feed_index += 1
         if self._feed_index >= n and not self._eos_marked:
             self.renderer.mark_end_of_stream()
@@ -744,6 +1126,8 @@ class Transport:
             await asyncio.sleep(self._tick_s)
 
     def _tick(self, now: float) -> None:
+        self._tick_speech(now)
+        self._tick_output(now)
         if self._script is None or not self._script.utterances:
             return
         utts = self._script.utterances
@@ -759,7 +1143,9 @@ class Transport:
                     changed = True
                 self._offset_ms = int(pos.offset * 1000 / self.sample_rate)
             self._emit_words(self._index, self._offset_ms / 1000)
-            loading = pos.starved and not self.renderer.queued_indices() and not pos.finished
+            # Waiting for audio: nothing left to render, or a growing utterance outrun by the playhead.
+            loading = pos.starved and not pos.finished and (
+                not self.renderer.queued_indices() or self.renderer.waiting_for_synthesis())
             if loading != self._loading:
                 self._loading = loading
                 changed = True
@@ -790,11 +1176,68 @@ class Transport:
         self._loading = False
         self.renderer.pause_reading(True)
         self._persist()
-        if not self.renderer.has_clips():
-            self._stop_output()
+        self._stop_output()
         self._publish_state(force=True)
         if self._on_finished is not None and self._doc_id is not None:
             self._on_finished(self._doc_id)
+
+    # ================================================================== speech events
+
+    def _tick_speech(self, now: float) -> None:
+        """`assistant.speech`: started when a stream's first sample is heard, ended when its last sample has been
+        heard plus the echo tail (the bar keeps its microphone closed in between)."""
+        if not self._speech:
+            return
+        dev, lat = self.renderer.clock()
+        heard = dev - lat
+        running = self._output_on and self.output.running
+        tail = self._settings().voice_input.echo_tail_ms / 1000
+        for h in list(self._speech):
+            s = h.stream
+            if not h.started and s.first_frame is not None and (heard >= s.first_frame or not running):
+                h.started = True
+                self.events.publish(AssistantSpeech(state="started", kind=h.kind, turn_id=h.turn_id))
+            if not s.ended:
+                continue
+            if h._heard_end_at is None:
+                last = s.last_frame if s.last_frame is not None else dev
+                if heard >= last or not running:
+                    h._heard_end_at = now
+                else:
+                    continue
+            if now - h._heard_end_at >= tail or not h.started:
+                # A stop that came too late to cut anything (the stream had already played out) doesn't count.
+                reason: SpeechEnd = (h._stop_reason or "stopped") if s.reason == "stopped" else "finished"
+                self._end_speech(h, reason)
+
+    def _end_speech(self, h: SpeechHandle, reason: SpeechEnd) -> None:
+        if h.ended:
+            return
+        h.ended = True
+        h.reason = reason
+        with contextlib.suppress(ValueError):
+            self._speech.remove(h)
+        self.events.publish(
+            AssistantSpeech(state="ended", kind=h.kind, turn_id=h.turn_id, reason=reason,
+                            recording_id=h.recording_id, played_ms=h.played_ms)
+        )
+        if not h._future.done():
+            h._future.set_result(reason)
+        if h.hold is not None:
+            self._holds.discard(h.hold)
+            self._apply_hold()
+            self._publish_state(force=True)
+        if self._intent != "playing" and not self.speaking():
+            self._stop_output()
+
+    def audio_diagnostics(self) -> dict[str, object]:
+        """`GET /api/v1/diagnostics/audio`: what the audio path counted since it started."""
+        snap = self.diagnostics.snapshot()
+        snap["reading_buffered_ms"] = round(1000 * self.renderer.buffered_frames() / max(1, self.renderer.rate), 1)
+        snap["speed"] = self._speed
+        snap["output_running"] = bool(self._output_on and self.output.running)
+        snap["speaking"] = len(self.speaking())
+        return snap
 
     def publish_state(self) -> None:
         """Tell clients the snapshot changed for a reason the transport can't see (e.g. the queue)."""
@@ -824,7 +1267,13 @@ class Transport:
         if p is None:
             return
         cursor = self._word_cursor.get(index, 0)
-        if utt.fidelity != "exact" or not p.words:
+        if index in self._tinted and p.done and p.words and utt.fidelity == "exact":
+            # The utterance was tinted while it was still being generated; its words are known now: pick up the
+            # word highlight at the playhead.
+            self._tinted.discard(index)
+            self._skip_words_before(index, t)
+            cursor = self._word_cursor.get(index, 0)
+        elif utt.fidelity != "exact" or not p.words:
             if cursor == 0 and t >= 0:
                 anchors = utterance_anchors(utt)
                 if anchors:
@@ -841,6 +1290,8 @@ class Transport:
                         )
                     )
                 self._word_cursor[index] = 1
+                if not p.done:
+                    self._tinted.add(index)
             return
         sentence = None
         while cursor < len(p.words) and p.words[cursor].t0 <= t:

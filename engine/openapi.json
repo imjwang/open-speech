@@ -864,12 +864,366 @@
         }
       }
     },
+    "/api/v1/voices/clones": {
+      "get": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "List Clones",
+        "description": "Cloned and designed voices (kept ones).",
+        "operationId": "list_clones_api_v1_voices_clones_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloneList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Create Clone",
+        "description": "Make a voice from a recording or an audio file. `consent=true` is required (422 otherwise): the person\nconfirms it is their voice or they have the speaker's permission. With `passage_id` the recording must say that\npassage. `keep=false` leaves it unlisted until kept (the bar's \"Keep it?\"); `session_id` answers in that\nconversation with the check sentence in the new voice.",
+        "operationId": "create_clone_api_v1_voices_clones_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_clone_api_v1_voices_clones_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloneAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/voices/clones/passages": {
+      "get": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Clone Passages",
+        "description": "Passages to read for a clone (two sentences, ~8-10 s), and the consent line to show with them.",
+        "operationId": "clone_passages_api_v1_voices_clones_passages_get",
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassageList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/voices/clones/design": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Design Voices",
+        "description": "Three candidate voices from a description; keep one with POST /voices/clones/design/{candidate_id}.",
+        "operationId": "design_voices_api_v1_voices_clones_design_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/voices/clones/design/{candidate_id}": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Keep Designed",
+        "description": "Keep a designed candidate as a voice (`source = \"design\"`).",
+        "operationId": "keep_designed_api_v1_voices_clones_design__candidate_id__post",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/KeepCandidate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloneOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/voices/clones/{slug}": {
+      "patch": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Patch Clone",
+        "operationId": "patch_clone_api_v1_voices_clones__slug__patch",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClonePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloneOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Delete Clone",
+        "description": "Delete a voice: its folder, its cached audio; settings that used it go back to \"auto\".",
+        "operationId": "delete_clone_api_v1_voices_clones__slug__delete",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/voices/clones/{slug}/reference": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Replace Reference",
+        "description": "Replace a voice's recording (same id and name; its cached audio is made again).",
+        "operationId": "replace_reference_api_v1_voices_clones__slug__reference_post",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_replace_reference_api_v1_voices_clones__slug__reference_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloneAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/voices/{voice_id}/preview": {
       "post": {
         "tags": [
           "voices"
         ],
         "summary": "Preview Voice",
+        "description": "A short sample (`text`, or the voice introducing itself). `play=false` only makes the recording.",
         "operationId": "preview_voice_api_v1_voices__voice_id__preview_post",
         "parameters": [
           {
@@ -906,6 +1260,23 @@
               "default": true,
               "title": "Play"
             }
+          },
+          {
+            "name": "text",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Text"
+            }
           }
         ],
         "responses": {
@@ -915,6 +1286,49 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Get Job",
+        "description": "A background job: a clone or designed voices being made, or a model download.",
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
                 }
               }
             }
@@ -1044,66 +1458,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RuleProposal"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/rules/presets": {
-      "get": {
-        "tags": [
-          "rules"
-        ],
-        "summary": "Get Presets",
-        "operationId": "get_presets_api_v1_rules_presets_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PresetsState"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "rules"
-        ],
-        "summary": "Put Presets",
-        "operationId": "put_presets_api_v1_rules_presets_put",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PresetsUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PresetsState"
                 }
               }
             }
@@ -1537,6 +1891,40 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/speech/stop": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Assistant Speech Stop",
+        "operationId": "assistant_speech_stop_api_v1_assistant_speech_stop_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeechStopRequest"
               }
             }
           },
@@ -2027,7 +2415,20 @@
           "settings"
         ],
         "summary": "Local Models",
+        "description": "Local models. Of the downloadable weight variants (Qwen3-TTS sizes x precisions) only the installed ones, the\nones downloading and the ones the settings choose are listed, unless `all=1`.",
         "operationId": "local_models_api_v1_models_local_get",
+        "parameters": [
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "All"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2035,6 +2436,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LocalModelList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2188,6 +2599,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/diagnostics/audio": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Audio Diagnostics",
+        "description": "Underflows, starvations, ring low-water and callback timing since the engine started (05 \u00a7 9).",
+        "operationId": "audio_diagnostics_api_v1_diagnostics_audio_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioDiagnostics"
                 }
               }
             }
@@ -2471,6 +2904,141 @@
         "title": "Attachment",
         "description": "Something attached to a command in the composer: a file, a link, pasted text, or a document that was\nalready imported (uploads)."
       },
+      "AudioDiagnostics": {
+        "properties": {
+          "device": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device"
+          },
+          "rate": {
+            "type": "integer",
+            "title": "Rate",
+            "default": 0
+          },
+          "latency_ms": {
+            "type": "number",
+            "title": "Latency Ms",
+            "default": 0.0
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "default": ""
+          },
+          "resampler": {
+            "type": "string",
+            "title": "Resampler",
+            "default": ""
+          },
+          "uptime_s": {
+            "type": "number",
+            "title": "Uptime S",
+            "default": 0.0
+          },
+          "callbacks": {
+            "type": "integer",
+            "title": "Callbacks",
+            "default": 0
+          },
+          "audio_s": {
+            "type": "number",
+            "title": "Audio S",
+            "default": 0.0
+          },
+          "output_underflows": {
+            "type": "integer",
+            "title": "Output Underflows",
+            "default": 0
+          },
+          "output_overflows": {
+            "type": "integer",
+            "title": "Output Overflows",
+            "default": 0
+          },
+          "priming_output": {
+            "type": "integer",
+            "title": "Priming Output",
+            "default": 0
+          },
+          "render_starvations": {
+            "type": "integer",
+            "title": "Render Starvations",
+            "default": 0
+          },
+          "synthesis_waits": {
+            "type": "integer",
+            "title": "Synthesis Waits",
+            "default": 0
+          },
+          "stream_starvations": {
+            "type": "integer",
+            "title": "Stream Starvations",
+            "default": 0
+          },
+          "ring_low_water_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ring Low Water Ms"
+          },
+          "max_pull_ms": {
+            "type": "number",
+            "title": "Max Pull Ms",
+            "default": 0.0
+          },
+          "mean_pull_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Pull Ms"
+          },
+          "device_reopens": {
+            "type": "integer",
+            "title": "Device Reopens",
+            "default": 0
+          },
+          "reading_buffered_ms": {
+            "type": "number",
+            "title": "Reading Buffered Ms",
+            "default": 0.0
+          },
+          "speed": {
+            "type": "number",
+            "title": "Speed",
+            "default": 1.0
+          },
+          "output_running": {
+            "type": "boolean",
+            "title": "Output Running",
+            "default": false
+          },
+          "speaking": {
+            "type": "integer",
+            "title": "Speaking",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "AudioDiagnostics",
+        "description": "What the audio path counted since the engine started (GET /diagnostics/audio). Starvation is split by\ncause: `render_starvations` (the renderer fell behind: a bug or an overloaded Mac) versus `synthesis_waits`\n(the next sentence wasn't synthesized yet: a slow voice)."
+      },
       "BBox": {
         "properties": {
           "page": {
@@ -2651,6 +3219,163 @@
         ],
         "title": "BlocksPage"
       },
+      "Body_create_clone_api_v1_voices_clones_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "consent": {
+            "type": "boolean",
+            "title": "Consent",
+            "default": false
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "ref_text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Text"
+          },
+          "passage_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passage Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "recording",
+              "file"
+            ],
+            "title": "Source",
+            "default": "file"
+          },
+          "keep": {
+            "type": "boolean",
+            "title": "Keep",
+            "default": true
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_create_clone_api_v1_voices_clones_post"
+      },
+      "Body_replace_reference_api_v1_voices_clones__slug__reference_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "consent": {
+            "type": "boolean",
+            "title": "Consent",
+            "default": false
+          },
+          "ref_text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Text"
+          },
+          "passage_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passage Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "recording",
+              "file"
+            ],
+            "title": "Source",
+            "default": "file"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_replace_reference_api_v1_voices_clones__slug__reference_post"
+      },
       "Body_upload_document_api_v1_documents_upload_post": {
         "properties": {
           "file": {
@@ -2673,21 +3398,6 @@
               }
             ],
             "title": "Voice Id"
-          },
-          "mode": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "classic",
-                  "ai_enhanced"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode"
           },
           "confirm_estimate": {
             "type": "boolean",
@@ -2750,6 +3460,13 @@
           "pct": {
             "type": "number",
             "title": "Pct"
+          },
+          "free_tiers": {
+            "items": {
+              "$ref": "#/components/schemas/FreeTierState"
+            },
+            "type": "array",
+            "title": "Free Tiers"
           }
         },
         "type": "object",
@@ -2862,6 +3579,287 @@
         ],
         "title": "Capabilities",
         "description": "What this build can do (GET /capabilities). Cloud features depend on the providers configured at\nbuild time; nothing here can be changed from inside the app."
+      },
+      "CloneAccepted": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "voice_id": {
+            "type": "string",
+            "title": "Voice Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "slug",
+          "voice_id"
+        ],
+        "title": "CloneAccepted",
+        "description": "The clone is being made: follow `job_id` (`job.progress`, GET /jobs/{id}; its result has the check)."
+      },
+      "CloneCheck": {
+        "properties": {
+          "wer": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wer"
+          },
+          "similarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Similarity"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "good",
+                  "fair",
+                  "poor"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "recording_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recording Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "CloneCheck",
+        "description": "The new voice said a test sentence; the on-device recognizer's word error rate grades it."
+      },
+      "CloneConsent": {
+        "properties": {
+          "text_version": {
+            "type": "string",
+            "title": "Text Version"
+          },
+          "accepted_at": {
+            "type": "string",
+            "title": "Accepted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text_version",
+          "accepted_at"
+        ],
+        "title": "CloneConsent",
+        "description": "What the person confirmed (\"This is my voice, or I have the speaker's permission \u2026\") and when."
+      },
+      "CloneList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CloneOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CloneList"
+      },
+      "CloneOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "voice_id": {
+            "type": "string",
+            "title": "Voice Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "recording",
+              "file",
+              "design"
+            ],
+            "title": "Source"
+          },
+          "design_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Design Prompt"
+          },
+          "ref_text": {
+            "type": "string",
+            "title": "Ref Text"
+          },
+          "ref_sha256": {
+            "type": "string",
+            "title": "Ref Sha256"
+          },
+          "processing_version": {
+            "type": "string",
+            "title": "Processing Version"
+          },
+          "duration_s": {
+            "type": "number",
+            "title": "Duration S"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "kept": {
+            "type": "boolean",
+            "title": "Kept"
+          },
+          "consent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CloneConsent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CloneCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quality": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Quality"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "voice_id",
+          "name",
+          "language",
+          "source",
+          "ref_text",
+          "ref_sha256",
+          "processing_version",
+          "duration_s",
+          "created_at",
+          "kept"
+        ],
+        "title": "CloneOut"
+      },
+      "ClonePatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "ref_text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Text"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "type": "object",
+        "title": "ClonePatch",
+        "description": "Rename, correct what the reference says (a new reference hash: cached audio is made again), or its language."
       },
       "CreateDocumentRequest": {
         "properties": {
@@ -2979,21 +3977,6 @@
             ],
             "title": "Voice Id"
           },
-          "mode": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "classic",
-                  "ai_enhanced"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode"
-          },
           "confirm_estimate": {
             "type": "boolean",
             "title": "Confirm Estimate",
@@ -3039,11 +4022,16 @@
           "voice": {
             "type": "string",
             "title": "Voice",
-            "default": "kokoro:kokoro-82m-v1.0:af_heart"
+            "default": "auto"
           },
           "assistant_voice": {
             "type": "string",
             "title": "Assistant Voice",
+            "default": "auto"
+          },
+          "local_voice": {
+            "type": "string",
+            "title": "Local Voice",
             "default": "kokoro:kokoro-82m-v1.0:af_heart"
           },
           "voices": {
@@ -3060,15 +4048,6 @@
             "title": "Speed",
             "default": 1.0
           },
-          "mode": {
-            "type": "string",
-            "enum": [
-              "classic",
-              "ai_enhanced"
-            ],
-            "title": "Mode",
-            "default": "classic"
-          },
           "style": {
             "anyOf": [
               {
@@ -3083,6 +4062,60 @@
         },
         "type": "object",
         "title": "Defaults"
+      },
+      "DesignAccepted": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "DesignAccepted",
+        "description": "Follow `job_id`; its result lists the candidates ({candidate_id, recording_id, wer})."
+      },
+      "DesignRequest": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 3,
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "type": "object",
+        "required": [
+          "description"
+        ],
+        "title": "DesignRequest",
+        "description": "Make voices from a description (VoiceDesign 1.7B): three candidates, each a few seconds of a neutral passage."
       },
       "DiffRemoval": {
         "properties": {
@@ -3309,21 +4342,6 @@
             ],
             "title": "Voice Id"
           },
-          "mode": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "classic",
-                  "ai_enhanced"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode"
-          },
           "pinned": {
             "type": "boolean",
             "title": "Pinned",
@@ -3345,21 +4363,6 @@
               }
             ],
             "title": "Voice Id"
-          },
-          "mode": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "classic",
-                  "ai_enhanced"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode"
           },
           "pinned": {
             "anyOf": [
@@ -3490,21 +4493,6 @@
             ],
             "title": "Voice Id"
           },
-          "mode": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "classic",
-                  "ai_enhanced"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode"
-          },
           "operation": {
             "type": "string",
             "enum": [
@@ -3520,6 +4508,46 @@
         },
         "type": "object",
         "title": "EstimateRequest"
+      },
+      "FreeTierState": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "unit": {
+            "type": "string",
+            "const": "chars",
+            "title": "Unit",
+            "default": "chars"
+          },
+          "used": {
+            "type": "integer",
+            "title": "Used"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "resets_on": {
+            "type": "string",
+            "title": "Resets On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "label",
+          "used",
+          "limit",
+          "resets_on"
+        ],
+        "title": "FreeTierState",
+        "description": "A provider allowance that costs nothing until it is used up (e.g. Google's free voice characters).\nCounted from this app's own use only, so it is an estimate."
       },
       "HTTPValidationError": {
         "properties": {
@@ -3644,6 +4672,79 @@
           "job_id"
         ],
         "title": "JobAccepted"
+      },
+      "JobOut": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "pct": {
+            "type": "number",
+            "title": "Pct"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "result": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "kind",
+          "pct",
+          "label",
+          "state"
+        ],
+        "title": "JobOut"
+      },
+      "KeepCandidate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "title": "KeepCandidate"
       },
       "LedgerPage": {
         "properties": {
@@ -3791,7 +4892,7 @@
           "model": {
             "type": "string",
             "title": "Model",
-            "default": "claude-sonnet-5-5"
+            "default": "claude-haiku-5-5"
           },
           "annotate_effort": {
             "type": "string",
@@ -3869,6 +4970,44 @@
             ],
             "title": "Kind",
             "default": "tts"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision"
+          },
+          "selected": {
+            "type": "boolean",
+            "title": "Selected",
+            "default": false
           }
         },
         "type": "object",
@@ -3942,26 +5081,55 @@
         ],
         "title": "MarkKind"
       },
-      "ModeOverride": {
+      "PassageList": {
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/RuleScope"
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PassageOut"
+            },
+            "type": "array",
+            "title": "Items"
           },
-          "mode": {
+          "consent": {
             "type": "string",
-            "enum": [
-              "classic",
-              "ai_enhanced"
-            ],
-            "title": "Mode"
+            "title": "Consent"
+          },
+          "consent_version": {
+            "type": "string",
+            "title": "Consent Version"
           }
         },
         "type": "object",
         "required": [
-          "scope",
-          "mode"
+          "items",
+          "consent",
+          "consent_version"
         ],
-        "title": "ModeOverride"
+        "title": "PassageList",
+        "description": "Two-sentence passages to read for a clone, and the consent line to show with them."
+      },
+      "PassageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "language",
+          "text"
+        ],
+        "title": "PassageOut"
       },
       "PlayFrom": {
         "properties": {
@@ -4081,6 +5249,26 @@
             "minimum": 10.0,
             "title": "Max Ahead Seconds",
             "default": 120
+          },
+          "beyond_free_tier": {
+            "type": "string",
+            "enum": [
+              "local",
+              "pay"
+            ],
+            "title": "Beyond Free Tier",
+            "default": "local"
+          },
+          "beyond_free_tier_month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beyond Free Tier Month"
           }
         },
         "type": "object",
@@ -4263,109 +5451,6 @@
         "type": "object",
         "title": "Position"
       },
-      "PresetOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled"
-          },
-          "classic": {
-            "type": "string",
-            "title": "Classic"
-          },
-          "ai_enhanced_adds": {
-            "type": "string",
-            "title": "Ai Enhanced Adds"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "enabled",
-          "classic",
-          "ai_enhanced_adds"
-        ],
-        "title": "PresetOut"
-      },
-      "PresetsState": {
-        "properties": {
-          "mode": {
-            "type": "string",
-            "enum": [
-              "classic",
-              "ai_enhanced"
-            ],
-            "title": "Mode"
-          },
-          "overrides": {
-            "items": {
-              "$ref": "#/components/schemas/ModeOverride"
-            },
-            "type": "array",
-            "title": "Overrides"
-          },
-          "presets": {
-            "items": {
-              "$ref": "#/components/schemas/PresetOut"
-            },
-            "type": "array",
-            "title": "Presets"
-          }
-        },
-        "type": "object",
-        "required": [
-          "mode",
-          "presets"
-        ],
-        "title": "PresetsState"
-      },
-      "PresetsUpdate": {
-        "properties": {
-          "mode": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "classic",
-                  "ai_enhanced"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode"
-          },
-          "presets": {
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "type": "object",
-            "title": "Presets"
-          },
-          "scope": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RuleScope"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "title": "PresetsUpdate"
-      },
       "PreviewResponse": {
         "properties": {
           "recording_id": {
@@ -4441,6 +5526,36 @@
         "title": "QueueRequest",
         "description": "Read several documents one after another. `now` replaces what is playing and starts the first;\n`next` goes right after the current document; `last` appends."
       },
+      "Qwen3Settings": {
+        "properties": {
+          "size": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "0.6b",
+              "1.7b"
+            ],
+            "title": "Size",
+            "default": "auto"
+          },
+          "precision": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "bf16",
+              "8bit",
+              "6bit",
+              "5bit",
+              "4bit"
+            ],
+            "title": "Precision",
+            "default": "auto"
+          }
+        },
+        "type": "object",
+        "title": "Qwen3Settings",
+        "description": "Which Qwen3-TTS weights read the Qwen voices (providers/qwen3.py `resolve_variant`). The voices stay the same;\n\"auto\" is the size and precision measured best on this kind of Mac (the catalog's defaults; 0.6B with 8 GB)."
+      },
       "ReaderSettings": {
         "properties": {
           "font_size": {
@@ -4487,8 +5602,7 @@
             "enum": [
               "preferences",
               "lexicon",
-              "rule",
-              "preset"
+              "rule"
             ],
             "title": "Kind"
           },
@@ -4556,7 +5670,7 @@
           "path"
         ],
         "title": "RuleFile",
-        "description": "One text file under rules/: the standing preferences, the pronunciation list, or a rule."
+        "description": "One text file under rules/: the reading instructions (SPEECH.md), the pronunciation list, or a rule."
       },
       "RuleFileContent": {
         "properties": {
@@ -4569,8 +5683,7 @@
             "enum": [
               "preferences",
               "lexicon",
-              "rule",
-              "preset"
+              "rule"
             ],
             "title": "Kind"
           },
@@ -5375,6 +6488,24 @@
         "title": "SpeechInput",
         "description": "Whether the bar can listen, and with what."
       },
+      "SpeechStopRequest": {
+        "properties": {
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          }
+        },
+        "type": "object",
+        "title": "SpeechStopRequest",
+        "description": "Stop what the engine is saying (the WS `speech.stop`): one turn's reply, or anything when `turn_id` is\nomitted. It fades out in ~15 ms and pending synthesis is dropped."
+      },
       "SpeedRequest": {
         "properties": {
           "speed": {
@@ -5658,6 +6789,9 @@
           "playback": {
             "$ref": "#/components/schemas/PlaybackSettings"
           },
+          "qwen3": {
+            "$ref": "#/components/schemas/Qwen3Settings"
+          },
           "onboarding_completed": {
             "type": "boolean",
             "title": "Onboarding Completed",
@@ -5864,6 +6998,17 @@
             "type": "boolean",
             "title": "Timestamps",
             "default": false
+          },
+          "persona": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Persona"
           }
         },
         "type": "object",
@@ -5901,6 +7046,13 @@
             ],
             "title": "Stt Provider",
             "default": "auto"
+          },
+          "echo_tail_ms": {
+            "type": "integer",
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Echo Tail Ms",
+            "default": 150
           }
         },
         "type": "object",

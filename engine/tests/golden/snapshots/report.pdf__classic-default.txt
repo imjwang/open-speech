@@ -13,8 +13,8 @@ H Outlook
 ¶ We expect demand to stay strong through the holidays. The main risk is the price of green coffee, which rose sharply in September (see the appendix for the full price series). We will review contracts in January.
 
 --- removed (5)
-urls skip blk_7: https://example.com/reports/q3
-footers drop_block blk_8: Northwind Roasters · Internal
-page-numbers drop_block blk_9: Page 1 of 2
-footers drop_block blk_14: Northwind Roasters · Internal
-page-numbers drop_block blk_15: Page 2 of 2
+Don't read URLs skip blk_7: https://example.com/reports/q3
+Don't read headers, footers and page numbers drop_block blk_8: Northwind Roasters · Internal
+Don't read headers, footers and page numbers drop_block blk_9: Page 1 of 2
+Don't read headers, footers and page numbers drop_block blk_14: Northwind Roasters · Internal
+Don't read headers, footers and page numbers drop_block blk_15: Page 2 of 2

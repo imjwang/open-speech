@@ -52,7 +52,7 @@ def build_server() -> Any:
         kind: Literal["auto", "path", "url", "text"] = "auto",
         voice: str | None = None,
         speed: float | None = None,
-        mode: Literal["classic", "ai_enhanced"] | None = None,
+        confirm: bool = False,
     ) -> str:
         k = kind
         if k == "auto":
@@ -63,7 +63,7 @@ def build_server() -> Any:
                 if source.startswith(("/", "~"))
                 else "text"
             )
-        body: dict[str, Any] = {"voice_id": voice, "mode": mode, "play": True}
+        body: dict[str, Any] = {"voice_id": voice, "play": True, "confirm_estimate": confirm}
         if k == "url":
             body.update(kind="url", url=source)
         elif k == "path":
@@ -77,7 +77,7 @@ def build_server() -> Any:
         if est and est.get("requires_confirmation") and not res.get("playing"):
             return (
                 f"That would cost about ${est['usd_estimate']} (estimated). "
-                "Ask the user, then retry with mode='classic' or confirm in the app."
+                "Ask the user, then retry with confirm=true after they agree."
             )
         return f"Reading “{res['document']['title']}”."
 

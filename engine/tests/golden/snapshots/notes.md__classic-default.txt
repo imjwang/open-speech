@@ -13,5 +13,5 @@ H Recipe
 ¶ Taste first, then adjust the grind.
 
 --- removed (2)
-footnotes skip blk_4: 1
-footnotes drop_block blk_12: 1 Rinsing removes the papery taste.
+Don't read footnotes and footnote markers skip blk_4: 1
+Don't read footnotes and footnote markers drop_block blk_12: 1 Rinsing removes the papery taste.

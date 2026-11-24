@@ -10,6 +10,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from open_speech.api import schemas as s
+from open_speech.config import AUTO_VOICE
 from open_speech.errors import EngineError, EstimateRequired, NotFound
 from open_speech.i18n import say, t
 from open_speech.plan.script import SpeechScript
@@ -32,6 +33,9 @@ class PlaybackService:
         self._advancing: asyncio.Task[None] | None = None
         self._cost_ok: set[str] = set()  # documents the user agreed to pay for
         self._cost_asked: dict[str, float] = {}  # document → when we last said what it would cost
+        # Bumped whenever a command starts, resumes or changes reading (what plays, where, how fast, in which
+        # voice): the assistant compares it across a turn to know whether reading audio is the turn's answer.
+        self.touched = 0
 
     # ------------------------------------------------------------------ state
 
@@ -40,6 +44,11 @@ class PlaybackService:
 
     def state(self) -> s.PlaybackState:
         return self.e.transport.snapshot()
+
+    def reading_intended(self) -> bool:
+        """Reading will be heard once the conversation lets go of it (it is playing, or held only by the bar or
+        by speech). False when paused, stopped or with nothing open."""
+        return bool(self.e.transport.reading_intended)
 
     # ------------------------------------------------------------------ play
 
@@ -108,7 +117,7 @@ class PlaybackService:
 
     async def cost_to_confirm(self, document_id: str) -> s.Estimate | None:
         """The estimate for reading `document_id`, when it is over the threshold and not yet agreed to. Free
-        reading (a local voice with Classic cleanup) is never estimated."""
+        reading (a local voice, with no Claude cleanup in this build) is never estimated."""
         if document_id in self._cost_ok:
             return None
         doc = self.e.documents.load(document_id)
@@ -173,6 +182,8 @@ class PlaybackService:
         start, offset = self._resolve_start(script, req.from_, document_id)
         settings = self.e.settings.get()
         speed = self.e.transport.snapshot().speed if self._doc_id else settings.defaults.speed
+        await self.e.voices.settle_auto()  # right after startup: know whether Chirp works before "auto" picks
+        voice_id, notice_reason = self.e.documents.resolve_voice(doc.id)
         await self.e.transport.load(
             document_id=doc.id,
             title=doc.title,
@@ -180,12 +191,15 @@ class PlaybackService:
             script=script,
             start_index=start,
             offset_ms=offset,
-            voice_id=self.e.documents.voice_for(doc.id),
+            voice_id=voice_id,
             style=settings.defaults.style,
             speed=speed,
         )
+        if notice_reason:  # "auto" reads with the local voice this time: say why, once
+            self.e.transport.show_notice(self.e.voices.notice_text(notice_reason), notice_reason)
         self._doc_id = doc.id
         self.e.documents.touch(doc.id)
+        self.touched += 1
         await self.e.transport.play()
         self._start_lookahead(doc.id, script)
         return self.state()
@@ -237,6 +251,7 @@ class PlaybackService:
             return await self.play(s.PlayRequest())
         if snap.state in ("idle", "stopped"):
             return await self.play(s.PlayRequest(document_id=self._doc_id))
+        self.touched += 1
         await self.e.transport.resume()
         return self.state()
 
@@ -301,11 +316,13 @@ class PlaybackService:
     async def skip(self, req: s.SkipRequest) -> s.PlaybackState:
         if self._doc_id is None:
             raise EngineError("invalid_request", t("error.nothing_playing"))
+        self.touched += 1
         await self.e.transport.skip(req.unit, req.count)
         return self.state()
 
     async def set_speed(self, speed: float) -> s.PlaybackState:
         speed = max(0.5, min(5.0, round(speed, 2)))
+        self.touched += 1
         await self.e.transport.set_speed(speed)
         return self.state()
 
@@ -320,10 +337,14 @@ class PlaybackService:
     async def set_voice(self, req: s.VoiceRequest) -> s.PlaybackState:
         voices = {v.id: v for v in self.e.registry.voices()}
         v = voices.get(req.voice_id)
-        if v is None:
+        if req.voice_id == AUTO_VOICE:
+            pass  # the automatic choice: Chirp Zephyr while it's free, else the local voice
+        elif v is None:
             raise NotFound(f"the voice {req.voice_id}")
-        if not v.available:
+        elif not v.available:
             raise EngineError("unavailable", v.unavailable_reason or f"{v.name} isn't available right now.")
+        if req.scope != "assistant":
+            self.touched += 1
         if req.scope == "assistant":
             await self.e.settings.set_key("defaults.assistant_voice", req.voice_id)
         elif req.scope == "default" or self._doc_id is None:
@@ -338,6 +359,8 @@ class PlaybackService:
 
     async def bar_state(self, open_: bool) -> None:
         self._bar_open = open_
+        if open_:
+            self.e.warm_llm()  # the user is about to speak: have a warm connection ready for the reply
         await self.e.transport.duck(open_)
 
     # ------------------------------------------------------------------ where am I (FR-ASST-5)

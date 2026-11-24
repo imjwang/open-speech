@@ -29,8 +29,6 @@ IntentKind = Literal[
     "read_clipboard",
     "where_am_i",
     "lexicon",
-    "preset",
-    "set_mode",
     "usage",
     "confirm",
     "cancel",
@@ -50,6 +48,12 @@ IntentKind = Literal[
     "set_budget",
     "open_rules",
     "remove_pronunciation",
+    "keep_free_tier_voice",
+    "install_voice_model",
+    "clone_voice",
+    "design_voice",
+    "delete_voice",
+    "rename_voice",
 ]
 
 
@@ -169,50 +173,20 @@ def normalise(text: str) -> str:
 
 # ------------------------------------------------------------------ vocabularies
 
-PRESET_ALIASES: dict[str, str] = {
-    "header": "Headers",
-    "headers": "Headers",
-    "running heads": "Headers",
-    "running headers": "Headers",
-    "footer": "Footers",
-    "footers": "Footers",
-    "page number": "Page numbers",
-    "page numbers": "Page numbers",
-    "footnote": "Footnotes",
-    "footnotes": "Footnotes",
-    "endnotes": "Footnotes",
-    "citation": "Citations",
-    "citations": "Citations",
-    "references in the text": "Citations",
-    "url": "URLs",
-    "urls": "URLs",
-    "links": "URLs",
-    "web addresses": "URLs",
-    "parentheses": "Parentheses",
-    "parentheticals": "Parentheses",
-    "parenthesis": "Parentheses",
-    "brackets": "Brackets",
-    "square brackets": "Brackets",
-    "braces": "Braces",
-    "curly braces": "Braces",
-    "table": "Tables",
-    "tables": "Tables",
-    "formula": "Formulas",
-    "formulas": "Formulas",
-    "equations": "Formulas",
-    "math": "Formulas",
-    "caption": "Captions",
-    "captions": "Captions",
-    "figure captions": "Captions",
-    "code": "Code",
-    "code blocks": "Code",
-}
-_PRESET_RE = "|".join(sorted((re.escape(k) for k in PRESET_ALIASES), key=len, reverse=True))
-
+# A skip or read rule limited to this site, this document or a type of document ("stop reading the footnotes on
+# this site", "skip citations in PDFs"). Unscoped ("skip footnotes") it is not a command: what is read everywhere is
+# the reading instructions' business, and Claude edits them.
 _SCOPE_RE = re.compile(
-    r"\s+(?:on|for|in)\s+(?:this|the current)\s+(site|website|page|domain|document|paper|book|file|pdf)$"
-    r"|\s+(?:everywhere|always|globally|on every site)$"
+    r"\s+(?:only\s+)?(?:on|for|in)\s+(?:this|the current)\s+"
+    r"(site|website|domain|page|document|paper|book|file|pdf|article|one)(?:\s+only)?$"
+    r"|\s+(?:only\s+)?(?:on|for|in)\s+(?:all\s+)?(pdfs|pdf files|web ?pages|websites|word documents|word docs)"
+    r"(?:\s+only)?$"
 )
+_SCOPES = {"site": "site", "website": "site", "domain": "site", "page": "site"}  # else document
+_SKIP_VERB = r"(?:skip|stop reading|don't read|do not read|ignore|leave out|drop|hide|omit)"
+_READ_VERB = r"(?:start reading|include|don't skip|do not skip|stop skipping)"
+# What follows "skip" when it is moving through the text, not a kind of content ("skip to the end of this page").
+_NOT_CONTENT = r"(?!(?:to|ahead|back|forward|over|it|this|that|next|previous|last|the (?:next|previous|last|rest))\b)"
 
 _COUNT = r"(?:\d+|two|three|four|five|six|seven|eight|nine|ten)"
 # What people call the things they attach ("read this pdf", "read these links").
@@ -235,15 +209,14 @@ _SHOW = {
     "history": "recents",
     "local models": "models",
     "models": "models",
-    "presets": "presets",
-    "auto-skip": "presets",
-    "skips": "presets",
     "settings": "settings",
     "preferences": "settings",
     "queue": "queue",
     "reading queue": "queue",
     "reading list": "queue",
 }
+
+_VOICE_PROVIDER = {"google": "google", "chirp": "google", "kokoro": "kokoro"}
 
 URL_RE = re.compile(r"(https?://\S+|(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:/\S*)?)", re.I)
 
@@ -315,6 +288,68 @@ def parse(
     return None
 
 
+_NAMED = r"(?: (?:and call it|and name it|as|called|named) (.+))?"
+_AUDIO = r"(?:file|recording|audio|sample|clip|track|attachment)"
+
+
+def _original(raw: str, folded_part: str) -> str:
+    """The user's own spelling of a name taken from the normalised text ("call it Jeff" → "Jeff")."""
+    i = raw.lower().find(folded_part.lower())
+    return raw[i : i + len(folded_part)].strip(" .\"'“”") if i >= 0 else folded_part.strip(" .\"'“”")
+
+
+def parse_own_voices_en(t: str, raw: str, *, has_attachments: bool = False) -> Intent | None:
+    """"clone my voice", "clone this voice" (an audio file attached), "make a voice that sounds like …", "delete
+    the voice Jeff", "rename the voice Jeff to Dad"."""
+    m = re.fullmatch(
+        rf"(?:clone|copy) (?:my|my own) voice{_NAMED}|clone me{_NAMED}|"
+        rf"(?:make|create|record|do) (?:a )?(?:clone|copy|voice clone) of my(?: own)? voice{_NAMED}|"
+        rf"(?:make|create) (?:a |my )?voice (?:from|out of|with) my(?: own)? voice{_NAMED}|record my voice{_NAMED}",
+        t,
+    )
+    if m:
+        name = next((g for g in m.groups() if g), None)
+        return Intent("clone_voice", {"source": "recording", **({"name": _original(raw, name)} if name else {})})
+    m = re.fullmatch(
+        rf"clone (?:this|that|the|these|those)(?: one)?(?: voice)?{_NAMED}|"
+        rf"clone (?:the )?voice (?:in|from|of) (?:this|that|the|my) {_AUDIO}{_NAMED}|"
+        rf"clone (?:this|that|the) {_AUDIO}{_NAMED}|"
+        rf"(?:make|create) (?:a )?voice (?:from|out of|like) (?:this|that|the) (?:{_AUDIO}|voice){_NAMED}|"
+        rf"clone it{_NAMED}",
+        t,
+    )
+    if m and (has_attachments or not t.startswith("clone it")):
+        name = next((g for g in m.groups() if g), None)
+        return Intent("clone_voice", {"source": "file", **({"name": _original(raw, name)} if name else {})})
+    m = re.fullmatch(
+        r"(?:make|create|design|build|generate|give me|invent)(?: me)? (?:a|an|another|a new|some)? ?(?:new )?voice"
+        r"(?: that| which)? (?:sounds?|sounding) like (.+)|"
+        r"(?:make|create|design|build|generate|give me|invent)(?: me)? (?:a|an|another|a new)? ?(?:new )?voice"
+        r"(?: that is| that's| which is| with) (.+)|"
+        r"design (?:a |me a |me )?(?:new )?voice(?: for| of|:)? (.+)",
+        t,
+    )
+    if m:
+        desc = next(g for g in m.groups() if g)
+        return Intent("design_voice", {"description": _original(raw, desc)})
+    m = re.fullmatch(
+        r"(?:delete|remove|erase|forget|get rid of|throw away) (?:the |my )?(?:cloned |designed |custom )?voice"
+        r"(?: called| named)? (.+)|"
+        r"(?:delete|remove|erase|forget|get rid of) (my(?: own)? voice|my clone|my cloned voice)",
+        t,
+    )
+    if m:
+        name = m.group(1) or m.group(2)
+        return Intent("delete_voice", {"name": _original(raw, name)})
+    m = re.fullmatch(r"rename (?:the |my )?(?:voice )?(.+?) (?:to|as) (.+)|call (?:the |my )?voice (.+?) (.+)", t)
+    if m:
+        old, new = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+        if old in ("voice", "clone"):
+            old = "my voice"
+        return Intent("rename_voice", {"name": _original(raw, old), "new_name": _original(raw, new)})
+    return None
+
+
 def parse_en(text: str, *, has_pending_action: bool = False, has_attachments: bool = False) -> Intent | None:  # noqa: C901 — a grammar is a list
     t = normalise(text)
     if not t:
@@ -334,6 +369,34 @@ def parse_en(text: str, *, has_pending_action: bool = False, has_attachments: bo
             t,
         ):
             return Intent("cancel")
+
+    # --- keep the Google voice once its free characters run out this month (a card with the rate first)
+    if re.fullmatch(
+        r"(?:keep|continue|carry on|go on|stay|stick)(?: on)?(?: using| with| paying for)? (?:the |my )?"
+        r"(?:google|chirp)(?: voices?)?(?: anyway| after all| and pay| this month| even if it costs(?: money)?)?|"
+        r"(?:use|i want|i'll pay for|pay for) (?:the |my )?(?:google|chirp)(?: voices?)? (?:anyway|after all|and pay)|"
+        r"(?:i'll |i will )?(?:pay for|keep paying for) (?:the |my )?(?:google|chirp)(?: voices?)?",
+        t,
+    ):
+        return Intent("keep_free_tier_voice", {"provider": "google"})
+
+    # --- voices of your own: clone, design, delete, rename
+    own = parse_own_voices_en(t, text.strip(), has_attachments=has_attachments)
+    if own is not None:
+        return own
+
+    # --- local voice models: "install the small Qwen voice", "download qwen", "get the big qwen voices"
+    m = re.fullmatch(
+        r"(?:install|download|get|add)(?: me)?(?: the| a)?(?: (small|smaller|little|light|large|larger|big|bigger|"
+        r"best|better|default))? qwen(?: ?3)?(?: tts)?(?: voices?| voice model| model)?(?: (small|large|big))?"
+        r"(?: (?:voices?|one))?",
+        t,
+    )
+    if m:
+        size = {"small": "0.6b", "smaller": "0.6b", "little": "0.6b", "light": "0.6b", "large": "1.7b",
+                "larger": "1.7b", "big": "1.7b", "bigger": "1.7b", "best": "1.7b", "better": "1.7b"}.get(
+            m.group(1) or m.group(2) or "")
+        return Intent("install_voice_model", {"family": "customvoice", "size": size})
 
     # --- transport
     if re.fullmatch(r"(?:pause|hold on|wait|hang on)(?: (?:it|reading|playback|that))?", t):
@@ -456,57 +519,18 @@ def parse_en(text: str, *, has_pending_action: bool = False, has_attachments: bo
         if 0 < len(term) <= 60 and 0 < len(spoken) <= 80:
             return Intent("lexicon", {"term": term.strip(), "spoken": spoken.strip()})
 
-    # --- mode
-    if re.fullmatch(
-        r"(?:turn )?(?:on )?(?:ai|a\.?i\.?) ?enhanced(?: mode)?(?: on)?|(?:turn on|use|switch to) (?:ai|a\.?i\.?) "
-        r"?enhanced(?: mode)?|smart (?:mode|cleanup)(?: on)?|be smart(?:er)? about (?:cleanup|skipping)",
-        t,
-    ):
-        return Intent("set_mode", {"mode": "ai_enhanced"})
-    if re.fullmatch(
-        r"(?:turn )?(?:off )?(?:ai|a\.?i\.?) ?enhanced(?: mode)? off|(?:turn off|disable) (?:ai|a\.?i\.?) "
-        r"?enhanced(?: mode)?|(?:use |switch to )?classic(?: mode| cleanup)?",
-        t,
-    ):
-        return Intent("set_mode", {"mode": "classic"})
-
-    # --- presets / scoped skip rules
-    scope = None
+    # --- scoped skip / read rules (a rule file, confirmed on a card; see _SCOPE_RE)
     sm = _SCOPE_RE.search(t)
-    body = t
     if sm:
-        word = sm.group(1) or "global"
-        scope = {
-            "site": "site",
-            "website": "site",
-            "domain": "site",
-            "page": "site",
-            "document": "document",
-            "paper": "document",
-            "book": "document",
-            "file": "document",
-            "pdf": "document",
-        }.get(word, "global")
         body = t[: sm.start()].strip()
-    m = re.fullmatch(
-        rf"(?:skip|stop reading|don't read|do not read|ignore|leave out|drop|hide) (?:the |all |any )?({_PRESET_RE})",
-        body,
-    )
-    if m:
-        preset = PRESET_ALIASES[m.group(1)]
-        if scope in ("site", "document"):
-            return Intent("propose_rule", {"instruction": text.strip(), "scope_hint": scope})
-        return Intent("preset", {"preset": preset, "enabled": True})
-    m = re.fullmatch(
-        rf"(?:read|start reading|include|keep|don't skip|do not skip|stop skipping) (?:the |all )?({_PRESET_RE})(?: "
-        rf"again)?",
-        body,
-    )
-    if m:
-        preset = PRESET_ALIASES[m.group(1)]
-        if scope in ("site", "document"):
-            return Intent("propose_rule", {"instruction": text.strip(), "scope_hint": scope})
-        return Intent("preset", {"preset": preset, "enabled": False})
+        if (
+            re.fullmatch(rf"{_SKIP_VERB} {_NOT_CONTENT}.+", body)
+            or re.fullmatch(rf"{_READ_VERB} {_NOT_CONTENT}.+", body)
+            or re.fullmatch(rf"read {_NOT_CONTENT}.+ again", body)
+        ):
+            # A type ("in PDFs") is named in the words, and the rule compiler reads it from there.
+            hint = _SCOPES.get(sm.group(1), "document") if sm.group(1) else None
+            return Intent("propose_rule", {"instruction": text.strip(), "scope_hint": hint})
 
     # --- appearance, language, text size, budget: settings people change by voice (no LLM, applied at once)
     theme_names = "dark|light|lavender|ember|system|automatic|auto"
@@ -549,14 +573,16 @@ def parse_en(text: str, *, has_pending_action: bool = False, has_attachments: bo
         if amount is not None:
             return Intent("set_budget", {"monthly_usd": amount})
 
-    # --- the rules editor and pronunciations
+    # --- the rules editor (on the reading instructions, SPEECH.md, or the pronunciations)
     m = re.fullmatch(
-        r"(?:open|show|edit)(?: me)? (?:the |my )?(?:rules? (?:editor|files?|folder)|rule editor)|"
+        r"(?:open|show|edit)(?: me)? (?:the |my )?(?:rules? (?:editor|files?|folder)|rule editor|"
+        r"(reading instructions|speech\.?md))|"
         r"(?:open|edit) (?:the |my )?rules|(?:open|edit) (?:the |my )?(?:speech )?(preferences|pronunciations|lexicon)",
         t,
     )
     if m:
-        item = {"preferences": "preferences", "pronunciations": "lexicon", "lexicon": "lexicon"}.get(m.group(1) or "")
+        item = "preferences" if m.group(1) else {"preferences": "preferences", "pronunciations": "lexicon",
+                                                 "lexicon": "lexicon"}.get(m.group(2) or "")
         return Intent("open_rules", {"item": item})
     m = re.fullmatch(
         r"(?:forget|remove|delete) (?:the )?pronunciation (?:of|for) (.+)|stop (?:saying|pronouncing) (.+?) (?:as|"
@@ -580,6 +606,16 @@ def parse_en(text: str, *, has_pending_action: bool = False, has_attachments: bo
         period = {"today": "today", "this week": "week", "this month": "month", "in total": "month"}[p]
         return Intent("usage", {"period": period})
 
+    # --- the rest of the voices (the voices card shows a short list)
+    m = re.fullmatch(
+        r"(?:(?:show|list|give|read)(?: me)? )?(?:the )?(?:more|all(?: the| of the)?|other|every|the other)"
+        r"(?: (google|chirp|kokoro))? voices?|(?:(?:show|list)(?: me)? )?(?:the |all )?(google|chirp|kokoro) voices",
+        t,
+    )
+    if m:
+        name = m.group(1) or m.group(2)
+        return Intent("show", {"what": "voices_more", **({"provider": _VOICE_PROVIDER[name]} if name else {})})
+
     # --- show lists
     m = re.fullmatch(
         r"(?:show|list|open|what are|which are)(?: me)?(?: my| the| all)?(?: available)? (.+?)(?: available)?", t
@@ -597,7 +633,7 @@ def parse_en(text: str, *, has_pending_action: bool = False, has_attachments: bo
         r"(?:the )?(default|everything|assistant|this document))?",
         t,
     )
-    if m and not m.group(1).startswith(("ai", "classic", "smart")):
+    if m:
         target = {"default": "default", "everything": "default", "assistant": "assistant"}.get(
             m.group(2) or "", "document"
         )

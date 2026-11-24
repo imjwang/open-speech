@@ -1,12 +1,13 @@
 """A mechanical bound on what an AI span op may remove (05 § Tier 2).
 
-Each built-in preset names a kind of span: a citation, a web address, a parenthetical, a running head. An op
-credited to a preset, or to no rule at all, may take that kind of span out of the speech plus at most
+Each skip line of the reading instructions that compiles to a filter ("Skip citations.", `rules/prompt.py`) names a
+kind of span: a citation, a web address, a parenthetical, a running head. An op credited to such a line, or to no
+rule at all, may take that kind of span out of the speech plus at most
 `MAX_STRAY_WORDS` other words — the connective that only introduced it ("at", "see also", "available online
 at"). An op that removes more is refused: the text is read as written and the refusal is logged, so a model
 slip cannot silently drop what the author said next to a URL or a citation.
 
-Ops credited to a rule the user wrote (tier `annotate`, e.g. "never read legal disclaimers") or to SPEECH.md
+Ops credited to a rule file of tier `annotate` (e.g. "never read legal disclaimers") or to the rest of SPEECH.md
 are not bounded here. There the user asked for judgment over whole passages, and Script view shows everything
 that was removed.
 
@@ -22,7 +23,7 @@ import re
 from collections import Counter
 from collections.abc import Sequence
 
-from open_speech.document.model import BlockType, Document
+from open_speech.document.model import BlockType, Document, MarkKind
 from open_speech.ingest.marks import balanced_spans, find_citation_items, find_urls
 from open_speech.plan.script import SPEECH_MD_RULE_ID, SpanOp
 from open_speech.rules.model import Rule
@@ -54,10 +55,27 @@ def _parenthetical_spans(text: str) -> list[Span]:
     return balanced_spans(text, "(", ")") + balanced_spans(text, "（", "）")
 
 
-# Presets whose kind of span has a shape. "page-numbers" ("Page 4 of 18") and "footnotes" (a note marker)
-# need none: such spans hold at most a word or two, which the stray-word allowance already covers.
-# "headers" is recognised by repetition instead (see `_is_furniture`), and only for ops credited to it.
-_CORES = {"urls": _address_spans, "citations": _citation_spans, "parentheses": _parenthetical_spans}
+# Kinds of span that have a shape, by the mark a skip filter drops. Page numbers ("Page 4 of 18") and note markers
+# need none: such spans hold at most a word or two, which the stray-word allowance already covers. Running heads
+# are recognised by repetition instead (see `_is_furniture`), and only for ops credited to a rule that drops
+# headers.
+_CORES = {
+    MarkKind.url: _address_spans,
+    MarkKind.citation_ref: _citation_spans,
+    MarkKind.parenthetical: _parenthetical_spans,
+}
+_NAMED_CORES = {"urls": MarkKind.url, "citations": MarkKind.citation_ref, "parentheses": MarkKind.parenthetical}
+
+
+def _core_marks(rule: Rule) -> set[MarkKind]:
+    marks = set(rule.compiled.drop_marks) if rule.compiled is not None else set()
+    if rule.name in _NAMED_CORES:
+        marks.add(_NAMED_CORES[rule.name])
+    return marks
+
+
+def _drops_headers(rule: Rule) -> bool:
+    return rule.name == "headers" or (rule.compiled is not None and BlockType.header in rule.compiled.drop_blocks)
 
 
 def _normalize(text: str) -> str:
@@ -70,7 +88,7 @@ class OpGuard:
     def __init__(self, rules: Sequence[Rule], *, speech_md: str = "", document: Document | None = None) -> None:
         self._by_id = {r.id: r for r in rules}
         self._only = rules[0] if len(rules) == 1 else None  # an unattributed op is credited to a lone rule
-        self._presets = {r.name for r in rules if r.preset}
+        self._marks = {m for r in rules if r.preset for m in _core_marks(r)}
         self._speech_md = bool(speech_md.strip())
         self._document = document
         self._body: str | None = None
@@ -88,14 +106,14 @@ class OpGuard:
         stray = self._stray_words(removed, op.text if op.op == "replace" else "")
         if len(stray) <= MAX_STRAY_WORDS and sum(len(w) for w in stray) <= MAX_STRAY_LETTERS:
             return None
-        if rule is not None and rule.name == "headers" and self._is_furniture(removed):
+        if rule is not None and _drops_headers(rule) and self._is_furniture(removed):
             return None
-        who = f"the {rule.name} preset" if rule is not None else "any active rule"
+        who = f"the rule {rule.label!r}" if rule is not None else "any active rule"
         return f"removing {removed!r} takes more than {who} covers"
 
     def _stray_words(self, removed: str, kept_text: str) -> list[str]:
-        """Words of `removed` that would be lost and aren't part of a span an active preset names."""
-        cores = [s for name, find in _CORES.items() if name in self._presets for s in find(removed)]
+        """Words of `removed` that would be lost and aren't part of a span an active skip line names."""
+        cores = [s for mark, find in _CORES.items() if mark in self._marks for s in find(removed)]
         kept = Counter(w.casefold() for w in _WORD.findall(kept_text))
         stray: list[str] = []
         for m in _WORD.finditer(removed):

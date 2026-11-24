@@ -22,7 +22,7 @@ from it, and CI fails if the client is stale.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/documents` | Create from `{kind: url\|text\|image\|html_blocks\|clipboard\|file_path, ..., play?, voice_id?, mode?}`. Returns `{document, estimate?, playing}`. `document.language` is the detected language (`en`, `es` or null) |
+| `POST` | `/documents` | Create from `{kind: url\|text\|image\|html_blocks\|clipboard\|file_path, ..., play?, voice_id?}`. Returns `{document, estimate?, playing}`. `document.language` is the detected language (`en`, `es` or null) |
 | `POST` | `/documents/upload` | The same from an uploaded file (multipart) |
 | `GET` | `/documents` | Recents and search (`?q=` full text, `?limit=`) |
 | `GET` | `/documents/{id}` | Metadata, progress, source kind, page count |
@@ -30,7 +30,7 @@ from it, and CI fails if the client is stale.
 | `GET` | `/documents/{id}/script` | The speech plan: utterances with anchors, fidelity, and which rules acted on which spans (powers Script view and the speech diff) |
 | `GET` | `/documents/{id}/source` | The original file, for the reader |
 | `POST` | `/documents/{id}/regenerate` | Rebuild the plan (new Claude pass); estimate first |
-| `PUT` | `/documents/{id}/settings` | Per-document voice, mode (Classic/AI Enhanced), pin offline |
+| `PUT` | `/documents/{id}/settings` | Per-document voice, pin offline |
 | `DELETE` | `/documents/{id}` | Remove the document and its unpinned caches |
 
 `html_blocks` is what the shell's page preload posts: `{url, title, blocks: [{id, type, text, dom_anchor}]}`.
@@ -55,7 +55,21 @@ A `url` is fetched through the page store (`03` § The asset store): http(s) onl
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/voices` | All available voices `{id, provider, model, name, languages, styles, local, available, unavailable_reason?}` |
-| `POST` | `/voices/{id}/preview` | Plays a cached sample (synthesized once per voice and style) |
+| `POST` | `/voices/{id}/preview` | Plays a cached sample (synthesized once per voice and style). `text=` says that instead of the voice's introduction; `play=false` only makes the recording (returns its `recording_id`) |
+
+**Cloned and designed voices** (`08` § Voice cloning). A clone is a voice like any other: `qwen3:clone:<slug>`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/voices/clones` | The kept ones: `{slug, voice_id, name, language, source: recording\|file\|design, design_prompt?, ref_text, ref_sha256, processing_version, duration_s, created_at, kept, consent: {text_version, accepted_at}, check: {wer, similarity, grade: good\|fair\|poor, recording_id}, quality, warnings}` |
+| `GET` | `/voices/clones/passages?language=` | Two-sentence passages to read (en, es) and the consent line to show with them |
+| `POST` | `/voices/clones` | Multipart: `file`, `consent=true` (**required: 422 otherwise**), `name?`, `language?`, `ref_text?`, `passage_id?`, `source: recording\|file`, `keep` (default true; false = unlisted until kept), `session_id?`, `conversation_id?` → `202 {job_id, slug, voice_id}`. The job (`job.progress`, `GET /jobs/{id}`) cleans the reference, checks it says the passage (on-device recognizer, word error rate ≤ 0.15) or transcribes a file, and grades a test sentence; its result has `check`. With `session_id` the engine answers in that conversation: the test sentence in the new voice, then "Keep it?" (`keep_clone` card) |
+| `PATCH` | `/voices/clones/{slug}` | `{name?, ref_text?, language?}`. A new `ref_text` re-hashes the reference: what the voice said before is made again |
+| `POST` | `/voices/clones/{slug}/reference` | Replace the recording (multipart as above, `consent=true`); same id and name |
+| `DELETE` | `/voices/clones/{slug}` | Removes its folder and every cached sentence it said; settings that used it go back to `auto` |
+| `POST` | `/voices/clones/design` | `{description, name?, language?}` → `202 {job_id}`; the job's result lists three candidates `{candidate_id, index, recording_id, wer, seed}` |
+| `POST` | `/voices/clones/design/{candidate_id}` | `{name?}`: keep that candidate as a voice (`source: design`) |
+| `GET` | `/jobs/{id}` | `{job_id, kind, pct, label, state: running\|done\|failed, error?, result}` for clone, design and model-download jobs |
 
 ### Rules and skills
 
@@ -65,10 +79,9 @@ A `url` is fetched through the page store (`03` § The asset store): http(s) onl
 | `POST` | `/rules/proposals` | `{instruction, scope?, document_id?}` → a proposed rule file + speech diff on that document (no write) |
 | `POST` | `/rules` | Save a rule (usually from a confirmed proposal) |
 | `PATCH` | `/rules/{id}` · `DELETE` `/rules/{id}` | Edit (e.g. enable/disable) / delete |
-| `GET` · `PUT` | `/rules/presets` | Preset toggles and `mode: classic\|ai_enhanced` (per scope) |
 | `GET` · `POST` | `/rules/lexicon` | Pronunciation entries |
 | `DELETE` | `/rules/lexicon/{term}` | Remove one |
-| `GET` | `/rules/files` | Every text file behind the rules: `preferences` (`SPEECH.md`), `lexicon` (`lexicon.csv`), the user's rules, the presets; each with `{id, kind, name, path, enabled, scope?, tier?}` |
+| `GET` | `/rules/files` | Every text file behind the rules: `preferences` (`SPEECH.md`, the reading instructions), `lexicon` (`lexicon.csv`), the user's rules; each with `{id, kind, name, path, enabled, scope?, tier?}` |
 | `GET` | `/rules/files/{file_id}` | One file: `text` (the file as it is on disk) and `body` (what a person edits: a rule's instruction, or the whole text for preferences and pronunciations) |
 | `POST` | `/rules/files` | Create a rule from `{body}`: the engine names it, works out how it applies and writes the file |
 | `PUT` | `/rules/files/{file_id}` | `{body}` changes what a rule says and re-compiles it; `{text}` replaces the whole file, header included; `{name}` renames the rule and its file; `{enabled}` switches it |
@@ -79,7 +92,8 @@ A `url` is fetched through the page store (`03` § The asset store): http(s) onl
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/assistant/turns` | `{text, source: typed\|spoken\|button, attachments: [...], session_id?, recording_id?, context: {document_id?, selection?, conversation_id?}}` → `{turn_id}`; the reply streams over WS |
-| `POST` | `/assistant/say` | `{text}`: speak a short prompt in the assistant voice (first run); returns when it has played |
+| `POST` | `/assistant/say` | `{text}`: speak a short prompt in the assistant voice (first run, the bar's spoken notices); it replaces whatever is being said, emits `assistant.speech` (kind `say`) and returns when it has been heard. No recording is kept |
+| `POST` | `/assistant/speech/stop` | `{turn_id?}`: stop what the engine is saying (one turn's reply, or anything): a 15 ms fade, pending synthesis dropped; `assistant.speech` ended `{reason: stopped}` follows. Same as the WS `speech.stop` |
 | `GET` | `/actions` | Pending action cards |
 | `POST` | `/actions/{id}/confirm` · `/cancel` | Resolve a pending action card |
 
@@ -94,7 +108,7 @@ A `url` is fetched through the page store (`03` § The asset store): http(s) onl
 |---|---|---|
 | `GET` | `/usage/summary` | `?period=today\|week\|month&group_by=provider\|op\|document` → totals, breakdown, cache savings |
 | `GET` | `/usage/ledger` | Raw rows, paged, filterable |
-| `POST` | `/usage/estimate` | `{document_id \| source, voice_id?, mode?}` → `{usd_estimate, breakdown, assumptions}` |
+| `POST` | `/usage/estimate` | `{document_id \| source, voice_id?}` → `{usd_estimate, breakdown, assumptions}` |
 | `GET` · `PUT` | `/usage/budget` | `{monthly_usd, warn_at: 0.8, hard_stop: true}` |
 
 ### Settings, capabilities, models, recordings
@@ -122,7 +136,8 @@ frames (16-bit LE PCM, 16 kHz mono) between `mic.start` and `mic.stop`.
 | *(binary)* | PCM frames | Mic audio |
 | `mic.stop` | `session_id`, `submit?`, `attachments?` | End of utterance. `submit: false` cancels (the user started typing). `attachments` are the badges in the composer when the utterance ended |
 | `command` | `text`, `source: typed\|spoken\|button`, `attachments?`, `session_id?`, `context?` | Submit to the fast-path parser, then the agent (same as `POST /assistant/turns`) |
-| `bar.state` | `open` | The bar started or stopped listening: reading pauses and resumes (`07` § Ducking) |
+| `bar.state` | `open` | A conversation started or ended (listening, thinking, speaking): reading pauses and resumes (`07` § Ducking) |
+| `speech.stop` | `turn_id?` | Stop what the engine is saying (barge-in by key): that turn's reply, or anything when omitted. Fades out in ~15 ms and drops the reply's pending synthesis |
 | `subscribe` | `topics: [...]` | Defaults to all |
 
 **Engine → client**
@@ -137,7 +152,8 @@ frames (16-bit LE PCM, 16 kHz mono) between `mic.start` and `mic.stop`.
 | `assistant.card` | `turn_id`, `kind`, `title`, `rows`, `data` | Structured rows for the bar. `kind`: `voices`, `rules`, `usage`, `recents`, `models`, `where`, `presets`, `settings`, `queue`, `info` |
 | `assistant.action` | `turn_id`, `action_id`, `kind`, `summary`, `spoken?`, `preview?`, `details` | Needs confirmation (rule diff, budget change, …) |
 | `assistant.action_resolved` | `action_id`, `status: confirmed\|cancelled\|failed`, `message` | The card was answered |
-| `assistant.done` | `turn_id`, `text`, `reply_recording_id?`, `handled_by: fast_path\|agent\|error`, `error?` | Turn finished; reply audio available for replay |
+| `assistant.done` | `turn_id`, `text`, `handled_by: fast_path\|agent\|error`, `error?`, `speaks`, `audible_effect` | The reply's text is complete. Sent as soon as it is, usually while the reply is still being said (its `assistant.speech` started may already have come). `speaks: true`: reply audio is playing or coming, and an `assistant.speech` ended for this turn is guaranteed. `audible_effect: true`: the answer is reading audio that resumes when the conversation ends (end it rather than listen for a follow-up; such a reply is usually not spoken). `reply_recording_id` is no longer set: the recording comes with *ended* |
+| `assistant.speech` | `state: started\|ended`, `kind: reply\|say\|preview\|recording`, `turn_id?`, `reason?: finished\|stopped\|superseded\|error`, `recording_id?`, `played_ms?` | The engine started or finished saying something (`07` § Reply speech). *started*: its first sample is heard (handed to the device plus the output latency). *ended*: its last sample has been heard plus `voice_input.echo_tail_ms`, or it was stopped (after the fade) or superseded. A reply's events carry its `turn_id`, and its *ended* the `recording_id` of the whole reply. Also emitted with the headless output. A reply that was announced (`speaks`) but could not be said gets an *ended* with `reason: error` and no *started* |
 | `playback.state` | transport snapshot (with `queue`) | On every state change |
 | `playback.word` | `document_id`, `utterance_id`, `utterance_index`, `anchor`, `sentence_anchors`, `fidelity` | Word/segment boundary for highlighting. `anchor` is one of `{block_id, char_start, char_end, bbox?}`, `{block_id, dom_anchor}`, or `{media_t0, media_t1}` |
 | `document.updated` | `document_id`, `reason` | The script for a document changed (rule saved, lexicon edit, regenerate) |
@@ -146,17 +162,23 @@ frames (16-bit LE PCM, 16 kHz mono) between `mic.start` and `mic.stop`.
 | `capabilities.changed` | `capabilities` | What the build can do changed while running, e.g. the speech model finished installing |
 | `ui.open` | `target: rules\|reader\|bar`, `item?` | The assistant asks the shell to show something, e.g. the rules editor on one file |
 | `usage.alert` | `level: warn\|stop`, `spent`, `budget`, `message` | Budget events |
-| `job.progress` | `job_id`, `pct`, `label` | Downloads, long plans, exports |
+| `usage.changed` | `budget` (as `GET /usage/budget`) | Month-to-date spend, the budget or a free allowance changed (debounced, only on a real change) |
+| `job.progress` | `job_id`, `pct`, `label`, `kind?: install\|clone\|design` | Downloads, a voice being cloned or designed, long plans |
 | `error` | problem+json | Async failures |
 
 ## CLI
 
 ```
 open-speech serve [--port 0] [--handshake stdout]
-open-speech read <path|url|-> [--voice ID] [--speed 1.8] [--mode classic|ai] [--from-page N]
+open-speech read <path|url|-> [--voice ID] [--speed 1.8] [--from-page N]
 open-speech pause | resume | stop | status
 open-speech skip [--sentence|--paragraph] [N]
 open-speech voices [--provider P] [--lang L]
+open-speech voices clone NAME --file x.wav [--text "…"] [--language en] [--passage en-1] --i-have-consent
+open-speech voices design NAME --describe "a calm, low voice" [--keep N] [--out-dir DIR]
+open-speech voices keep-design CANDIDATE_ID [--name N]
+open-speech voices clones | passages [--language es] | rm-clone SLUG
+open-speech voices preview VOICE_ID --out sample.wav [--text "…"]   # writes a file, plays nothing
 open-speech rules ls | add "<instruction>" [--site S] | rm <id>
 open-speech usage [--today|--week|--month] [--by provider|op|document]
 open-speech estimate <path|url>
@@ -175,7 +197,7 @@ stdio transport (`open-speech mcp`). Tools are thin wrappers over `service/`:
 
 | Tool | Purpose |
 |---|---|
-| `read_aloud` | `{source: path\|url\|text, voice?, speed?, mode?}` |
+| `read_aloud` | `{source: path\|url\|text, voice?, speed?, confirm?}` |
 | `playback` | `{action: pause\|resume\|stop\|skip, ...}` |
 | `where_am_i` | Current document, section, time left |
 | `get_usage` | `{period, group_by}` |
@@ -196,5 +218,5 @@ This makes Open Speech a drop-in local speech gateway for any tool that already 
 ## Versioning and compatibility
 
 - `/api/v1` is stable within a major version. Additive changes only; breaking changes go to `/api/v2`.
-- The WS event set is versioned with `{"type": "hello", "protocol": 2}` on connect. A shell that speaks another protocol says so instead of misbehaving.
+- The WS event set is versioned with `{"type": "hello", "protocol": 3}` on connect. A shell that speaks another protocol says so instead of misbehaving. Protocol 3 (2026-11): every reply is spoken; `assistant.speech`, `speech.stop`, `usage.changed`, and `assistant.done.speaks` / `audible_effect` were added, and the reply recording moved from `assistant.done` to `assistant.speech` ended.
 - `engine/openapi.json` and `engine/ws-schema.json` are committed and diffed in CI.

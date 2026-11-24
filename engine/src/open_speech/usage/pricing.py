@@ -5,17 +5,24 @@ computation (FR-COST-5): `cost()` re-reads the override file when its mtime chan
 
 from __future__ import annotations
 
+import logging
 import math
 import tomllib
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from open_speech.config import Paths
 from open_speech.local.catalog import DATA_DIR, deep_merge
 from open_speech.providers.base import Units
 
+log = logging.getLogger(__name__)
+
 BUNDLED_PRICING = DATA_DIR / "pricing.toml"
+DEFAULT_FREE_TZ = "America/Los_Angeles"  # Google's billing month (verify)
 MTOK = Decimal(1_000_000)
 QUANT = Decimal("0.000001")  # stored precision (micro-dollars)
 _META = {"version", "currency", "chars_per_token"}
@@ -89,12 +96,50 @@ class Pricing:
     def has(self, provider: str, model: str) -> bool:
         return self.entry(provider, model) is not None
 
+    def free_allowance(self, provider: str, model: str) -> FreeAllowance | None:
+        """The model's free monthly allowance (`free_chars_per_month`), or None."""
+        self.refresh_if_changed()
+        e = self.entry(provider, model)
+        if e is None or not e.get("free_chars_per_month"):
+            return None
+        return FreeAllowance(
+            provider=provider,
+            model=model,
+            chars=int(e["free_chars_per_month"]),
+            tz=str(e.get("free_period_tz") or DEFAULT_FREE_TZ),
+            per_mchars=_d(e.get("per_mchars", 0)),
+        )
+
+    def free_allowances(self) -> list[FreeAllowance]:
+        out: list[FreeAllowance] = []
+        for provider, models in self.data.items():
+            if provider in _META or not isinstance(models, dict):
+                continue
+            for model in models:
+                a = self.free_allowance(provider, model)
+                if a is not None:
+                    out.append(a)
+        return out
+
+    @staticmethod
+    def rate_card(e: dict[str, Any], units: Units) -> dict[str, Any]:
+        """The rates that apply to this call: the entry's `long_context` card replaces them when the prompt
+        (input + cache-read + cache-write tokens) is over its `above_tokens` (Claude Haiku 5.5 over 100K)."""
+        long = e.get("long_context")
+        if not isinstance(long, dict) or "above_tokens" not in long:
+            return e
+        prompt = units.in_tok + units.cache_read_tok + units.cache_write_tok
+        if prompt <= int(long["above_tokens"]):
+            return e
+        return {**{k: v for k, v in e.items() if k != "long_context"}, **long}
+
     def cost(self, provider: str, model: str, units: Units) -> Decimal:
         """Estimated USD for one call. Unknown models cost 0 (the ledger flags them `unpriced`)."""
         self.refresh_if_changed()
         e = self.entry(provider, model)
         if e is None:
             return Decimal(0)
+        e = self.rate_card(e, units)
         total = Decimal(0)
         in_rate = e.get("input_per_mtok", e.get("text_input_per_mtok"))
         if in_rate is not None:
@@ -120,6 +165,44 @@ class Pricing:
         if "per_image" in e:
             total += _d(e["per_image"]) * Decimal(units.images)
         return total.quantize(QUANT, rounding=ROUND_HALF_UP)
+
+
+@dataclass(frozen=True)
+class FreeAllowance:
+    """A monthly allowance that costs nothing (`free_chars_per_month`), counted per billing month in `tz`."""
+
+    provider: str
+    model: str
+    chars: int
+    tz: str = DEFAULT_FREE_TZ
+    per_mchars: Decimal = Decimal(0)  # the price beyond it, per million characters
+
+    @property
+    def per_kchars(self) -> Decimal:
+        return self.per_mchars / Decimal(1000)
+
+
+@dataclass(frozen=True)
+class BillingPeriod:
+    key: str  # "YYYY-MM" in the allowance's time zone
+    start: datetime  # first instant of the month (aware, in that zone)
+    resets_on: date  # the first day of the next month, in that zone
+
+
+def billing_zone(name: str) -> tzinfo:
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        log.warning("no time zone data for %s; using UTC-8 for its billing month", name)
+        return timezone(timedelta(hours=-8))
+
+
+def billing_period(now: datetime, tz_name: str) -> BillingPeriod:
+    """The calendar month `now` falls in, in `tz_name` (Google bills by the Pacific-time month)."""
+    local = (now if now.tzinfo is not None else now.replace(tzinfo=UTC)).astimezone(billing_zone(tz_name))
+    start = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    nxt = date(start.year + (start.month == 12), start.month % 12 + 1, 1)
+    return BillingPeriod(key=start.strftime("%Y-%m"), start=start, resets_on=nxt)
 
 
 def money(d: Decimal | str | int | float) -> str:

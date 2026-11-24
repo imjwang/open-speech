@@ -43,7 +43,7 @@ describe('interface text', () => {
   })
 
   it('tMaybe falls back for keys built at run time', () => {
-    expect(tMaybe('preset.Headers', 'x')).toBe('Headers')
-    expect(tMaybe('preset.Something new', 'Something new')).toBe('Something new')
+    expect(tMaybe('theme.lavender', 'x')).toBe('Lavender')
+    expect(tMaybe('theme.something new', 'Something new')).toBe('Something new')
   })
 })

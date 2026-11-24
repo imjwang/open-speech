@@ -9,8 +9,8 @@ H What changes
 ¶ The budget takes effect in January.
 
 --- removed (5)
-citations skip blk_1: [3]
-parentheses skip blk_1: (about $5 million in total)
-citations skip blk_2: (Diaz, 2021)
-urls skip blk_5: https://example-news.com/budget-table
-captions drop_block blk_7: Figure 2: Council members during the vote on Tuesday.
+Don't read citations skip blk_1: [3]
+Don't read parentheses skip blk_1: (about $5 million in total)
+Don't read citations skip blk_2: (Diaz, 2021)
+Don't read URLs skip blk_5: https://example-news.com/budget-table
+Don't read captions drop_block blk_7: Figure 2: Council members during the vote on Tuesday.

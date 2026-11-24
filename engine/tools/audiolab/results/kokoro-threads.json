@@ -1,0 +1,100 @@
+{
+  "rows": [
+    {
+      "intra_op": 1,
+      "concurrent": 1,
+      "rtf": 0.1967,
+      "per_sentence_p50_ms": 881.1,
+      "probe_p99_ms": 4.95,
+      "probe_max_ms": 5.0
+    },
+    {
+      "intra_op": 1,
+      "concurrent": 2,
+      "rtf": 0.2046,
+      "per_sentence_p50_ms": 1789.7,
+      "probe_p99_ms": 4.94,
+      "probe_max_ms": 7.2
+    },
+    {
+      "intra_op": 2,
+      "concurrent": 1,
+      "rtf": 0.1251,
+      "per_sentence_p50_ms": 554.7,
+      "probe_p99_ms": 4.92,
+      "probe_max_ms": 5.0
+    },
+    {
+      "intra_op": 2,
+      "concurrent": 2,
+      "rtf": 0.1241,
+      "per_sentence_p50_ms": 1114.5,
+      "probe_p99_ms": 4.8,
+      "probe_max_ms": 5.1
+    },
+    {
+      "intra_op": 3,
+      "concurrent": 1,
+      "rtf": 0.0995,
+      "per_sentence_p50_ms": 447.0,
+      "probe_p99_ms": 4.91,
+      "probe_max_ms": 5.0
+    },
+    {
+      "intra_op": 3,
+      "concurrent": 2,
+      "rtf": 0.1009,
+      "per_sentence_p50_ms": 917.2,
+      "probe_p99_ms": 4.9,
+      "probe_max_ms": 5.1
+    },
+    {
+      "intra_op": 4,
+      "concurrent": 1,
+      "rtf": 0.0919,
+      "per_sentence_p50_ms": 409.7,
+      "probe_p99_ms": 4.91,
+      "probe_max_ms": 5.5
+    },
+    {
+      "intra_op": 4,
+      "concurrent": 2,
+      "rtf": 0.0936,
+      "per_sentence_p50_ms": 830.4,
+      "probe_p99_ms": 4.99,
+      "probe_max_ms": 5.1
+    },
+    {
+      "intra_op": 6,
+      "concurrent": 1,
+      "rtf": 0.0859,
+      "per_sentence_p50_ms": 391.8,
+      "probe_p99_ms": 4.9,
+      "probe_max_ms": 5.1
+    },
+    {
+      "intra_op": 6,
+      "concurrent": 2,
+      "rtf": 0.0864,
+      "per_sentence_p50_ms": 757.1,
+      "probe_p99_ms": 4.94,
+      "probe_max_ms": 5.0
+    },
+    {
+      "intra_op": "default",
+      "concurrent": 1,
+      "rtf": 0.0989,
+      "per_sentence_p50_ms": 444.6,
+      "probe_p99_ms": 4.79,
+      "probe_max_ms": 5.1
+    },
+    {
+      "intra_op": "default",
+      "concurrent": 2,
+      "rtf": 0.1002,
+      "per_sentence_p50_ms": 908.0,
+      "probe_p99_ms": 4.95,
+      "probe_max_ms": 5.0
+    }
+  ]
+}

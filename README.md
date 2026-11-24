@@ -22,8 +22,8 @@ aloud in the voice you choose, following speech rules you write in plain languag
 
 ```bash
 cd app
-pnpm install
-pnpm dist:mac        # bundles Python, the engine, the Kokoro voices and the speech recognizer
+bun install
+bun run dist:mac    # bundles Python, the engine, the Kokoro voices and the speech recognizer
                      # (the first build downloads about 750 MB of model weights)
 open release/OpenSpeech-0.1.0-arm64.dmg
 ```
@@ -38,7 +38,7 @@ downloaded from elsewhere needs **System Settings → Privacy & Security → Ope
 ### Provider keys are set before building
 
 Cloud features are part of a build or they are not. The app never asks for a key, shows one or stores
-one. Set the keys you want in the repo-root `.env` (or the environment) before `pnpm dist:mac`; the
+one. Set the keys you want in the repo-root `.env` (or the environment) before `bun run dist:mac`; the
 build copies those three values, and nothing else from `.env`, into the app.
 
 | Key at build time | Adds |
@@ -47,8 +47,8 @@ build copies those three values, and nothing else from `.env`, into the app.
 | `OPENAI_API_KEY` or `GEMINI_API_KEY` | Cloud voices, and cloud speech-to-text as a fallback |
 
 With no keys, everything else works offline: talking to the bar, reading PDFs, web pages, DOCX, text
-and the clipboard, queues of several items, presets, pronunciations, the rules editor, voices, speed,
-navigation, themes and spending. `OPEN_SPEECH_BUNDLE_KEYS=0 pnpm dist:mac` builds without keys even
+and the clipboard, queues of several items, the reading instructions, pronunciations, the rules editor, voices, speed,
+navigation, themes and spending. `OPEN_SPEECH_BUNDLE_KEYS=0 bun run dist:mac` builds without keys even
 when `.env` has them, and `OPEN_SPEECH_BUNDLE_STT=0` leaves out the speech model (about 640 MB; the app
 then offers to download it).
 
@@ -65,9 +65,9 @@ uv run pytest                      # 853 tests, no network, no sound
 uv run open-speech models install parakeet-tdt-0.6b-v3-int8   # speech recognition for development (642 MB)
 uv run open-speech read ../some-paper.pdf
 
-cd ../app && pnpm install
-pnpm test && pnpm typecheck        # 259 tests
-pnpm dev                           # Electron; starts the engine with `uv run`
+cd ../app && bun install
+bun run test && bun run typecheck  # 259 tests
+bun run dev                        # Electron; starts the engine with `uv run`
 ```
 
 `OPEN_SPEECH_FIXTURE_PROVIDERS=1` swaps in deterministic offline providers (tone voices, scripted
@@ -79,7 +79,9 @@ or the speakers.
 ## Coming from Speechify?
 
 See the [switcher guide](docs/01-speechify-analysis.md#switcher-guide-goes-into-the-readme). The same
-auto-skip names (Headers, Footers, Footnotes, Citations, …) and the same Classic / AI Enhanced modes are here.
+auto-skips (headers, footers, footnotes, citations, …) are lines in one editable prompt, the reading
+instructions (`rules/SPEECH.md`), which Claude follows on every document. Ask the assistant to change it
+("stop reading captions") or edit it yourself.
 
 ## License
 

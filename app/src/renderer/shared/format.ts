@@ -1,4 +1,8 @@
 /** Small formatting helpers. Money is always shown as an estimate (FR-ASST-6). */
+// This month's spending on the spend chip and in the tray ("Free", "<$0.01", "$0.12", "$123"): shared with
+// the main process, so it lives in src/shared.
+export { formatSpend, spendLabel, spendRing } from '@shared/spend'
+
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return ''
   const s = Math.round(seconds)

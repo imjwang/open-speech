@@ -1,4 +1,4 @@
-import { AudioLines, ClipboardList, History, ListChecks, Paperclip, SlidersHorizontal, Wallet } from 'lucide-react'
+import { AudioLines, ClipboardList, History, ListChecks, Paperclip, SlidersHorizontal } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { IconButton } from '@/components/ui/icon-button'
@@ -14,8 +14,8 @@ export interface ToolbarHandlers {
 
 /**
  * Everything the bar can do without a command, as icons: attach, read the clipboard, recent documents,
- * voices, rules, spending, settings. Each has a name on hover and for screen readers; all of them can also
- * be asked for by voice.
+ * voices, rules, settings; and at the end (`trailing`), this month's spending. Each has a name on hover and
+ * for screen readers; all of them can also be asked for by voice.
  */
 export function Toolbar({ handlers, trailing }: { handlers: ToolbarHandlers; trailing?: ReactNode }) {
   const t = useT()
@@ -37,13 +37,10 @@ export function Toolbar({ handlers, trailing }: { handlers: ToolbarHandlers; tra
       <IconButton label={t('tool.rules')} onClick={handlers.rules} tabIndex={-1}>
         <ListChecks />
       </IconButton>
-      <IconButton label={t('tool.usage')} onClick={() => handlers.show('usage')} tabIndex={-1}>
-        <Wallet />
-      </IconButton>
       <IconButton label={t('tool.settings')} onClick={() => handlers.show('settings')} tabIndex={-1}>
         <SlidersHorizontal />
       </IconButton>
-      <span className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">{trailing}</span>
+      <span className="ml-auto flex items-center gap-2">{trailing}</span>
     </div>
   )
 }

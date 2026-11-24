@@ -2,6 +2,9 @@
  * What every window needs to know about the user and the build: settings, capabilities, language, theme.
  * The engine owns all of it; this store mirrors it and applies theme and language to the document the moment
  * they change, whoever changed them (a voice command, the settings card, a hand edit of settings.toml).
+ *
+ * Until the engine answers, the theme is the one the main process remembered (`theme=` in the page URL), applied
+ * before the first paint, so a window never flashes the Mac's appearance before switching to the user's choice.
  */
 import { create } from 'zustand'
 
@@ -20,8 +23,14 @@ export interface Prefs {
 
 export const usePrefs = create<Prefs>(() => ({ settings: null, capabilities: null, language: 'en', theme: 'lavender' }))
 
+/** The theme preference the page was opened with (`?theme=`), or "system". */
+export function initialThemePreference(search: string = typeof window === 'undefined' ? '' : window.location.search): ThemePreference {
+  const value = new URLSearchParams(search).get('theme')
+  return value === 'lavender' || value === 'ember' || value === 'system' ? value : 'system'
+}
+
 function apply(settings: UserSettings | null, language: string | null | undefined): void {
-  const pref = (settings?.appearance?.theme ?? 'system') as ThemePreference
+  const pref = (settings?.appearance?.theme ?? initialThemePreference()) as ThemePreference
   const theme = applyTheme(pref)
   const root = document.documentElement
   root.classList.toggle('high-contrast', !!settings?.reader?.high_contrast)

@@ -1,0 +1,180 @@
+{
+  "switch_interval_s": 0.005,
+  "kokoro_session": "engine default",
+  "probe_period_ms": 10.0,
+  "mode": "callback",
+  "renderer": "engine at 48000 Hz",
+  "scenarios": {
+    "idle": {
+      "calls": 9001.0,
+      "misses": 1.0,
+      "p50_ms": 2.0375155727379024,
+      "p99_ms": 2.6003309758380055,
+      "p999_ms": 4.6814172528686635,
+      "max_ms": 10.859769594389945,
+      "load_jobs": 0,
+      "seconds": 90.0,
+      "render": {
+        "uptime_s": 90.5,
+        "device": null,
+        "rate": 48000,
+        "latency_ms": 0.0,
+        "mode": "",
+        "resampler": "soxr VHQ",
+        "callbacks": 9001,
+        "audio_s": 90.01,
+        "output_underflows": 0,
+        "output_overflows": 0,
+        "priming_output": 0,
+        "render_starvations": 0,
+        "synthesis_waits": 0,
+        "stream_starvations": 0,
+        "ring_low_water_ms": 300.0,
+        "max_pull_ms": 2.716,
+        "mean_pull_ms": 0.0657,
+        "device_reopens": 0
+      },
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.00011109876680368848,
+          "misses_per_min": 0.667,
+          "count_over": 1
+        },
+        "20ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "30ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "40ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    },
+    "qwen-inproc": {
+      "calls": 9001.0,
+      "misses": 3.0,
+      "p50_ms": 2.014487748965621,
+      "p99_ms": 3.715378639753908,
+      "p999_ms": 7.302128185984959,
+      "max_ms": 29.68696062453091,
+      "load_jobs": 310,
+      "seconds": 90.0,
+      "render": {
+        "uptime_s": 92.1,
+        "device": null,
+        "rate": 48000,
+        "latency_ms": 0.0,
+        "mode": "",
+        "resampler": "soxr VHQ",
+        "callbacks": 9001,
+        "audio_s": 90.01,
+        "output_underflows": 0,
+        "output_overflows": 0,
+        "priming_output": 0,
+        "render_starvations": 0,
+        "synthesis_waits": 0,
+        "stream_starvations": 0,
+        "ring_low_water_ms": 290.8,
+        "max_pull_ms": 8.456,
+        "mean_pull_ms": 0.0333,
+        "device_reopens": 0
+      },
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.00033329630041106545,
+          "misses_per_min": 2.0,
+          "count_over": 3
+        },
+        "20ms": {
+          "p_late": 0.00011109876680368848,
+          "misses_per_min": 0.333,
+          "count_over": 1
+        },
+        "30ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "40ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    },
+    "qwen-worker": {
+      "calls": 9001.0,
+      "misses": 0.0,
+      "p50_ms": 2.027427719440311,
+      "p99_ms": 2.587473951280117,
+      "p999_ms": 5.061685573310455,
+      "max_ms": 8.623075438663363,
+      "load_jobs": 259,
+      "seconds": 90.0,
+      "render": {
+        "uptime_s": 90.9,
+        "device": null,
+        "rate": 48000,
+        "latency_ms": 0.0,
+        "mode": "",
+        "resampler": "soxr VHQ",
+        "callbacks": 9001,
+        "audio_s": 90.01,
+        "output_underflows": 0,
+        "output_overflows": 0,
+        "priming_output": 0,
+        "render_starvations": 0,
+        "synthesis_waits": 0,
+        "stream_starvations": 0,
+        "ring_low_water_ms": 300.0,
+        "max_pull_ms": 2.415,
+        "mean_pull_ms": 0.0426,
+        "device_reopens": 0
+      },
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "20ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "30ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "40ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    }
+  }
+}

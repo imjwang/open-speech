@@ -38,7 +38,7 @@ for it out loud: "How much have I spent this month?"
 | Persona | Needs | What Open Speech gives them |
 |---|---|---|
 | **Maya**, dyslexic/ADHD student | Listen to readings at 1.5–2x without fighting the layout; never be forced to read settings | Voice-operated everything; academic-paper rules; summaries when a section is dense |
-| **Dev**, knowledge worker | Papers, docs and articles at 2.5–3x; skip boilerplate | Rules per site and document type; AI Enhanced skipping; clipboard hotkey |
+| **Dev**, knowledge worker | Papers, docs and articles at 2.5–3x; skip boilerplate | Rules per site and document type; AI cleanup driven by the reading instructions; clipboard hotkey |
 | **Ruth**, low-vision user | Operate the whole app without seeing it | Command bar opens listening; spoken replies; VoiceOver-labelled UI; image descriptions |
 | **Lucía**, bilingual reader | Read and give commands in Spanish and English without switching tools | Spanish interface, commands and replies; each document read with a voice for its language |
 | **Sam**, developer / tinkerer | Script it, self-host voices, extend it | REST/WS API, CLI, MCP, rule and skill files, local models, provider adapters |
@@ -54,13 +54,15 @@ for it out loud: "How much have I spent this month?"
 - Usage and cost ledger with budgets and pre-flight estimates, answerable by voice.
 - Content-addressed caching of extraction, speech plans and audio.
 - A local engine API (REST + WebSocket) and CLI, with a thin Electron shell on top.
+- Your own voices, on this Mac: clone a voice from a passage you read aloud (or from an audio file you have
+  permission to use), or make one from a description; each is checked, heard and kept only if you say so (`08` § Voice
+  cloning). Clones never leave the Mac.
 
 ## Non-goals (MVP)
 
 - Accounts, payments, cloud library, cross-device sync, mobile apps, browser extension. (A hosted deployment that holds the provider keys and bills for use is planned as the replacement for keys set at build time; it is not built.)
 - Entering, storing or showing provider keys in the app. Keys are build configuration (`08` § Keys).
 - Podcasts, meeting notes, dubbing, audiobook store.
-- Voice cloning or custom/self voices. Preset voices only.
 - Video sources (deferred).
 - Windows, Linux and Intel Mac builds. macOS on Apple Silicon is the only target until verification is complete.
 - Rich document editing or annotation.
@@ -68,7 +70,7 @@ for it out loud: "How much have I spent this month?"
 
 ## Success metrics
 
-- Open a 300-page PDF, start listening in ≤ 3 s, and hear **zero** headers, footers or page numbers with the Classic presets.
+- Open a 300-page PDF, start listening in ≤ 3 s, and hear **zero** headers, footers or page numbers with the default reading instructions.
 - A switching Speechify user finds every "day-one" feature (see `01`) or a deliberate replacement within 10 minutes.
 - A user completes onboarding and changes voice, speed, a rule and the budget **without looking at the screen**.
 - The cost for any document is visible before it is spent. Replays cost $0.
@@ -93,6 +95,6 @@ for it out loud: "How much have I spent this month?"
 | **Speech plan / script** | The ordered **utterances** actually spoken, each anchored back to the source |
 | **Span op** | A Claude-proposed edit on a block (skip or replace a quoted span); never a whole-text rewrite |
 | **Fidelity** | How precisely an utterance maps to the source: `exact` (word), `block`, `section`, `media` (time range) |
-| **Classic / AI Enhanced** | Rule modes: deterministic filters only (free, instant) vs. filters plus Claude span ops |
+| **Reading instructions** | `SPEECH.md`: the one prompt Claude follows to clean up what is read. Its skip lines also compile to free deterministic filters |
 | **Transport** | The engine's single playback session (queue, position, speed, voice) that every surface controls |
 | **Ledger** | Local record of every billable call with units and estimated cost |

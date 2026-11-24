@@ -3,7 +3,8 @@
     cd engine && uv run python tests/fixtures/providers/make_fixtures.py
 
 Shapes follow each vendor's documented wire format (OpenAI audio.speech Ogg/Opus bytes and transcription
-JSON; Gemini Interactions SSE and unary JSON; Anthropic Messages JSON and SSE). No real API output is
+JSON; Gemini Interactions SSE and unary JSON; Anthropic Messages JSON and SSE; Google Cloud Text-to-Speech v1
+REST JSON). No real API output is
 stored here: there were no keys and the APIs were unreachable when these were written.
 """
 
@@ -29,7 +30,76 @@ def sse(events: list[dict], *, key: str) -> str:
     return "".join(f"event: {e[key]}\ndata: {json.dumps(e)}\n\n" for e in events)
 
 
+CHIRP_STARS = [
+    "Achernar", "Achird", "Algenib", "Algieba", "Alnilam", "Aoede", "Autonoe", "Callirrhoe", "Charon", "Despina",
+    "Enceladus", "Erinome", "Fenrir", "Gacrux", "Iapetus", "Kore", "Laomedeia", "Leda", "Orus", "Puck",
+    "Pulcherrima", "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar", "Sulafat", "Umbriel", "Vindemiatrix",
+    "Zephyr", "Zubenelgenubi",
+]
+CHIRP_MALE = {"Achird", "Algenib", "Algieba", "Alnilam", "Charon", "Enceladus", "Fenrir", "Iapetus", "Orus", "Puck",
+              "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar", "Umbriel", "Zubenelgenubi"}
+
+
+def google_fixtures() -> None:
+    """Google Cloud Text-to-Speech v1 (REST): text:synthesize, voices.list and the 403 a key gets when Cloud
+    Text-to-Speech isn't among its allowed APIs (synthesis with this build's key, 2026-11-22: status
+    PERMISSION_DENIED, ErrorInfo reason API_KEY_SERVICE_BLOCKED; project number zeroed). The same key's
+    voices.list answered PERMISSION_DENIED with reason ACCESS_DENIED ("Permission denied on the service.");
+    tests/unit/runtime/test_google_tts.py covers that shape inline."""
+    # LINEAR16 at 24 kHz comes back as a WAV file (44-byte RIFF header). Two tones with 300 ms of silence between.
+    sr = 24000
+    pcm = np.concatenate([tone(220.0, 0.4, sr), np.zeros(int(0.3 * sr), np.float32), tone(330.0, 0.4, sr)])
+    buf = io.BytesIO()
+    sf.write(buf, pcm, sr, format="WAV", subtype="PCM_16")
+    (HERE / "google_tts_synthesize.json").write_text(
+        json.dumps({"audioContent": base64.b64encode(buf.getvalue()).decode()}, indent=2) + "\n"
+    )
+
+    voices = []
+    for locale in ("en-US", "en-GB", "es-US", "es-ES"):
+        for name in (f"{locale}-Neural2-A", f"{locale}-Chirp-HD-D", f"{locale}-Standard-B"):
+            voices.append(
+                {"languageCodes": [locale], "name": name, "ssmlGender": "MALE", "naturalSampleRateHertz": 24000}
+            )
+        for star in CHIRP_STARS:
+            if locale == "es-ES" and star == "Sadachbia":
+                continue  # one catalog voice the API doesn't list: it must not be offered
+            voices.append({
+                "languageCodes": [locale],
+                "name": f"{locale}-Chirp3-HD-{star}",
+                "ssmlGender": "MALE" if star in CHIRP_MALE else "FEMALE",
+                "naturalSampleRateHertz": 24000,
+            })
+    (HERE / "google_tts_voices.json").write_text(json.dumps({"voices": voices}, indent=2) + "\n")
+
+    method = "google.cloud.texttospeech.v1.TextToSpeech.SynthesizeSpeech"
+    message = f"Requests to this API texttospeech.googleapis.com method {method} are blocked."
+    blocked = {
+        "error": {
+            "code": 403,
+            "message": message,
+            "status": "PERMISSION_DENIED",
+            "details": [
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": "API_KEY_SERVICE_BLOCKED",
+                    "domain": "googleapis.com",
+                    "metadata": {
+                        "consumer": "projects/000000000000",
+                        "service": "texttospeech.googleapis.com",
+                        "methodName": method,
+                        "apiName": "texttospeech.googleapis.com",
+                    },
+                },
+                {"@type": "type.googleapis.com/google.rpc.LocalizedMessage", "locale": "en-US", "message": message},
+            ],
+        }
+    }
+    (HERE / "google_tts_403_service_blocked.json").write_text(json.dumps(blocked, indent=2) + "\n")
+
+
 def main() -> None:
+    google_fixtures()
     # OpenAI audio.speech, response_format="opus": Ogg/Opus at 48 kHz.
     buf = io.BytesIO()
     sf.write(buf, tone(330.0, 0.8, 48000), 48000, format="OGG", subtype="OPUS")

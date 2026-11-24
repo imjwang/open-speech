@@ -1,0 +1,336 @@
+{
+  "switch_interval_s": 0.005,
+  "kokoro_session": "legacy (onnxruntime defaults)",
+  "probe_period_ms": 10,
+  "scenarios": {
+    "idle": {
+      "calls": 6001.0,
+      "misses": 0.0,
+      "p50_ms": 2.0447163260541856,
+      "p99_ms": 2.5601935922168195,
+      "p999_ms": 2.7797004440800133,
+      "max_ms": 7.362984819337726,
+      "load_jobs": 0,
+      "seconds": 60.0,
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "20ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "30ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "40ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "80ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "100ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    },
+    "kokoro1": {
+      "calls": 6001.0,
+      "misses": 1.0,
+      "p50_ms": 2.0113654900342226,
+      "p99_ms": 2.5630377931520343,
+      "p999_ms": 3.244380990509036,
+      "max_ms": 12.895498715806752,
+      "load_jobs": 137,
+      "seconds": 60.0,
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.00016663889351774705,
+          "misses_per_min": 1.0,
+          "count_over": 1
+        },
+        "20ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "30ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "40ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "80ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "100ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    },
+    "kokoro2": {
+      "calls": 6000.0,
+      "misses": 0.0,
+      "p50_ms": 2.368371526245028,
+      "p99_ms": 5.02181743271649,
+      "p999_ms": 7.422193446138753,
+      "max_ms": 9.079676761757582,
+      "load_jobs": 184,
+      "seconds": 60.0,
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "20ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "30ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "40ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "80ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "100ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    },
+    "g2p": {
+      "calls": 6001.0,
+      "misses": 333.0,
+      "p50_ms": 4.262791597284377,
+      "p99_ms": 19.576896738726646,
+      "p999_ms": 31.60384309012488,
+      "max_ms": 42.79369430150837,
+      "load_jobs": 146429,
+      "seconds": 60.0,
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.05549075154140976,
+          "misses_per_min": 332.945,
+          "count_over": 333
+        },
+        "20ms": {
+          "p_late": 0.009331778036993834,
+          "misses_per_min": 27.995,
+          "count_over": 56
+        },
+        "30ms": {
+          "p_late": 0.0019996667222129645,
+          "misses_per_min": 3.999,
+          "count_over": 12
+        },
+        "40ms": {
+          "p_late": 0.00016663889351774705,
+          "misses_per_min": 0.25,
+          "count_over": 1
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "80ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "100ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    },
+    "opus": {
+      "calls": 6001.0,
+      "misses": 2.0,
+      "p50_ms": 2.0068196463398635,
+      "p99_ms": 2.494060609024018,
+      "p999_ms": 2.9499354423024524,
+      "max_ms": 24.77701538009569,
+      "load_jobs": 120,
+      "seconds": 60.0,
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.0003332777870354941,
+          "misses_per_min": 2.0,
+          "count_over": 2
+        },
+        "20ms": {
+          "p_late": 0.00016663889351774705,
+          "misses_per_min": 0.5,
+          "count_over": 1
+        },
+        "30ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "40ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "80ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "100ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    },
+    "parakeet": {
+      "calls": 6000.0,
+      "misses": 2.0,
+      "p50_ms": 2.016646380070597,
+      "p99_ms": 2.658822478260853,
+      "p999_ms": 5.666782935092701,
+      "max_ms": 19.795715692453086,
+      "load_jobs": 188,
+      "seconds": 60.0,
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.0003333333333333333,
+          "misses_per_min": 2.0,
+          "count_over": 2
+        },
+        "20ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "30ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "40ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "80ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "100ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    },
+    "mixed": {
+      "calls": 6002.0,
+      "misses": 866.0,
+      "p50_ms": 6.063160457415506,
+      "p99_ms": 28.654400409432103,
+      "p999_ms": 46.95796453353428,
+      "max_ms": 54.43188699427992,
+      "load_jobs": 56966,
+      "seconds": 60.0,
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.14428523825391537,
+          "misses_per_min": 865.711,
+          "count_over": 866
+        },
+        "20ms": {
+          "p_late": 0.030989670109963344,
+          "misses_per_min": 92.969,
+          "count_over": 186
+        },
+        "30ms": {
+          "p_late": 0.008997000999666778,
+          "misses_per_min": 17.994,
+          "count_over": 54
+        },
+        "40ms": {
+          "p_late": 0.002499166944351883,
+          "misses_per_min": 3.749,
+          "count_over": 15
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "80ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "100ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    }
+  }
+}

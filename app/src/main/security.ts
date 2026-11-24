@@ -43,13 +43,17 @@ function originOf(url: string): string | null {
   }
 }
 
-async function ensureMacMicrophoneAccess(): Promise<boolean> {
+type BlurGuard = <T>(fn: () => Promise<T>) => Promise<T>
+
+async function ensureMacMicrophoneAccess(withBlurSuppressed: BlurGuard): Promise<boolean> {
   if (process.platform !== 'darwin') return true
   if (process.env.OPEN_SPEECH_FAKE_MIC === '1') return true // UI automation: Chromium's fake capture device
   const status = systemPreferences.getMediaAccessStatus('microphone')
   if (status === 'granted') return true
   if (status === 'denied' || status === 'restricted') return false
-  return systemPreferences.askForMediaAccess('microphone')
+  // macOS's own prompt takes focus from the bar, which hides on blur: on the first run the bar would vanish
+  // the moment it asked to listen. It stays up while the prompt is answered.
+  return withBlurSuppressed(() => systemPreferences.askForMediaAccess('microphone'))
 }
 
 export interface SecurityOptions {
@@ -58,6 +62,8 @@ export interface SecurityOptions {
   micAllowed: (contents: WebContents | null) => boolean
   /** Web-reader contents may navigate anywhere http(s) inside their own view. */
   isWebView: (contents: WebContents) => boolean
+  /** Keep the bar up while a system prompt has focus (the microphone permission). */
+  withBlurSuppressed?: BlurGuard
 }
 
 export function installSecurity(opts: SecurityOptions): Session {
@@ -68,7 +74,7 @@ export function installSecurity(opts: SecurityOptions): Session {
     const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes ?? []) : []
     const audioOnly = mediaTypes.length > 0 && mediaTypes.every((t) => t === 'audio')
     if (permission === 'media' && audioOnly && opts.micAllowed(contents)) {
-      void ensureMacMicrophoneAccess().then(callback, () => callback(false))
+      void ensureMacMicrophoneAccess(opts.withBlurSuppressed ?? ((fn) => fn())).then(callback, () => callback(false))
       return
     }
     callback(false)

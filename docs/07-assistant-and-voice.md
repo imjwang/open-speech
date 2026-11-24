@@ -17,7 +17,8 @@ hotkey ─▶ bar opens listening ─▶ mic PCM over WS ─▶ on-device STT (l
        ─▶ fast-path intent parser ──match──▶ execute locally (≤ 100 ms, $0)
                                   └─no match─▶ Claude agent (tools) ─▶ reply text (streamed)
                                                └─ no Claude in this build ─▶ one plain sentence
-       ─▶ sentence-chunked TTS in the assistant voice ─▶ reading ducks ─▶ reply plays ─▶ reading resumes
+       ─▶ sentence-chunked TTS in the assistant voice ─▶ reply plays (mic closed) ─▶ bar listens for a follow-up
+       ─▶ nothing more said ─▶ idle: mic released, reading resumes
 ```
 
 ## Fast path (no LLM)
@@ -37,12 +38,14 @@ an English one.
 | "next document" · "clear the queue" · "show the queue" · *siguiente documento · vacía la cola* | the reading queue |
 | "where am I" · "how much is left" · *¿dónde estoy?* | `where_am_i` |
 | "say X as Y" · "forget how to say X" · *di X como Y* | lexicon entry added or removed (confirmation card) |
-| "skip headers/footers/footnotes/…" · "AI enhanced on/off" · *deja de leer las tablas* | preset toggle (confirmation card) |
+| "skip footnotes on this site" · "skip citations in PDFs" · *deja de leer las tablas en este sitio* | scoped rule proposal with a speech diff (confirmation card). Unscoped "skip footnotes" goes to the agent, which edits the reading instructions |
 | "set my budget to $20" · *presupuesto de 15* | budget (confirmation card) |
 | "dark theme" · "use the lavender theme" · "match the system" · *tema oscuro · tema claro* | theme, at once |
 | "speak Spanish" · "Spanish" · "in English" · *habla en inglés · español* | interface language, at once |
 | "bigger text" · "smaller text" · *letra más grande* | reader text size, at once |
-| "show voices" · "voices" · "settings" · "show rules" · "recents" · *muestra las voces · ajustes* | a card in the bar |
+| "show voices" · "voices" · "settings" · "show rules" · "recents" · *muestra las voces · ajustes* | a card in the bar (voices: a short list, see Reply speech) |
+| "more voices" · "all Google voices" · "Kokoro voices" · *más voces · todas las voces de Google* | the rest of the voices |
+| a name on the voices card on screen ("Kore", "play Aoede", *escuchar Dora*) | hear that voice's sample |
 | "open the rules" · "edit my rules" · "open my pronunciations" · *abre las reglas* | the rules editor |
 | "how much have I spent (today/this week/this month)" · *cuánto he gastado* | `get_usage` |
 | "yes" · "no" · *sí · vale · cancela* (only while a card is waiting) | confirm or cancel the card |
@@ -60,16 +63,18 @@ text is always taken as written.
 
 | Setting | Value |
 |---|---|
-| Model | `claude-sonnet-5-5` (user-changeable in settings) |
-| Thinking / effort | Adaptive thinking, `effort: "low"` (settings offer low / medium / auto, where auto omits effort) |
+| Model | `claude-haiku-5-5` (user-changeable in settings: Sonnet 5.5, Opus 5.5 and Fable 5.2 are offered too). Profiles still on the old default, Sonnet 5.5, move to Haiku once (settings migration `2026-11-llm-haiku`); a later switch back sticks |
+| Thinking / effort | Adaptive thinking, `effort: "low"` (settings offer low / medium / auto, where auto omits effort: medium on Haiku 5.5). `max_tokens` 4096, since thinking counts toward it |
+| Client | One `AsyncAnthropic` for the agent and AI cleanup, with a keep-alive pool (60 s), so a turn reuses the previous turn's TLS connection. When the bar opens after more than 60 s without a call, a free Models API call re-opens it in the background while the user speaks |
+| Reply text | The text of every tool-loop iteration is the reply ("Setting it now." + "Reading at 1.8x."): what streams, what is shown and what is spoken are the same |
 | Harness | Anthropic Python SDK Tool Runner (`client.beta.messages.tool_runner` with `@beta_tool` functions) |
-| Streaming | On. `eager_input_streaming: true` on tools, with input validated before execution |
+| Streaming | On. Streamed turns set `eager_input_streaming: true` on every tool (`beta_async_tool(fn, eager_input_streaming=True)`); the typed tool functions validate the parsed input before running, so malformed input never acts. Input the SDK can't parse at all raises `ValueError` from the runner: the turn is asked again once, only if nothing has been said or run yet. Text deltas feed the reply's voice as they arrive |
 | Caching | System prompt + tool definitions form a stable cached prefix. Per-turn context (current document, position, selection) goes after the cache breakpoint |
-| Refusals | Server-side fallback (`betas: ["server-side-fallback-2026-07-01"]`, `fallbacks: "default"`); always check `stop_reason` |
-| Tool choice | `auto` only (forced `tool_choice` is rejected on Sonnet 5.5). Steer from the prompt |
+| Refusals | Always check `stop_reason`. Server-side fallback (`betas: ["server-side-fallback-2026-07-01"]`, `fallbacks: "default"`) only on models that have one (`server_fallback` in the catalog: Sonnet 5.5, Opus 5.5, Fable 5.2). Haiku 5.5 has none: a declined turn ends with `refusal` and the reply says so |
+| Tool choice | `auto` only (forced `tool_choice` is rejected on Sonnet 5.5 and Opus 5.5). Steer from the prompt |
 | Sampling params | None (`temperature` etc. are rejected) |
-| History | Per conversation (one id for everything said while the bar stays open), kept in memory and persisted for replay; append-only (no history editing). It includes what was settled without Claude ("yes" → "Saved.", "pause"), so the model's picture of the conversation has no holes |
-| Turn context | Every turn starts with a `<turn_context>`: the language to reply in, what is playing, the reading queue, the attachments (already imported, with their `document_id`s) and any that failed to open. `<user_preferences>` carries `SPEECH.md` |
+| History | None, for now: every turn is sent on its own (system prompt, tools, turn context, what the user said). Nothing said earlier is kept for the model. What a turn needs comes from the turn context and the tools (what is playing, pending confirmations, the rules) |
+| Turn context | Every turn starts with a `<turn_context>`: the language to reply in, what is playing, the reading queue, the attachments (already imported, with their `document_id`s) and any that failed to open. `<user_preferences>` carries the reading instructions (`SPEECH.md`) |
 
 ## Tool catalog
 
@@ -89,22 +94,21 @@ Every setting in the settings schema must be reachable through a tool (FR-ASST-3
 | `list_rules` / `read_rule` | no | The rule files with scope, tier and on/off; one file in full (a rule, `preferences` or `lexicon`) |
 | `propose_rule` | **card** | A new rule from plain words: compiler + speech diff on the current document. `site` scopes it to a domain the user named ("on Wikipedia") whatever is open; the result says where the rule applies |
 | `update_rule` / `delete_rule` | **yes** | Turn a rule on or off, reword it (the file is rewritten and re-compiled), rename it; remove it |
-| `edit_preferences` | **yes** | Add to or replace the standing preferences (`SPEECH.md`) |
-| `set_preset` / `set_mode` | **yes** | Toggle a preset; Classic / AI Enhanced for a scope |
+| `edit_prompt` | **yes** | Edit the reading instructions (`SPEECH.md`): an exact `old_text → new_text` replacement (like Claude Code's Edit), or a new line at the end of a `section` ("Leave out"). How the user changes what is read: "stop reading captions" adds "- Skip captions." |
 | `add_pronunciation` / `remove_pronunciation` | **yes** | Lexicon entry |
 | `get_usage` | no | Totals and breakdowns from the ledger, always labelled estimated |
 | `estimate_cost` | no | Estimate for a document or operation |
 | `set_budget` | **yes** | Monthly cap, warn level, hard stop |
 | `get_settings` / `update_setting` | update: no for settings that are visible at once, **yes** for the rest | Any key in `settings.toml` |
 | `list_local_models` / `install_local_model` | install: **yes** | Shows download size and RAM before confirming |
-| `show` | no | Put a card in the bar: voices, rules, usage, recents, queue, models, presets, settings |
+| `show` | no | Put a card in the bar: voices, rules, usage, recents, queue, models, settings |
 | `open_rules_editor` | no | Open the rules editor, optionally on one file |
 
 **What applies at once.** Playback, the queue, speed, a voice for this document only, and the settings
 whose effect is visible immediately and undone by saying so: `appearance.theme`, `language`,
 `reader.font_size`, `reader.line_spacing`, `reader.font`, `reader.high_contrast`, `defaults.speed`.
-**What waits on a card.** Everything that lasts: rules, presets, the cleanup mode, pronunciations,
-preferences, the default and assistant voices, budgets, local models, and every other setting.
+**What waits on a card.** Everything that lasts: rules, the reading instructions, pronunciations,
+the default and assistant voices, budgets, local models, and every other setting.
 
 **A tool that fails says so.** An ordinary failure (no such rule, a link that may not be opened, nothing
 playing) comes back to the model as `{"error": "<one sentence>", "code": …}` rather than as an exception,
@@ -137,7 +141,7 @@ Two rules keep that from being turned against the user.
 ## Without an assistant
 
 A build without Claude still does everything the fast path covers: reading, the queue, navigation, voices,
-presets, pronunciations, simple rules, themes, language, spending and the rules editor. A request the
+pronunciations, simple scoped rules, themes, language, spending and the rules editor. A request the
 grammar doesn't cover gets one sentence, in the interface language, that says what works: "I can read
 things aloud and change playback, voices, rules and settings. Open-ended requests aren't part of this
 build." It is reported as `unavailable` (feature `assistant`), shown as information rather than as a
@@ -177,9 +181,62 @@ recording said is stored beside it in the asset store, under the hash of its aud
 recognizer, recordings never leave the machine; otherwise they go only to the STT provider that
 transcribes them.
 
-**Reply speech:** the reply streams sentence by sentence into TTS with the **assistant voice** (default:
-Kokoro for speed and $0; configurable), in a voice that speaks the reply's language. Replies are written
-for the ear: short, numbers rounded sensibly, no markdown or lists unless the user is reading.
+**Reply speech** (`service/reply_speech.py`, `service/speakable.py`). Every reply is heard, whether the user
+spoke, typed or pressed a button, errors included: in a conversation run by voice the screen isn't watched,
+and reading is paused while the bar talks, so silence would be no feedback at all. The one exception is below.
+
+- **One voice at a time.** A turn opens its reply stream before anything is decided, in the **assistant voice**
+  (`defaults.assistant_voice`, `auto` = Chirp Zephyr while free, else the local voice) for the reply language.
+  A new stream supersedes the old one (it fades out, `ended {reason: superseded}`); `speech.stop` /
+  `POST /assistant/speech/stop` stops it and drops its pending synthesis.
+- **Sentence by sentence.** Claude's text deltas go into the stream as they arrive; a fast-path reply goes in
+  whole. The splitter strips markdown (a link reads as its text, a bare URL as "link" / "enlace", emoji are
+  dropped, a list item or heading ends with a pause), cuts sentences with pySBD in the reply language and
+  counts a boundary only once a complete word has followed it ("Dr.", "3.5", "e.g.", "Sra.", "p. ej." hold;
+  "¿…?" and "¡…!" work). A sentence under 20 characters is merged with the next; the first waits at most
+  300 ms for that, then goes alone. A first sentence longer than 120 characters starts at its first clause of
+  40 or more (", " "; " ": " " — "); no unit is longer than 300. When the text stops arriving (a tool is
+  running) what is complete is said after 300 ms, anything else after 1 s.
+- **Ahead, in order.** Units are synthesized ahead, up to the voice provider's `max_concurrency` at once
+  (Kokoro 1, cloud 3), and handed to one transport speech stream strictly in order: fresh PCM as soon as the
+  provider returns it, else the cached audio. A unit that fails is skipped and logged; a fallback voice (free
+  characters used up, offline) carries on for the rest of the reply. A reply none of whose units could be said
+  ends with `reason: error`.
+- **Heard, then over.** `assistant.speech` *started* comes when the first sample is heard (often before
+  `assistant.done`: the first sentence plays while Claude writes the rest); *ended* after the last one plus the
+  echo tail. `assistant.done` comes as soon as the text is complete, with `speaks: true` when audio is coming
+  (then an *ended* for that turn is guaranteed, even if no unit could be said). The whole reply is saved as one
+  recording (`kind: reply`, kept like other recordings); its id arrives with *ended* and is stored on the turn,
+  and "say that again" plays it again.
+- **Samples in a reply.** `preview_voice` during a turn plays the sample inside the reply, after the words
+  written so far; a preview or replay from a card button replaces whatever is being said.
+- **Prompts and notices** use the same path: `POST /assistant/say` (kind `say`, no recording) and the
+  transport's spoken notices ("This month's free Google voice is used up; reading with the local voice."):
+  once per session per reason, as part of the reply being said or on their own after it.
+
+**What is not said, and why.** When a command's result *is* reading audio and reading will resume when the
+conversation ends, the reading is the answer: its words are shown but not spoken, and `assistant.done`
+carries `audible_effect: true` so the bar ends the conversation instead of listening for a follow-up.
+
+| Silent (when reading will resume) | Always said |
+|---|---|
+| play / resume · read the attachments, the clipboard, a link or a file · next document · skip / back · speed (set, faster, slower) · go to page · a voice for this document · an agent turn that started or changed reading (said briefly, then `audible_effect`) | pause · stop · cancel · clear the queue · open the rules · text size · theme · language · cards and questions · where am I · usage · errors · everything Claude answers · button turns (their one-line summary) |
+
+"Faster" with nothing playing is said ("1.25 times speed."): no reading will resume, so words are the only
+feedback. Empty answers get words: "Skipped.", "Nothing to play." In a conversation reading is already
+paused, which is why pause and stop are said.
+
+**Voices card.** Not every voice (Chirp alone has 120): the current voice, six Google voices in the interface
+language's locale (Zephyr, Kore, Aoede, Charon, Puck, Achernar), the best local voices for the language
+(Kokoro: Heart, Bella, Emma, Michael, George; Dora and Alex in Spanish; any other local provider's first four,
+e.g. Qwen presets), the user's clones, and a "More voices" row (`data.command`: "more voices") that lists the
+rest. Spoken: "You're using Zephyr. Here are 15 more; say a name to hear one." `list_voices` gives Claude the
+same short list unless it asks for `all` or a provider.
+
+**"auto" right after startup.** The first Google availability check answers ~0.3 s after the engine starts.
+A read, reply or preview with `auto` in that window waits for it (at most 1.5 s), so a key the API refuses
+means the local voice from the first word, silently, instead of a failed Chirp request and a spoken "isn't
+available"; and the voice never switches under the listener mid-document.
 
 **Languages.** The `language` setting (`auto`, `en`, `es`) decides what the interface shows, the language
 replies are spoken in, and which grammar is tried first. Numbers, money and durations are said the way
@@ -187,18 +244,71 @@ each language says them ("one dollar and twenty cents" · "1 dólar con 20 centa
 no hint. Documents keep their own language: an English paper is read by an English voice while the
 interface speaks Spanish (`08` § Voices and languages).
 
-**Ducking:** reading pauses when the bar starts listening and while a reply is spoken, and resumes after
-the reply, unless the command changed playback.
+**Listening from the first instant.** The bar opens the microphone the moment it opens unless speech input is
+*known* to be unavailable (the engine said so, or the shell remembers it said so: `shell-state.json`
+`canListen`; with nothing saved, yes in packaged builds, which bundle the recognizer). The capture graph
+(AudioContext + worklet) is built when the page loads, so an open only waits for `getUserMedia` (measured
+first audio 15–45 ms after an open, warm). Audio is kept, up to 30 s, until the engine has accepted
+`mic.start`, then sent in order; the local VAD runs meanwhile, and an utterance that ended before the engine
+connected is sent with `mic.stop {submit: true}` the moment it does. The stream stays open for the whole
+conversation (follow-ups need no new prompt or setup) and is released when the conversation goes idle or the
+bar closes.
 
-**Barge-in (P1):** in hands-free mode, speech during a reply stops it. Our own output must not trigger it.
-With engine-side playback, Chromium's echo cancellation doesn't see the reference signal, so P1 adds
-engine-side AEC (WebRTC audio processing) or routes assistant replies through the renderer. Push-to-talk
-(P0) avoids the problem.
+**Turn-taking (half duplex).** The engine plays every reply, prompt, preview and replay through CoreAudio,
+where Chromium's echo cancellation doesn't hear it. So the bar never sends microphone audio while the engine
+speaks: `assistant.speech` *started* … *ended* (every kind), and from `assistant.done {speaks: true}` until
+that reply's *ended* (which already includes the output latency and a 150 ms echo tail,
+`voice_input.echo_tail_ms`). Its local VAD isn't fed meanwhile either.
+
+```
+listening ─(end of utterance)─▶ thinking ─(reply)─▶ speaking ─(ended)─▶ listening for a follow-up
+    ▲                                                                       │ 7 s (10 s with a card) of nothing
+    └──────────── Tab · orb · hotkey ◀──── idle (mic released, reading resumes) ◀┘
+```
+
+- **Follow-up:** after the reply has been heard (or at once, when `speaks` is false) the bar listens again,
+  from the same stream, without re-measuring the room. Typed commands and toolbar presses get the same.
+- **Idle:** if nothing is said, the conversation ends: the microphone is released, `bar.state {open: false}`,
+  the orb goes quiet. No note.
+- **A turn whose effect is reading audio** (reading resumes: `playback.state` goes back to playing during the
+  turn, or `assistant.done.audible_effect`) ends the conversation instead of listening again. So does reading
+  starting while the bar listens, and any transport button.
+- **Confirmations** use the same loop: the question is spoken, and the bar listens for "yes" / "no" only once
+  it has been heard.
+- **Guards:** if a reply announced by `speaks` never starts, the bar stops waiting after 15 s; an `ended` that
+  never comes (a lost event) after 120 s; a dropped connection ends the wait at once.
+
+**Spoken notices from the bar** go through `POST /assistant/say` in the interface language and are announced
+to screen readers: "Sorry, I didn't catch that" (an empty transcript; it listens once more, and a second miss
+ends the conversation), no answer within 20 s, a budget alert while the bar is open (after the reply, never
+over it), speech input unavailable, a microphone that can't open. The first run says once how to talk to it
+(09 § 8).
+
+**Ducking:** `bar.state {open}` means *a conversation is active* (listening, thinking, speaking, or typing a
+reply): reading pauses for it and resumes when it goes idle or the bar closes. The bar sends it before any
+command, so a "resume" isn't paused again right after; it re-sends it when the engine reconnects. An explicit
+play/resume releases the pause at once (that is how the bar knows the turn's effect is reading).
+
+**Barge-in by key (P0):** Tab, the orb or the hotkey while the engine speaks send `speech.stop {turn_id}` (a
+15 ms fade; the reply's pending synthesis is dropped) and listen at once; Esc stops it and ends the
+conversation. Listening shows immediately, but audio is sent only after that speech's `ended` (fade + echo
+tail, measured ≈ 200 ms), so the reply's last syllable never becomes the user's words. The hotkey reaches the
+bar as `BarOpenedEvent {bargeIn: true}` when the shell has heard `assistant.speech` started.
+
+**Barge-in by voice (P1):** speech during a reply stopping it needs engine-side echo cancellation (WebRTC audio
+processing) or replies routed through the renderer; until then the microphone is closed while the engine
+speaks, and keys interrupt.
 
 ## Latency target
 
 End of speech → first reply audio ≤ 2.5 s p50: STT final ≤ 0.4 s + Claude first sentence ≤ 1.2 s
 (low effort, cached prefix) + TTS first audio ≤ 0.5 s (Kokoro) or ~1.4 s (cloud).
+
+Measured 2026-11-23 (M-series Mac, Kokoro q8 from the bundled weights, `NullOutput` at real time, from the turn
+reaching the engine to its first sample heard): fast path, warm, 40 ms when the reply audio is cached and
+180–460 ms when it isn't (the first unit is ≤ ~60 characters: ~400 ms of Kokoro); first turn after start
+700 ms (model load). Agent path with Claude simulated at 80 words/s: ~610 ms from the first delta (130 ms of
+streaming the first sentence, ~440 ms of Kokoro). Fixture voice: 40 ms fast path, ~170 ms from the first delta.
 Fast-path commands: ≤ 100 ms after the final transcript.
 
 ## Writing for the ear

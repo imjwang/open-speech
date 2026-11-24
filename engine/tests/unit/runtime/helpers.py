@@ -16,7 +16,9 @@ FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "providers"
 
 def make_env(**kw: Any) -> EngineEnv:
     """EngineEnv that ignores the repo `.env` and the process environment for keys."""
-    base: dict[str, Any] = {"anthropic_api_key": None, "openai_api_key": None, "gemini_api_key": None}
+    base: dict[str, Any] = {
+        "anthropic_api_key": None, "openai_api_key": None, "gemini_api_key": None, "google_tts_api_key": None,
+    }
     base.update(kw)
     return EngineEnv(_env_file=None, **base)  # type: ignore[call-arg]
 

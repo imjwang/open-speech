@@ -1,0 +1,76 @@
+{
+  "switch_interval_s": 0.001,
+  "kokoro_session": "engine default",
+  "probe_period_ms": 10.0,
+  "mode": "callback",
+  "renderer": "engine at 48000 Hz",
+  "scenarios": {
+    "mixed": {
+      "calls": 30002.0,
+      "misses": 226.0,
+      "p50_ms": 2.6532940682955086,
+      "p99_ms": 9.10369751858519,
+      "p999_ms": 15.791708424629313,
+      "max_ms": 32.550423755310476,
+      "load_jobs": 348067,
+      "seconds": 300.0,
+      "render": {
+        "uptime_s": 302.7,
+        "device": null,
+        "rate": 48000,
+        "latency_ms": 0.0,
+        "mode": "",
+        "resampler": "soxr VHQ",
+        "callbacks": 30002,
+        "audio_s": 300.02,
+        "output_underflows": 0,
+        "output_overflows": 0,
+        "priming_output": 0,
+        "render_starvations": 0,
+        "synthesis_waits": 0,
+        "stream_starvations": 0,
+        "ring_low_water_ms": 244.2,
+        "max_pull_ms": 4.753,
+        "mean_pull_ms": 0.0496,
+        "device_reopens": 0
+      },
+      "by_latency": {
+        "10ms": {
+          "p_late": 0.007532831144590361,
+          "misses_per_min": 45.197,
+          "count_over": 226
+        },
+        "20ms": {
+          "p_late": 0.0003999733351109926,
+          "misses_per_min": 1.2,
+          "count_over": 12
+        },
+        "30ms": {
+          "p_late": 6.666222251849876e-05,
+          "misses_per_min": 0.133,
+          "count_over": 2
+        },
+        "40ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "60ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "80ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        },
+        "100ms": {
+          "p_late": 0.0,
+          "misses_per_min": 0.0,
+          "count_over": 0
+        }
+      }
+    }
+  }
+}

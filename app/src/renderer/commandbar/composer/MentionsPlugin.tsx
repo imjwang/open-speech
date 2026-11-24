@@ -20,7 +20,7 @@ import {
   KEY_TAB_COMMAND,
   type NodeKey,
 } from 'lexical'
-import { CornerDownLeft, FileText, FileType2, Folder, FolderOpen, Globe, Image as ImageIcon, Loader2 } from 'lucide-react'
+import { AudioLines, CornerDownLeft, FileText, FileType2, Folder, FolderOpen, Globe, Image as ImageIcon, Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState, type JSX } from 'react'
 
 import type { FileHit, FileKind, FileSearchResult } from '@shared/ipc-channels'
@@ -64,6 +64,8 @@ function KindIcon({ kind }: { kind: FileKind }): JSX.Element {
       return <Globe aria-hidden="true" className="text-tint-web-foreground" />
     case 'doc':
       return <FileType2 aria-hidden="true" className="text-tint-file-foreground" />
+    case 'audio':
+      return <AudioLines aria-hidden="true" className="text-tint-file-foreground" />
     default:
       return <FileText aria-hidden="true" className="text-tint-file-foreground" />
   }

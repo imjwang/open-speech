@@ -71,7 +71,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     h = tmp_path / "home"
     monkeypatch.setenv("OPEN_SPEECH_HOME", str(h))
     monkeypatch.setenv("OPEN_SPEECH_FIXTURE_PROVIDERS", "1")
-    for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"):
+    for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_TTS_API_KEY"):
         monkeypatch.setenv(k, "")
     return h
 

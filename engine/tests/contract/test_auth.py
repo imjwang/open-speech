@@ -11,6 +11,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from open_speech.api import schemas as s
 from open_speech.api.app import create_app
+from open_speech.api.ws_schema import PROTOCOL
 
 TOKEN = "t" * 64
 
@@ -118,7 +119,7 @@ def test_ws_rejects_foreign_origin(client: TestClient) -> None:
 def test_ws_hello_with_token(client: TestClient) -> None:
     with client.websocket_connect(f"/api/v1/ws?token={TOKEN}", headers={"Host": "127.0.0.1:8765"}) as ws:
         hello = ws.receive_json()
-        assert hello["type"] == "hello" and hello["protocol"] == 2
+        assert hello["type"] == "hello" and hello["protocol"] == PROTOCOL
         state = ws.receive_json()
         assert state["type"] == "playback.state"
 

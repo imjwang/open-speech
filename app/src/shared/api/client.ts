@@ -38,10 +38,17 @@ export type RuleFileContent = Schemas['RuleFileContent']
 export type RuleFileWrite = Schemas['RuleFileWrite']
 export type LocalModel = Schemas['LocalModel']
 export type UsageSummary = Schemas['UsageSummary']
+/**
+ * This month's spending, the budget, and free allowances in use. `GET /usage/budget` and `usage.changed` carry
+ * the same shape; the WS schema's is the looser of the two (it lets `unit` default), so both fit this one.
+ */
+export type BudgetState = import('./ws.gen').BudgetState
+export type FreeTierState = import('./ws.gen').FreeTierState
+export type CloneOut = Schemas['CloneOut']
+export type CloneAccepted = Schemas['CloneAccepted']
 export type HtmlBlocksPayload = Schemas['HtmlBlocksPayload']
 export type HtmlBlock = Schemas['HtmlBlock']
 export type DomAnchor = Schemas['DomAnchor']
-export type Mode = 'classic' | 'ai_enhanced'
 
 export interface EngineEndpoint {
   /** e.g. `http://127.0.0.1:52341` (no trailing slash, no `/api/v1`). */
@@ -107,7 +114,6 @@ export async function unwrap<T>(request: Promise<Result<T>>): Promise<T> {
 export interface UploadOptions {
   play?: boolean
   voiceId?: string
-  mode?: Mode
   confirmEstimate?: boolean
 }
 
@@ -126,7 +132,6 @@ export function uploadDocument(
         play: options.play ?? false,
         confirm_estimate: options.confirmEstimate ?? false,
         voice_id: options.voiceId ?? null,
-        mode: options.mode ?? null,
       },
       bodySerializer: (body) => {
         const form = new FormData()
@@ -134,7 +139,52 @@ export function uploadDocument(
         form.append('play', String(body.play))
         form.append('confirm_estimate', String(body.confirm_estimate))
         if (body.voice_id) form.append('voice_id', body.voice_id)
-        if (body.mode) form.append('mode', body.mode)
+        return form
+      },
+    }),
+  )
+}
+
+/** What goes with a recording to be cloned (`POST /voices/clones`). */
+export interface CloneUpload {
+  name?: string | null
+  language?: string | null
+  passageId?: string | null
+  /** The person confirmed it is their voice or they have the speaker's permission (required by the engine). */
+  consent: boolean
+  source: 'recording' | 'file'
+  /** false: unlisted until the user hears it and keeps it ("Keep it?"). */
+  keep: boolean
+  /** The bar's session: the engine answers in this conversation (the check sentence, then "Keep it?"). */
+  sessionId?: string | null
+  conversationId?: string | null
+}
+
+/** `POST /voices/clones` (multipart): a recorded reference, to become a voice. */
+export function uploadClone(client: EngineClient, wav: Blob, filename: string, fields: CloneUpload): Promise<CloneAccepted> {
+  return unwrap(
+    client.POST('/api/v1/voices/clones', {
+      body: {
+        file: filename,
+        consent: fields.consent,
+        source: fields.source,
+        keep: fields.keep,
+        name: fields.name ?? null,
+        language: fields.language ?? null,
+        passage_id: fields.passageId ?? null,
+        session_id: fields.sessionId ?? null,
+        conversation_id: fields.conversationId ?? null,
+      },
+      bodySerializer: (body) => {
+        const form = new FormData()
+        form.append('file', wav, filename)
+        form.append('consent', String(body.consent))
+        form.append('source', body.source)
+        form.append('keep', String(body.keep))
+        for (const key of ['name', 'language', 'passage_id', 'session_id', 'conversation_id'] as const) {
+          const value = body[key]
+          if (value) form.append(key, value)
+        }
         return form
       },
     }),

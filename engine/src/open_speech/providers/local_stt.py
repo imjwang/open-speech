@@ -245,6 +245,37 @@ class LocalStt:
             return f"Download {entry.name or 'the speech recognition model'}{about} to use speech input on this Mac."
         return None
 
+    def vad_path(self) -> Path | None:
+        """The Silero VAD model shipped with the installed speech model (voices/reference.py finds speech with it)."""
+        entry = self._models.get(self.model)
+        if entry is None or not entry.vad or not self.installed():
+            return None
+        p = self.model_dir() / entry.vad
+        return p if p.exists() else None
+
+    async def transcribe_pcm(self, samples: np.ndarray, sample_rate: int = MIC_RATE) -> str:
+        """What mono float32 audio says (a cloned voice's reference, or its check sentence). Never leaves this Mac."""
+        model = self.model
+        reason = self.unavailable_reason(model)
+        if reason:
+            raise EngineError("offline", reason, provider=self.id)
+        self._streams += 1
+        try:
+            x = samples
+            if sample_rate != MIC_RATE:
+                x = await asyncio.to_thread(resample, samples, sample_rate, MIC_RATE)
+            chunk = int(FILE_CHUNK_S * MIC_RATE)
+            texts: list[str] = []
+            for start in range(0, len(x), chunk):
+                text, _ = await asyncio.to_thread(self._decode, model, np.asarray(x[start : start + chunk]), None)
+                if text:
+                    texts.append(text)
+            return " ".join(texts)
+        finally:
+            self._streams -= 1
+            self._last_used = time.monotonic()
+            self._schedule_unload()
+
     def price_units(self, audio_sec: float) -> Units:
         return Units(audio_sec=round(audio_sec, 3))
 

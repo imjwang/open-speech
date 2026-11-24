@@ -1,0 +1,147 @@
+{
+  "model": "Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16",
+  "load": {
+    "op": "loaded",
+    "id": 1,
+    "load_s": 2.808,
+    "warm_s": 1.902,
+    "active_gb": 2.561,
+    "sample_rate": 24000,
+    "type": "custom_voice",
+    "size": "0b6",
+    "speakers": [
+      "serena",
+      "vivian",
+      "uncle_fu",
+      "ryan",
+      "aiden",
+      "ono_anna",
+      "sohee",
+      "eric",
+      "dylan"
+    ],
+    "languages": [
+      "chinese",
+      "english",
+      "german",
+      "italian",
+      "portuguese",
+      "spanish",
+      "japanese",
+      "korean",
+      "french",
+      "russian"
+    ],
+    "wall_s": 4.74
+  },
+  "voice": "Ryan",
+  "quality": {
+    "en": {
+      "wer": 0.0044,
+      "words": 226,
+      "f0_median_hz": 126.6,
+      "f0_spread_pct": 12.7,
+      "timbre_similarity_mean": 0.969,
+      "timbre_similarity_min": 0.869,
+      "worst": [
+        {
+          "wer": 0.077,
+          "ref": "The recipe calls for two cups of flour, one egg, and a pinch of salt.",
+          "hyp": "The recipe call for two cups of flour, one egg, and a pinch of salt."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Water boils at one hundred degrees Celsius at sea level.",
+          "hyp": "Water boils at one hundred degrees Celsius at sea level."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Turn left at the next light.",
+          "hyp": "Turn left at the next light."
+        }
+      ]
+    },
+    "es": {
+      "wer": 0.01,
+      "words": 100,
+      "f0_median_hz": 137.4,
+      "f0_spread_pct": 12.4,
+      "timbre_similarity_mean": 0.965,
+      "timbre_similarity_min": 0.894,
+      "worst": [
+        {
+          "wer": 0.111,
+          "ref": "El agua hierve a cien grados al nivel del mar.",
+          "hyp": "Je, el agua hierve a 100 grados al nivel del mar."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos.",
+          "hyp": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Si la bater\u00eda est\u00e1 baja, la pantalla se oscurece para ahorrar energ\u00eda.",
+          "hyp": "Si la bater\u00eda est\u00e1 baja, la pantalla se oscurece para ahorrar energ\u00eda."
+        }
+      ]
+    },
+    "es-auto": {
+      "wer": 0.2,
+      "words": 100,
+      "f0_median_hz": 142.1,
+      "f0_spread_pct": 15.6,
+      "timbre_similarity_mean": 0.965,
+      "timbre_similarity_min": 0.894,
+      "worst": [
+        {
+          "wer": 1.545,
+          "ref": "Los ni\u00f1os menores de doce a\u00f1os deben ir acompa\u00f1ados de un adulto.",
+          "hyp": "So this this is bugger for is tasty how good is my mother kidded broke. So uh"
+        },
+        {
+          "wer": 0.143,
+          "ref": "La reuni\u00f3n se ha cambiado al jueves.",
+          "hyp": "Mmm. La reuni\u00f3n se ha cambiado al jueves."
+        },
+        {
+          "wer": 0.125,
+          "ref": "Gire a la izquierda en el pr\u00f3ximo sem\u00e1foro.",
+          "hyp": "Gui a la izquierda en el pr\u00f3ximo sem\u00e1foro."
+        }
+      ]
+    }
+  },
+  "sustained": {
+    "sentences": 160,
+    "x_rt_overall": 1.473,
+    "x_rt_last3min": 1.472,
+    "x_rt_per_minute": [
+      1.472,
+      1.469,
+      1.471,
+      1.47,
+      1.479,
+      1.476,
+      1.472,
+      1.471,
+      1.472,
+      1.473
+    ],
+    "load_avg_per_minute": [
+      2.1,
+      1.6,
+      1.7,
+      2.0,
+      1.6,
+      1.4,
+      1.6,
+      1.6,
+      2.0,
+      1.9
+    ],
+    "first_audio_p50_s": 0.34,
+    "first_audio_p90_s": 0.343,
+    "peak_gb": 3.196
+  }
+}

@@ -1,9 +1,11 @@
 """Planner (05 § 4): Document + rules → SpeechScript, cached by plan key.
 
-- Classic plans the whole document deterministically (tier 1 + lexicon), with no API calls.
-- AI Enhanced runs tier 2/3 only for the rules that need it: the first batch (~1.5k tokens of blocks)
-  synchronously in `plan()`, then `extend()` keeps ≥ 2 batches ahead of the playhead. Blocks not yet
-  annotated are read with tier-1 text, so the script is always complete and playable.
+- Cleanup is Claude following the reading instructions (SPEECH.md) and the rules (mode "ai_enhanced"). The
+  first batch (~1.5k tokens of blocks) runs synchronously in `plan()`, then `extend()` keeps ≥ 2 batches ahead
+  of the playhead. Blocks not yet annotated are read with tier-1 text, so the script is always complete and
+  playable.
+- Without Claude (mode "classic": no Claude in this build) the document is planned deterministically (tier 1 +
+  lexicon, including the filters from SPEECH.md's skip lines), with no API calls.
 - A cached plan is returned without LLM calls. Claude output is also pinned per block / section, so after
   a rule edit only blocks whose annotate input changed cost a call.
 """
@@ -110,7 +112,9 @@ class Planner:
 
     @staticmethod
     def _needs_llm(spec: BuildSpec) -> bool:
-        return spec.mode == "ai_enhanced" and (bool(spec.annotate) or spec.transform is not None)
+        return spec.mode == "ai_enhanced" and (
+            bool(spec.annotate) or spec.transform is not None or bool(spec.speech_md.strip())
+        )
 
     async def plan(self, ctx: PlanContext, llm: LlmProvider | None, *, first_batch_only: bool = True) -> PlanResult:
         spec = _spec(ctx)
@@ -121,7 +125,7 @@ class Planner:
                 return PlanResult(script=cached)
         memo = self._memo(ctx.document.id)
         result = await build_script(spec, llm, memo, playhead_order=-1, ahead=0, everything=not first_batch_only)
-        # Don't pin a plan that silently fell back to Classic because Claude was unavailable.
+        # Don't pin a plan made without the Claude cleanup it should have had (unavailable, over budget).
         self._save(ctx.document.id, memo, None if result.degraded else result.script)
         return PlanResult(script=result.script, llm_calls=result.calls, degraded=result.degraded)
 

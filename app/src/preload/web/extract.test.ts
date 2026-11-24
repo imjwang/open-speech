@@ -105,7 +105,7 @@ describe('extractBlocks on a Wikipedia article lead', () => {
   it('produces the payload the engine tests ingest (wikipedia_lead_blocks.json)', () => {
     const doc = parse(readFileSync(PAGE, 'utf8'))
     const payload = { ...extractBlocks(doc, { Readability: readability }), url: PAGE_URL }
-    // After an intended change to the extractor: OPEN_SPEECH_UPDATE_FIXTURES=1 pnpm test, then review the diff.
+    // After an intended change to the extractor: OPEN_SPEECH_UPDATE_FIXTURES=1 bun run test, then review the diff.
     if (process.env.OPEN_SPEECH_UPDATE_FIXTURES === '1') writeFileSync(PAYLOAD, `${JSON.stringify(payload, null, 2)}\n`)
     expect(payload).toEqual(JSON.parse(readFileSync(PAYLOAD, 'utf8')))
   })

@@ -158,6 +158,14 @@ class Rule(BaseModel):
     def is_filter(self) -> bool:
         return self.tier == "filter" and self.compiled is not None
 
+    @property
+    def label(self) -> str:
+        """How the rule is named where people see what it removed: a rule file by its name, a skip line of the
+        reading instructions (no file) by what it does ("Don't read URLs")."""
+        if self.created_by == "speech_md" and self.description:
+            return self.description.rstrip(".")
+        return self.name
+
     def brief(self) -> RuleBrief:
         return RuleBrief(id=self.id, name=self.name, instruction=self.instruction or self.description)
 

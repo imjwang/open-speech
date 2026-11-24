@@ -142,3 +142,5 @@ async def _handle(engine: Engine, msg: Any, topics: set[str]) -> None:
             topics.update(msg.topics)
         case ws.BarState():
             await engine.playback.bar_state(msg.open)
+        case ws.SpeechStop():
+            await engine.stop_speech(msg.turn_id)

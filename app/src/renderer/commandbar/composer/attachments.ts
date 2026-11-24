@@ -34,10 +34,21 @@ const EXT_KIND: Record<string, FileKind> = {
   jpeg: 'image',
   webp: 'image',
   gif: 'image',
+  wav: 'audio',
+  m4a: 'audio',
+  mp3: 'audio',
+  aiff: 'audio',
+  aif: 'audio',
+  flac: 'audio',
+  ogg: 'audio',
+  opus: 'audio',
+  caf: 'audio',
+  aac: 'audio',
 }
 
 export function kindOfName(name: string, mime = ''): FileKind {
   if (mime.startsWith('image/')) return 'image'
+  if (mime.startsWith('audio/')) return 'audio'
   return EXT_KIND[name.split('.').pop()?.toLowerCase() ?? ''] ?? 'other'
 }
 

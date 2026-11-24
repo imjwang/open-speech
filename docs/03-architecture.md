@@ -58,6 +58,7 @@ flowchart LR
 | Claude | `anthropic` | Messages API + Tool Runner (`@beta_tool`); structured outputs for span ops |
 | OpenAI | `openai` | TTS (`audio.speech`), STT (transcriptions, realtime) |
 | Speech-to-text (local) | sherpa-onnx (`local-stt` extra) | Parakeet TDT 0.6B v3 with a Silero VAD gate; the default for the command bar (`08` § Local speech-to-text) |
+| Local Qwen3-TTS voices | mlx-audio 0.6.7 on MLX (`local-qwen` extra, Apple Silicon only) | Runs in its own worker process (`providers/qwen3_worker.py`, below); weights downloaded on demand (`08` § Local Qwen3-TTS voices) |
 | Gemini | `google-genai` ≥ 2.25 | TTS via the **Interactions API** (`client.interactions.create`, `api_version=v1beta`) |
 | HTTP utils | httpx, tenacity | Retries with jittered backoff. Every URL the engine reads goes through the page store (`store/pages.py`), which also enforces the network boundary |
 | Storage | SQLite (stdlib `sqlite3`) | WAL mode; one file in app data. Files worth keeping (voice audio, transcripts, fetched pages) live in the content-addressed asset store, indexed in SQLite |
@@ -76,8 +77,23 @@ flowchart LR
 **Optional extras** (installed on demand by the model manager):
 - `local-kokoro`: onnxruntime + Kokoro timestamped ONNX, with the English lexicon G2P (misaki) and the built-in Spanish G2P. In the default install for packaged builds.
 - `local-stt`: sherpa-onnx, which runs Parakeet TDT 0.6B v3 and Silero VAD. In the default install for packaged builds.
+- `local-qwen`: `mlx-audio==0.6.7` (pinned exactly: its model code changes between releases and cached audio is keyed to what it produces), with MLX, transformers (no torch), scipy, sentencepiece, miniaudio and huggingface_hub, all MIT/BSD/Apache. Wheels for macOS arm64 on Python 3.13 (the bundle) and 3.14 (development); the marker keeps it off other platforms. In the default install for packaged builds (`OPEN_SPEECH_BUNDLE_QWEN=0` leaves it out; it adds about 380 MB uncompressed: MLX 234 MB with its Metal library, scipy 65, transformers 57). Weights are never bundled. License note: the gate (`bundle-engine.sh`) passes; scipy's wheel carries libgfortran, libgcc_s (GPL-3.0 with the GCC Runtime Library Exception, which allows shipping them in non-GPL software) and libquadmath (LGPL-2.1). The Qwen3-TTS code path never imports scipy, but mlx-audio declares it.
 - `mcp`: the MCP SDK for the stdio server.
-- Planned, not in `pyproject.toml` yet: `local-qwen` (P2; mlx-audio on Apple Silicon, preset voices only) and `local-align` (v1.1; Qwen3-ForcedAligner-0.6B).
+- Planned, not in `pyproject.toml` yet: `local-align` (v1.1; Qwen3-ForcedAligner-0.6B).
+
+**The Qwen3-TTS worker process.** `providers/qwen3_worker.py` is the only module that imports MLX. The engine starts it
+as `sys.executable -I -m open_speech.providers.qwen3_worker` (isolated: no `PYTHON*` variables, no user site) with
+`HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `HF_HUB_DISABLE_TELEMETRY=1`, `TOKENIZERS_PARALLELISM=false`, and talks to
+it over stdin/stdout: each frame is a 4-byte big-endian length, a JSON header, then raw little-endian float32 PCM when
+the header says `bytes`. Requests: `load` (a variant's directory; it warms the streaming decoder), `generate` (text,
+preset voice or reference audio + text or a voice description, language, seed, sampling parameters, chunk interval),
+`cancel`, `ping`, `exit`; replies `loaded`, `chunk`, `done {gen_s, audio_s, rtf, first_s, peak_gb}`, `error`. Anything a
+library prints goes to stderr (logged by the engine). Why a process: measured with `tools/audiolab deadlines`, Qwen
+generating inside the engine raised the audio callback's worst lateness from 10.9 ms to 29.7 ms (p99.9 4.7 → 7.3 ms),
+because its Python generation loop competes for the GIL; from the worker it stayed at idle levels (max 8.6 ms, p99.9
+5.1 ms). The process also hands all of its 3–6 GB back when the engine stops it after 10 idle minutes, and a crash
+inside MLX ends it, not the engine: the provider restarts it once, then reads on with Kokoro. It exits when its stdin
+closes, so it never outlives the engine.
 
 ### Package layout
 
@@ -222,5 +238,5 @@ Everything the engine makes or downloads that is worth keeping is stored once, u
 | Malicious web content in the reader | `WebContentsView` with its own partition, `sandbox: true`, `contextIsolation: true`, no `nodeIntegration`; a minimal preload exposing only "post blocks" and "paint highlight"; permission requests denied by default; downloads prompt |
 | Shell renderer compromise | Strict CSP; no remote code; IPC validated with schemas; the renderer gets only the engine token, and only for the app's own windows (command bar, reader, rules editor); file lookups return names and paths under the home folder and mounted volumes, never contents |
 | Prompt injection via documents | See `07` § Injection boundary: content is data; plan and vision calls have no tools; mutating agent actions need user confirmation |
-| Supply chain | Lockfiles (`uv.lock`, `pnpm-lock.yaml`) committed; local model weights pinned by sha256 in the catalog |
+| Supply chain | Lockfiles (`uv.lock`, `bun.lock`) committed; local model weights pinned by sha256 in the catalog |
 | Accidental spend | Budget hard stop; pre-flight estimates; prefetch caps (see `08`) |

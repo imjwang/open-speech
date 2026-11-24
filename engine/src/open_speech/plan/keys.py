@@ -1,8 +1,8 @@
 """Plan cache keys (05 § Caches): `sha256(source_id, rules_hash, model_id, prompt_version, mode)`.
 
-The rules hash used here is *mode-effective*: Classic never calls Claude, so a Classic plan's key covers only
-the filter rules and the lexicon (editing an annotate rule, SPEECH.md or the model doesn't invalidate it).
-AI Enhanced keys cover every matching rule, the lexicon, SPEECH.md and the model.
+The rules hash used here is *mode-effective*. A plan made without Claude ("classic": no Claude in this build)
+covers only the filter rules and the lexicon. A plan with Claude ("ai_enhanced") covers every matching rule, the
+lexicon, SPEECH.md and the model.
 """
 
 from __future__ import annotations
@@ -16,10 +16,9 @@ from open_speech.document.model import Document
 from open_speech.ids import sha256_hex
 from open_speech.rules.hashing import compute_rules_hash
 from open_speech.rules.model import Rule
-from open_speech.rules.presets import preset_spec
 from open_speech.rules.scope import by_precedence, scope_matches
 
-PROMPT_VERSION = "annotate-2/transform-1"
+PROMPT_VERSION = "annotate-3/transform-1"
 PLANNER_VERSION = "planner-1"
 
 Mode = Literal["classic", "ai_enhanced"]
@@ -30,7 +29,7 @@ class Tiering:
     filters: list[Rule]
     annotate: list[Rule]  # rules whose instruction goes to the annotate tier
     transform: Rule | None
-    inactive: list[Rule]  # rules that need AI Enhanced but the mode is Classic
+    inactive: list[Rule]  # rules only Claude can apply, in a plan made without Claude
     extra_transforms: list[Rule]
 
 
@@ -44,14 +43,8 @@ def tiering(rules: Sequence[Rule], mode: Mode) -> Tiering:
     if mode == "classic":
         inactive = [r for r in rules if r.tier in ("annotate", "transform")]
         return Tiering(filters, [], None, inactive, [])
-    annotate: list[Rule] = []
-    for r in rules:
-        if r.tier == "annotate":
-            annotate.append(r)
-        elif r.preset and r.tier == "filter":
-            spec = preset_spec(r.name)
-            if spec is not None and spec.ai_annotate:
-                annotate.append(r)
+    # Filters from the skip lines of SPEECH.md (`preset`) also go to Claude, for the forms they can't recognise.
+    annotate = [r for r in rules if r.tier == "annotate" or (r.preset and r.tier == "filter")]
     transforms = [r for r in rules if r.tier == "transform"]
     return Tiering(filters, annotate, transforms[0] if transforms else None, [], transforms[1:])
 

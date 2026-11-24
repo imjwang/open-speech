@@ -13,7 +13,13 @@ from decimal import Decimal
 from open_speech.i18n import has, say, t
 from open_speech.i18n.say import number_words
 
-PROVIDER_NAMES = {"openai": "OpenAI", "gemini": "Gemini", "anthropic": "Claude", "fixture": "test provider"}
+PROVIDER_NAMES = {
+    "openai": "OpenAI",
+    "gemini": "Gemini",
+    "google": "Google",
+    "anthropic": "Claude",
+    "fixture": "test provider",
+}
 
 # Kept as the module's public helpers (callers and tests use these names).
 money_words = say.money
@@ -57,6 +63,9 @@ def usage_sentence(
     if month_pct is not None and budget > 0 and total > 0:
         if month_pct >= 1.0:
             parts.append(t("usage.budget_reached", budget=say.budget(budget)))
+        elif month_pct < 0.01:
+            # "about 0 percent of your budget" says nothing useful; say it plainly.
+            parts.append(t("usage.budget_well_under", budget=say.budget(budget)))
         else:
             parts.append(t("usage.budget_at", fraction=say.fraction(month_pct), budget=say.budget(budget)))
     if savings >= Decimal("0.01"):

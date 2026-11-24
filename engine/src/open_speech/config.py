@@ -4,7 +4,7 @@ Two layers (03 § Storage, 08 § Keys):
 - `EngineEnv`: process environment, the repo-root `.env` in development and, in a packaged build, the
   `provider.env` written into the bundled runtime at build time. Provider keys are build configuration:
   users never enter one. SecretStr keys.
-- `UserSettings`: `settings.toml` in app data — shortcuts, defaults, budget, retention, modes. This is the
+- `UserSettings`: `settings.toml` in app data — shortcuts, defaults, budget, retention. This is the
   schema the assistant must be able to read and write in full (FR-ASST-3) and that `GET/PATCH /settings`
   exposes.
 """
@@ -24,8 +24,13 @@ from pydantic import BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_VOICE = "kokoro:kokoro-82m-v1.0:af_heart"
-DEFAULT_LLM = "claude-sonnet-5-5"
+# "auto": Google's Chirp 3 HD Zephyr while this build has Google's voices and the month's free characters last
+# (or the user chose to keep paying for them), else the local voice (`defaults.local_voice`). Resolved by
+# `service/misc.py` `VoiceService` wherever a voice is about to be used; never sent to a provider.
+AUTO_VOICE = "auto"
+DEFAULT_LOCAL_VOICE = "kokoro:kokoro-82m-v1.0:af_heart"
+DEFAULT_VOICE = AUTO_VOICE
+DEFAULT_LLM = "claude-haiku-5-5"  # must match `[llm.anthropic] default` in data/models.toml
 SHELL_ORIGIN = "app://open-speech"
 BUNDLED_RUNTIME_ENV = "OPEN_SPEECH_BUNDLED_RUNTIME"
 PROVIDER_ENV_FILE = "provider.env"  # written by app/scripts/bundle-engine.sh from the build environment
@@ -51,6 +56,9 @@ class EngineEnv(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     gemini_api_key: SecretStr | None = None
+    # Google Cloud Text-to-Speech (Chirp 3 HD voices). When unset, the Gemini key is used: a key from the same
+    # Google Cloud project works once Cloud Text-to-Speech is among its allowed APIs (providers/keys.py).
+    google_tts_api_key: SecretStr | None = None
 
     open_speech_home: Path | None = None
     open_speech_llm_model: str | None = None
@@ -68,7 +76,7 @@ class EngineEnv(BaseSettings):
     # Let URL fetches reach this machine and the local network (tests against a local server only).
     open_speech_allow_private_urls: bool = False
 
-    @field_validator("anthropic_api_key", "openai_api_key", "gemini_api_key", mode="before")
+    @field_validator("anthropic_api_key", "openai_api_key", "gemini_api_key", "google_tts_api_key", mode="before")
     @classmethod
     def _blank_is_none(cls, v: Any) -> Any:
         return None if v in ("", None) else v
@@ -107,6 +115,9 @@ class Paths:
         self.engine_json = home / "engine.json"
         self.logs = home / "logs"
         self.uploads = home / "uploads"
+        # Cloned and designed voices (voices/<slug>/: the source, the processed reference, voice.json). Never pruned by
+        # recording retention or the cache budget: only deleting the voice removes its folder.
+        self.voices = home / "voices"
 
     def ensure(self) -> Paths:
         for d in (
@@ -119,6 +130,7 @@ class Paths:
             self.models,
             self.logs,
             self.uploads,
+            self.voices,
         ):
             d.mkdir(parents=True, exist_ok=True)
         return self
@@ -136,13 +148,16 @@ class Shortcuts(BaseModel):
 
 
 class Defaults(BaseModel):
+    # "auto" (AUTO_VOICE) or a voice id. Reading and replies both default to "auto": Chirp Zephyr while it is
+    # free, the local voice otherwise.
     voice: str = DEFAULT_VOICE
-    assistant_voice: str = DEFAULT_VOICE  # 10 § Open questions: Kokoro by default (fast, $0)
+    assistant_voice: str = DEFAULT_VOICE
+    # The free voice "auto" falls back to (and every fallback reads with), adjusted to the language being read.
+    local_voice: str = DEFAULT_LOCAL_VOICE
     # Preferred voice per language for text the default voice can't speak (e.g. {"es": "kokoro:…:ef_dora"}).
     # Filled in when the user picks a voice while reading or speaking that language.
     voices: dict[str, str] = Field(default_factory=dict)
     speed: float = Field(1.0, ge=0.5, le=5.0)
-    mode: Literal["classic", "ai_enhanced"] = "classic"
     style: str | None = None
 
 
@@ -166,6 +181,9 @@ class VoiceInput(BaseModel):
     recording_retention_days: int = Field(30, ge=0, le=3650)  # 0 = never keep
     # "auto" prefers speech-to-text that runs on this Mac, then whatever cloud provider the build includes.
     stt_provider: Literal["auto", "local", "openai", "gemini"] = "auto"
+    # After the engine stops speaking, the bar's microphone stays closed this much longer: CoreAudio playback
+    # isn't in the bar's echo cancellation, and the room keeps ringing briefly (`assistant.speech` ended).
+    echo_tail_ms: int = Field(150, ge=0, le=2000)
 
 
 class CacheSettings(BaseModel):
@@ -194,6 +212,19 @@ class PlaybackSettings(BaseModel):
     fallback: Literal["same_provider", "another_voice", "kokoro"] = "kokoro"
     prefetch_seconds: int = Field(30, ge=5, le=600)
     max_ahead_seconds: int = Field(120, ge=10, le=3600)
+    # When a voice's free monthly allowance (Google's Chirp characters) runs out: "local" reads on with the
+    # local voice; "pay" keeps the voice at its price (the budget still applies) for the month in
+    # `beyond_free_tier_month` only ("YYYY-MM" in the provider's billing time zone), then reverts to "local".
+    beyond_free_tier: Literal["local", "pay"] = "local"
+    beyond_free_tier_month: str | None = None
+
+
+class Qwen3Settings(BaseModel):
+    """Which Qwen3-TTS weights read the Qwen voices (providers/qwen3.py `resolve_variant`). The voices stay the same;
+    "auto" is the size and precision measured best on this kind of Mac (the catalog's defaults; 0.6B with 8 GB)."""
+
+    size: Literal["auto", "0.6b", "1.7b"] = "auto"
+    precision: Literal["auto", "bf16", "8bit", "6bit", "5bit", "4bit"] = "auto"
 
 
 class UserSettings(BaseModel):
@@ -208,6 +239,7 @@ class UserSettings(BaseModel):
     llm: LlmSettings = Field(default_factory=LlmSettings)
     reader: ReaderSettings = Field(default_factory=ReaderSettings)
     playback: PlaybackSettings = Field(default_factory=PlaybackSettings)
+    qwen3: Qwen3Settings = Field(default_factory=Qwen3Settings)
     onboarding_completed: bool = False
 
     # ------------------------------------------------------------ dotted-key access (assistant tools)

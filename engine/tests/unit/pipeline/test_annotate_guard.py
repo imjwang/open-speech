@@ -37,6 +37,8 @@ from tests.unit.pipeline.fakes import AnnotateFn, FakeLlm
 from tests.unit.runtime.helpers import Recorder, fixture_text
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
+_PRESET_NOUNS = {"parentheses": "text in parentheses", "brackets": "text in brackets"}
+URLS, CITATIONS, FURNITURE = "speech_skip-urls", "speech_skip-citations", "speech_skip-headers-footers-page-numbers"
 URL_SENTENCE = "More details are given at https://example.org/method together with the evaluation scripts."
 CLASSIC_SENTENCE = "More details are given at together with the evaluation scripts."
 
@@ -72,11 +74,16 @@ async def _plan(
     presets: Sequence[str] = (),
     rules: Sequence[Rule] = (),
 ) -> tuple[SpeechScript, list[str]]:
-    """Plan in AI Enhanced mode with the default presets. Returns the script and the block texts Claude saw."""
-    store = RuleStore(Paths(tmp_path).ensure())
+    """Plan with Claude and the default reading instructions, plus a skip line for each of `presets`. Returns the
+    script and the block texts Claude saw."""
+    paths = Paths(tmp_path).ensure()
+    store = RuleStore(paths)
     store.ensure_defaults()
-    for name in presets:
-        store.set_preset(name, True)
+    if presets:
+        lines = "".join(f"- Skip {_PRESET_NOUNS[name]}.\n" for name in presets)
+        text = paths.speech_md.read_text("utf-8")
+        paths.speech_md.write_text(text.replace("## Leave out\n", "## Leave out\n" + lines))
+        store.reload()
     for rule in rules:
         store.save(rule)
     seen: list[str] = []
@@ -86,7 +93,7 @@ async def _plan(
         return annotate(blocks, briefs, md)
 
     ctx = PlanContext(
-        document=doc, rules=store.rules_for(doc), lexicon=store.lexicon(), speech_md=speech_md, mode="ai_enhanced"
+        document=doc, rules=store.plan_rules(doc), lexicon=store.lexicon(), speech_md=speech_md, mode="ai_enhanced"
     )
     result = await Planner(None).plan(ctx, FakeLlm(annotate=recording), first_batch_only=False)
     return result.script, seen
@@ -164,9 +171,9 @@ def test_markers_are_spaced_like_words_and_merged_per_position() -> None:
     ("quote", "rule_id"),
     [
         (" together with the evaluation scripts", None),  # recorded live: no rule named at all
-        (" together with the evaluation scripts", "rule_urls"),  # the same slip, credited to the URL preset
-        (" at ⟦url⟧ together with the evaluation scripts", "rule_urls"),  # reaching across the marker
-        (" at together with the evaluation scripts", "rule_urls"),
+        (" together with the evaluation scripts", URLS),  # the same slip, credited to the URL preset
+        (" at ⟦url⟧ together with the evaluation scripts", URLS),  # reaching across the marker
+        (" at together with the evaluation scripts", URLS),
     ],
 )
 async def test_skip_next_to_a_removed_url_cannot_take_the_neighbouring_content(
@@ -200,7 +207,7 @@ async def test_recorded_response_on_the_academic_pdf_keeps_the_sentence(tmp_path
         ModelCatalog.load(), "sk-ant-test", http_client=rec.client(), base_url="https://anthropic.test", max_retries=0
     )
     ctx = PlanContext(
-        document=doc, rules=store.rules_for(doc), lexicon=store.lexicon(), speech_md=store.speech_md(),
+        document=doc, rules=store.plan_rules(doc), lexicon=store.lexicon(), speech_md=store.plan_speech_md(),
         mode="ai_enhanced",
     )
     result = await Planner(None).plan(ctx, llm, first_batch_only=False)
@@ -230,12 +237,12 @@ def test_guard_also_refuses_an_op_that_was_pinned_earlier() -> None:
 async def test_connective_that_only_introduced_the_url_may_go(tmp_path: Path) -> None:
     doc = _doc(f"Digits are normalized before the comparison. {URL_SENTENCE}")
     for quote in (" at", " at ⟦url⟧"):
-        op = {"op": "skip", "quote": quote, "rule_id": "rule_urls"}
+        op = {"op": "skip", "quote": quote, "rule_id": URLS}
         script, _ = await _plan(doc, tmp_path / quote.strip(), _ops(op))
         assert _spoken(script) == (
             "Digits are normalized before the comparison. More details are given together with the evaluation scripts."
         )
-        assert _ai_hits(script) == [("rule_urls", "skip", " at")]
+        assert _ai_hits(script) == [(URLS, "skip", " at")]
         assert script.warnings == []
         _assert_segments_exact(script, doc)
 
@@ -248,11 +255,11 @@ async def test_author_year_citations_keep_the_subject_name(tmp_path: Path) -> No
         doc,
         tmp_path,
         _ops(
-            {"op": "skip", "quote": " (2020)", "rule_id": "rule_citations"},
+            {"op": "skip", "quote": " (2020)", "rule_id": CITATIONS},
             {
                 "op": "skip",
                 "quote": " (for a review, see Lee and Kim, 2019, and Garcia 2021)",
-                "rule_id": "rule_citations",
+                "rule_id": CITATIONS,
             },
         ),
     )
@@ -267,7 +274,7 @@ async def test_citation_skip_cannot_take_the_clause_after_it(tmp_path: Path) -> 
     script, _ = await _plan(
         doc,
         tmp_path,
-        _ops({"op": "skip", "quote": " (2020) showed that the gap between columns", "rule_id": "rule_citations"}),
+        _ops({"op": "skip", "quote": " (2020) showed that the gap between columns", "rule_id": CITATIONS}),
     )
     assert _spoken(script) == doc.blocks[0].text
     assert len(script.warnings) == 1
@@ -275,16 +282,16 @@ async def test_citation_skip_cannot_take_the_clause_after_it(tmp_path: Path) -> 
 
 async def test_inline_page_number_fragment_is_skipped(tmp_path: Path) -> None:
     doc = _doc("The method is described below. Page 4 of 18 It relies on simple geometry.")
-    op = {"op": "skip", "quote": "Page 4 of 18 ", "rule_id": "rule_page-numbers"}
+    op = {"op": "skip", "quote": "Page 4 of 18 ", "rule_id": FURNITURE}
     script, _ = await _plan(doc, tmp_path, _ops(op))
     assert _spoken(script) == "The method is described below. It relies on simple geometry."
-    assert _ai_hits(script) == [("rule_page-numbers", "skip", "Page 4 of 18 ")]
+    assert _ai_hits(script) == [(FURNITURE, "skip", "Page 4 of 18 ")]
     assert script.warnings == []
 
 
 async def test_bare_address_is_read_as_its_short_domain(tmp_path: Path) -> None:
     doc = _doc("For the data, see example.org/docs/latest/index.html today.")
-    op = {"op": "replace", "quote": "example.org/docs/latest/index.html", "text": "example.org", "rule_id": "rule_urls"}
+    op = {"op": "replace", "quote": "example.org/docs/latest/index.html", "text": "example.org", "rule_id": URLS}
     script, seen = await _plan(doc, tmp_path, _ops(op))
     assert seen == [doc.blocks[0].text]  # no scheme, so the Classic URL filter left it alone
     assert _spoken(script) == "For the data, see example.org today."
@@ -301,7 +308,7 @@ async def test_replace_cannot_be_used_to_drop_content(tmp_path: Path) -> None:
                 "op": "replace",
                 "quote": "example.org/docs together with the evaluation scripts",
                 "text": "example.org",
-                "rule_id": "rule_urls",
+                "rule_id": URLS,
             }
         ),
     )
@@ -315,7 +322,7 @@ async def test_parentheses_preset_skips_parentheticals_but_not_what_follows(tmp_
     script, seen = await _plan(
         doc,
         tmp_path,
-        _ops({"op": "skip", "quote": " （see the appendix）", "rule_id": "rule_parentheses"}),
+        _ops({"op": "skip", "quote": " （see the appendix）", "rule_id": "speech_skip-parentheses"}),
         presets=["parentheses"],
     )
     assert seen == ["The corpus ⟦parenthetical⟧ is noisy （see the appendix） and was collected over three years."]
@@ -329,7 +336,7 @@ async def test_parentheses_preset_skips_parentheticals_but_not_what_follows(tmp_
             {
                 "op": "skip",
                 "quote": " （see the appendix） and was collected over three years",
-                "rule_id": "rule_parentheses",
+                "rule_id": "speech_skip-parentheses",
             }
         ),
         presets=["parentheses"],
@@ -347,7 +354,7 @@ async def test_running_head_fused_into_a_paragraph_is_skipped(tmp_path: Path) ->
         f"{head} Lines that cross every gutter are treated as full-width.",
     )
     script, _ = await _plan(
-        doc, tmp_path, _ops({"block_id": "blk_3", "op": "skip", "quote": f"{head} ", "rule_id": "rule_headers"})
+        doc, tmp_path, _ops({"block_id": "blk_3", "op": "skip", "quote": f"{head} ", "rule_id": FURNITURE})
     )
     assert _spoken(script) == (
         "We first group characters into lines and lines into columns. "
@@ -359,7 +366,7 @@ async def test_running_head_fused_into_a_paragraph_is_skipped(tmp_path: Path) ->
     script, _ = await _plan(
         doc,
         tmp_path / "once",
-        _ops({"block_id": "blk_3", "op": "skip", "quote": " Lines that cross every gutter", "rule_id": "rule_headers"}),
+        _ops({"block_id": "blk_3", "op": "skip", "quote": " Lines that cross every gutter", "rule_id": FURNITURE}),
     )
     assert "Lines that cross every gutter are treated as full-width." in _spoken(script)
     assert len(script.warnings) == 1

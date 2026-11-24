@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from open_speech.config import Paths
+from open_speech.config import DEFAULT_LLM, Paths
 from open_speech.local.catalog import ModelCatalog
 from open_speech.providers.keys import ProviderKeys
 
@@ -30,12 +30,41 @@ def test_bundled_catalog_matches_spec(catalog: ModelCatalog) -> None:
         "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve/dd4401a9add81ac692d20e240d22ec9dda82cc29"
     )
     assert "af_heart" in k.voices
-    q = catalog.tts_model("qwen3", "qwen3-tts-12hz-0.6b")
-    assert q is not None and q.status == "later" and q.requires == "apple-silicon"
+    q = catalog.tts_model("qwen3", "qwen3-tts")
+    assert q is not None and q.status is None and q.local and q.requires == "apple-silicon"
+    assert q.voices[:2] == ["Ryan", "Aiden"] and {"en", "es"} <= set(q.languages)
+    # Every size x family x precision Hugging Face publishes (no 0.6B VoiceDesign), pinned per file.
+    variants = catalog.weights_variants("qwen3")
+    assert len(variants) == 25
+    assert {v.family for v in variants} == {"base", "customvoice", "voicedesign"}
+    assert all(v.size == "1.7b" for v in variants if v.family == "voicedesign")
+    for v in variants:
+        assert v.weights is not None and len(v.weights.revision) == 40 and v.license == "Apache-2.0"
+        assert all(len(f.sha256) == 64 for f in v.weights.files), v.model
+        assert "model.safetensors" in v.required_files() and "speech_tokenizer/model.safetensors" in v.required_files()
+    cv = catalog.weights_variant("qwen3-tts-0.6b-customvoice-8bit")
+    assert cv is not None and {s.lower() for s in q.voices} == set(cv.speakers)
     assert catalog.stt_for("openai") is not None
     assert catalog.stt_for("openai").batch[0] == "gpt-4o-transcribe"  # type: ignore[union-attr]
     llm = catalog.llm_for("anthropic")
-    assert llm is not None and llm.default == "claude-sonnet-5-5"
+    assert llm is not None and llm.default == DEFAULT_LLM == "claude-haiku-5-5"
+    assert llm.options[0] == "claude-haiku-5-5"
+
+
+def test_llm_traits_per_model(catalog: ModelCatalog) -> None:
+    """How each model turns thinking off and whether it has a server-side refusal fallback (05 § Tier 2)."""
+    haiku = catalog.llm_traits("claude-haiku-5-5")
+    assert haiku.thinking_off_param() == {"type": "disabled"} and not haiku.server_fallback
+    assert haiku.annotate_thinking == "adaptive"  # the accuracy gate's choice (tests/live/test_annotate_eval.py)
+    sonnet = catalog.llm_traits("claude-sonnet-5-5")
+    assert sonnet.thinking_off_param() == {"type": "between_tools"} and sonnet.server_fallback
+    opus = catalog.llm_traits("claude-opus-5-5")
+    assert opus.thinking_off_param() is None and opus.server_fallback  # `disabled` is a 400 on Opus 5.5
+    # Every model the catalog offers has traits; an unknown one gets the safe defaults.
+    llm = catalog.llm_for("anthropic")
+    assert llm is not None and set(llm.options) <= set(llm.models)
+    unknown = catalog.llm_traits("claude-someday-9")
+    assert unknown.thinking_off_param() is None and not unknown.server_fallback
 
 
 def test_fixture_entries_are_test_only(catalog: ModelCatalog) -> None:

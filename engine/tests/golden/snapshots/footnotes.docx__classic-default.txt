@@ -11,8 +11,8 @@ H Results
 ¶ Clarity beats intensity when the cups cool.
 
 --- removed (5)
-footnotes skip blk_1: 1
-footnotes drop_block blk_2: 1 Scores follow the 2004 protocol with a 100-point scale.
-footnotes skip blk_4: 2
-urls skip blk_4: https://example.net/cupping
-footnotes drop_block blk_5: 2 Water was filtered to 120 ppm total dissolved solids.
+Don't read footnotes and footnote markers skip blk_1: 1
+Don't read footnotes and footnote markers drop_block blk_2: 1 Scores follow the 2004 protocol with a 100-point scale.
+Don't read footnotes and footnote markers skip blk_4: 2
+Don't read URLs skip blk_4: https://example.net/cupping
+Don't read footnotes and footnote markers drop_block blk_5: 2 Water was filtered to 120 ppm total dissolved solids.

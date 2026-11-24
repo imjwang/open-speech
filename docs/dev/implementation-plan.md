@@ -223,6 +223,6 @@ Owns `service/`, `api/` (beyond the shared contracts), `cli/`, `agent/`, `mcp/`,
 
 ## Definition of done per workstream
 
-- `uv run ruff check` and `uv run pytest tests/unit/<stream>` pass (shell: `pnpm typecheck`, `pnpm test`, `pnpm build`).
+- `uv run ruff check` and `uv run pytest tests/unit/<stream>` pass (shell: `bun run typecheck`, `bun run test`, `bun run build`).
 - Behavior matches the cited spec sections and FR acceptance criteria; deviations are listed in the final report.
 - No vendor SDK imported outside `providers/`. No keys logged. No GPL/AGPL dependency in the default install.

@@ -283,10 +283,10 @@ async def test_ai_enhanced_planning_and_confirmation_threshold(
         threshold_usd="0.50",
     )
     assert Decimal(ai.usd_estimate) > Decimal(classic.usd_estimate)
-    planning = next(line for line in ai.breakdown if line.item.startswith("AI Enhanced planning"))
+    planning = next(line for line in ai.breakdown if line.item.startswith("AI cleanup"))
     assert Decimal(planning.usd_estimate) > 0
     assert ai.requires_confirmation
-    assert any("Classic filters assumed" in a for a in classic.assumptions)
+    assert any("the default skips assumed" in a for a in classic.assumptions)
     # the header block is excluded from the no-plan estimate
     header_chars = len(doc.blocks[0].text)
     total_chars = sum(len(b.text) for b in doc.blocks)
@@ -304,7 +304,7 @@ async def test_ai_enhanced_planning_and_confirmation_threshold(
         pricing=rt.ledger.pricing,
         audio_cache=rt.cache,
     )
-    assert any(line.item == "AI Enhanced planning: already planned" for line in planned.breakdown)
+    assert any(line.item == "AI cleanup: already done" for line in planned.breakdown)
 
 
 async def test_local_voice_and_images(paths: Paths, db: Database, settings: SettingsBox, events: EventBus) -> None:

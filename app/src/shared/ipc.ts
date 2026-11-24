@@ -8,6 +8,7 @@ import { z } from 'zod'
 export { IPC, type IpcChannel } from './ipc-channels'
 export type {
   BarOpenedEvent,
+  BarShownEvent,
   ClipboardContent,
   FileHit,
   FileKind,
@@ -27,7 +28,9 @@ export const EngineInfoSchema = z.object({
 export type EngineInfo = z.infer<typeof EngineInfoSchema>
 
 export const BarResizeSchema = z.object({ height: z.number().int().min(40).max(2000) })
-export const BarListeningSchema = z.object({ listening: z.boolean() })
+export const BarShownSchema = z.object({ openId: z.number().int().min(0), height: z.number().int().min(40).max(2000) })
+// `recording`: the microphone is recording a voice to clone (the hotkey then finishes the take, not the bar).
+export const BarListeningSchema = z.object({ listening: z.boolean(), recording: z.boolean().optional() })
 export const BarOpenSchema = z.object({ documentId: id.optional(), listen: z.boolean().optional() })
 export type BarOpenRequest = z.infer<typeof BarOpenSchema>
 

@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 from open_speech.api.schemas import (
     Attachment,
     AttachmentOut,
+    BudgetState,
     Capabilities,
     PlaybackState,
     SpeechDiff,
@@ -23,7 +24,7 @@ from open_speech.api.schemas import (
 from open_speech.config import UserSettings
 from open_speech.document.model import Anchor, Fidelity
 
-PROTOCOL = 2
+PROTOCOL = 3
 
 
 def _now() -> str:
@@ -70,13 +71,24 @@ class Subscribe(_Msg):
 
 
 class BarState(_Msg):
-    """The bar tells the engine it opened or closed, for ducking (07 § Ducking)."""
+    """The bar tells the engine a conversation is active (listening, thinking or speaking) or over, so reading
+    pauses while the user and the assistant talk and resumes afterwards (07 § Ducking)."""
 
     type: Literal["bar.state"] = "bar.state"
     open: bool
 
 
-ClientMessage = Annotated[MicStart | MicStop | Command | Subscribe | BarState, Field(discriminator="type")]
+class SpeechStop(_Msg):
+    """Stop what the engine is saying right now (a reply, a prompt, a preview or a recording replay), with a
+    short fade, and drop the rest of that reply. The bar sends it when the user interrupts by key."""
+
+    type: Literal["speech.stop"] = "speech.stop"
+    turn_id: str | None = None  # None: whatever is being said
+
+
+ClientMessage = Annotated[
+    MicStart | MicStop | Command | Subscribe | BarState | SpeechStop, Field(discriminator="type")
+]
 client_message_adapter: TypeAdapter[Any] = TypeAdapter(ClientMessage)
 
 
@@ -135,7 +147,9 @@ class AssistantCard(_Msg):
 
     type: Literal["assistant.card"] = "assistant.card"
     turn_id: str
-    kind: Literal["voices", "rules", "usage", "recents", "models", "where", "presets", "settings", "queue", "info"]
+    kind: Literal[
+        "voices", "rules", "usage", "recents", "models", "where", "settings", "queue", "info", "design"
+    ]
     title: str
     rows: list[CardRow] = Field(default_factory=list)
     data: dict[str, Any] = Field(default_factory=dict)
@@ -160,12 +174,37 @@ class AssistantActionResolved(_Msg):
 
 
 class AssistantDone(_Msg):
+    """The reply's text is complete; it is sent as soon as it is, usually while the reply is still being said
+    (its first sentences may have been heard already: `assistant.speech` started can come before this). When
+    `speaks` is true an `assistant.speech` ended (kind "reply", this turn) is guaranteed to follow: the bar waits
+    for it before listening again. The reply recording arrives with that event, not here.
+
+    `audible_effect`: the answer is reading audio, which resumes when the conversation ends ("faster" while
+    reading, "read my clipboard", an agent turn that started reading). End the conversation once anything
+    still being said has been heard, instead of listening for a follow-up."""
+
     type: Literal["assistant.done"] = "assistant.done"
     turn_id: str
     text: str = ""
-    reply_recording_id: str | None = None
+    reply_recording_id: str | None = None  # always null since protocol 3: see `assistant.speech` ended
     handled_by: Literal["fast_path", "agent", "error"] = "agent"
     error: dict[str, Any] | None = None
+    speaks: bool = False
+    audible_effect: bool = False
+
+
+class AssistantSpeech(_Msg):
+    """The engine started or finished saying something. It plays through CoreAudio, where the bar's echo
+    cancellation can't hear it, so the bar keeps its microphone closed from `started` until `ended` (which is
+    sent once the last sample has left the speakers, plus a short echo tail)."""
+
+    type: Literal["assistant.speech"] = "assistant.speech"
+    state: Literal["started", "ended"]
+    kind: Literal["reply", "say", "preview", "recording"]
+    turn_id: str | None = None
+    reason: Literal["finished", "stopped", "superseded", "error"] | None = None  # set on "ended"
+    recording_id: str | None = None  # set on "ended" for replies: the whole reply, for replay
+    played_ms: int | None = None
 
 
 class PlaybackStateMsg(_Msg):
@@ -193,11 +232,20 @@ class UsageAlert(_Msg):
     message: str
 
 
+class UsageChanged(_Msg):
+    """Month-to-date spend, the budget or a free allowance changed (debounced; sent only on a real change)."""
+
+    type: Literal["usage.changed"] = "usage.changed"
+    budget: BudgetState
+
+
 class JobProgress(_Msg):
     type: Literal["job.progress"] = "job.progress"
     job_id: str
     pct: float
     label: str
+    # What the job is: a model download ("install"), a voice being cloned ("clone") or designed ("design").
+    kind: Literal["install", "clone", "design"] | None = None
 
 
 class DocumentUpdated(_Msg):
@@ -254,9 +302,11 @@ ServerMessage = Annotated[
     | AssistantAction
     | AssistantActionResolved
     | AssistantDone
+    | AssistantSpeech
     | PlaybackStateMsg
     | PlaybackWord
     | UsageAlert
+    | UsageChanged
     | JobProgress
     | DocumentUpdated
     | RulesChanged

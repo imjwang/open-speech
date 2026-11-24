@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Draws the menu-bar icons (09 § Menu bar: idle outline, listening filled + pulse frame, playing
-// waveform, attention dot) as macOS template images (black + alpha) at 1x and 2x. No dependencies:
+// Draws the menu-bar icons (09 § Menu bar: idle outline, listening filled + pulse frame, speaking speech
+// bubble, playing waveform, attention dot) as macOS template images (black + alpha) at 1x and 2x. No dependencies:
 // shapes are rasterised with 4×4 supersampling and encoded as PNG with node:zlib.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -74,6 +74,12 @@ const roundRect = (x0, y0, x1, y1, r) => (x, y) => {
   const cy = Math.min(Math.max(y, y0 + r), y1 - r)
   return dist(x, y, cx, cy) <= r
 }
+const triangle = (ax, ay, bx, by, cx, cy) => (x, y) => {
+  const s1 = (bx - ax) * (y - ay) - (by - ay) * (x - ax)
+  const s2 = (cx - bx) * (y - by) - (cy - by) * (x - bx)
+  const s3 = (ax - cx) * (y - cy) - (ay - cy) * (x - cx)
+  return (s1 >= 0 && s2 >= 0 && s3 >= 0) || (s1 <= 0 && s2 <= 0 && s3 <= 0)
+}
 const union = (...fs) => (x, y) => fs.some((f) => f(x, y))
 const minus = (a, b) => (x, y) => a(x, y) && !b(x, y)
 
@@ -93,6 +99,12 @@ const icons = {
   listening: minus(disc(8, 8, 7), bars([3, 5.4, 3])),
   // listening pulse frame (alternates with `listening` unless reduced motion is on)
   'listening-pulse': union(minus(disc(8, 8, 5.6), bars([2.4, 4.2, 2.4])), ring(8, 8, 7.2, 0.9)),
+  // speaking (the assistant is talking): a speech bubble with the glyph inside
+  speaking: union(
+    minus(roundRect(1, 1.6, 15, 11.6, 3.2), roundRect(2.3, 2.9, 13.7, 10.3, 2)),
+    minus(triangle(3.6, 10.8, 3.6, 14.8, 7.6, 10.8), roundRect(2.3, 2.9, 13.7, 10.3, 2)),
+    bars([2.4, 4.4, 2.4], 8.45, 6.6),
+  ),
   // playing: waveform
   playing: union(
     roundRect(1.4, 6, 3, 10, 0.8),

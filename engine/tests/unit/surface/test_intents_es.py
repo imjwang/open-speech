@@ -67,9 +67,7 @@ ES: list[tuple[str, str | None, dict[str, object]]] = [
     ("abre las reglas", "open_rules", {"item": None}),
     ("edita las reglas", "open_rules", {"item": None}),
     ("abre las pronunciaciones", "open_rules", {"item": "lexicon"}),
-    ("deja de leer las notas al pie", "preset", {"preset": "Footnotes", "enabled": True}),
-    ("no leas los encabezados", "preset", {"preset": "Headers", "enabled": True}),
-    ("vuelve a leer las citas", "preset", {"preset": "Citations", "enabled": False}),
+    ("abre mis instrucciones de lectura", "open_rules", {"item": "preferences"}),
     ("di SQL como sequel", "lexicon", {"term": "SQL", "spoken": "sequel"}),
     ("pronuncia Nguyen como güin", "lexicon", {"term": "Nguyen", "spoken": "güin"}),
     ("olvida la pronunciación de SQL", "remove_pronunciation", {"term": "sql"}),
@@ -77,6 +75,17 @@ ES: list[tuple[str, str | None, dict[str, object]]] = [
     # open-ended requests go to the assistant
     ("resume este artículo", None, {}),
     ("qué opinas de este texto", None, {}),
+    # what is read everywhere is the reading instructions' business: the assistant edits them
+    ("deja de leer las notas al pie", None, {}),
+    ("no leas los encabezados", None, {}),
+    ("vuelve a leer las citas", None, {}),
+    ("modo inteligente", None, {}),
+    # a rule limited to this site or this document is a card
+    ("omite las tablas en este sitio", "propose_rule",
+     {"instruction": "omite las tablas en este sitio", "scope_hint": "site"}),
+    ("vuelve a leer las citas en este documento", "propose_rule",
+     {"instruction": "vuelve a leer las citas en este documento", "scope_hint": "document"}),
+    ("salta al final en este documento", None, {}),
 ]
 
 EN_NEW: list[tuple[str, str | None, dict[str, object]]] = [

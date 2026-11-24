@@ -1,4 +1,5 @@
-"""Golden corpus (10 § Testing strategy): "what is spoken" per fixture and preset configuration.
+"""Golden corpus (10 § Testing strategy): "what is spoken" per fixture, without Claude, for three versions of the
+reading instructions: the default, every optional skip line added, and no skip lines.
 
 Snapshots live in tests/golden/snapshots/ and are reviewed on change. To regenerate after an intended
 change: `OPEN_SPEECH_UPDATE_GOLDEN=1 uv run pytest tests/golden` and review the diff.
@@ -20,7 +21,7 @@ from open_speech.ingest import SourceInput, ingest
 from open_speech.plan.planner import PlanContext, Planner
 from open_speech.plan.script import SpeechScript
 from open_speech.rules.files import RuleStore
-from open_speech.rules.presets import PRESETS
+from open_speech.rules.prompt import prompt_from_presets
 from tests.golden import make_fixtures as fx
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
@@ -55,12 +56,17 @@ def documents(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Document]:
     return asyncio.run(run())
 
 
+_ALL = ("headers", "footers", "page-numbers", "footnotes", "citations", "urls", "parentheses", "brackets", "braces",
+        "tables", "formulas", "captions", "code")
+
+
 def _store(tmp_path: Path, config: str) -> RuleStore:
-    store = RuleStore(Paths(tmp_path).ensure())
+    paths = Paths(tmp_path).ensure()
+    store = RuleStore(paths)
     store.ensure_defaults()
     if config != "classic-default":
-        for p in PRESETS:
-            store.set_preset(p.name, config == "classic-all-on")
+        paths.speech_md.write_text(prompt_from_presets(dict.fromkeys(_ALL, config == "classic-all-on")), "utf-8")
+        store.reload()
     return store
 
 
@@ -83,7 +89,9 @@ def render(script: SpeechScript, doc: Document) -> str:
 
 
 async def _plan(doc: Document, store: RuleStore) -> SpeechScript:
-    ctx = PlanContext(document=doc, rules=store.rules_for(doc), lexicon=store.lexicon(), speech_md=store.speech_md())
+    ctx = PlanContext(
+        document=doc, rules=store.plan_rules(doc), lexicon=store.lexicon(), speech_md=store.plan_speech_md()
+    )
     return (await Planner(None).plan(ctx, None)).script
 
 

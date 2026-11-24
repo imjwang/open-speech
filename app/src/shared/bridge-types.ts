@@ -12,8 +12,11 @@ export interface OpenSpeechBridge {
   onEngineChanged(cb: (info: EngineInfo | null) => void): () => void
   // command bar window
   hideBar(): void
-  resizeBar(height: number): void
-  setListening(listening: boolean): void
+  /** Synchronous: returns once the window has the new height (the height it has, after clamping). */
+  resizeBar(height: number): number
+  /** The bar painted open `openId` (from `onBarOpened`) at `height`: main may now show it. */
+  barShown(openId: number, height: number): void
+  setListening(listening: boolean, recording?: boolean): void
   onBarOpened(cb: (event: BarOpenedEvent) => void): () => void
   onBarClosed(cb: () => void): () => void
   openBar(request?: { documentId?: string; listen?: boolean }): void

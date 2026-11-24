@@ -4,14 +4,21 @@
  * WebContentsView owned by the main process. Highlights follow `playback.word`; follow mode keeps the
  * sentence in view until the user scrolls; click a sentence to start there; Script view shows exactly
  * what will be spoken.
+ *
+ * Steady on screen: this component doesn't follow the playing word at all. Each text block (and each PDF page,
+ * each Script view line) subscribes to its own part of the highlight, so per word only the one or two blocks it
+ * touches re-render; the title strip follows playback on its own; and opening another document keeps the
+ * current one on screen until the new one is ready to show.
  */
 import { ArrowDownToLine } from 'lucide-react'
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 
-import { fetchAllBlocks, fetchSource, unwrap, type Block, type DocumentOut } from '@shared/api/client'
+import { fetchAllBlocks, fetchSource, unwrap, type Block, type DocumentOut, type ScriptOut } from '@shared/api/client'
 import type { ReaderTarget } from '@shared/ipc'
 
 import type { Bridge } from '@/bridge'
+import { countEvent, useRenderCount } from '@/debug'
 import { useEngine, useEngineStore, useServerEvent } from '@/engine'
 import { useT } from '@/i18n'
 import { usePrefs } from '@/prefs'
@@ -20,17 +27,8 @@ import { PdfView } from './components/PdfView'
 import { ScriptView } from './components/ScriptView'
 import { TextView } from './components/TextView'
 import { TitleStrip } from './components/TitleStrip'
-import {
-  EMPTY_MARKS,
-  outlinedBlocks,
-  removedMarks,
-  sentenceRanges,
-  utteranceRanges,
-  utteranceReplacements,
-  wordRange,
-  type BlockMarks,
-} from './highlight'
-import { useReaderStore } from './store'
+import { removedMarks, utteranceRanges, utteranceReplacements, type BlockMarks } from './highlight'
+import { useReaderStore, type WordState } from './store'
 
 const LIVE_REGION_MIN_MS = 4000
 const FONT_FAMILIES: Record<string, string> = {
@@ -48,7 +46,7 @@ function readTargetFromLocation(): ReaderTarget | null {
 }
 
 /** Static per-block marks (rule removals, replacements, utterance ranges); recomputed only with the script. */
-function staticMarks(blocks: readonly Block[], script: ReturnType<typeof useReaderStore.getState>['script']): Map<string, BlockMarks> {
+export function staticMarks(blocks: readonly Block[], script: ScriptOut | null): Map<string, BlockMarks> {
   const map = new Map<string, BlockMarks>()
   if (!script) return map
   for (const b of blocks) {
@@ -66,19 +64,36 @@ function staticMarks(blocks: readonly Block[], script: ReturnType<typeof useRead
 }
 
 export function ReaderApp({ bridge }: { bridge: Bridge }) {
+  useRenderCount('ReaderApp')
   const t = useT()
   const engine = useEngine()
   const endpoint = useEngineStore((s) => s.endpoint)
-  const playback = useEngineStore((s) => s.playback)
-  const st = useReaderStore()
+  const playingDoc = useEngineStore((s) => s.playback.document_id ?? null)
+  const playingState = useEngineStore((s) => s.playback.state)
+  // Everything but the playing word (that is each block's own business).
+  const st = useReaderStore(
+    useShallow((s) => ({
+      target: s.target,
+      documentId: s.documentId,
+      doc: s.doc,
+      blocks: s.blocks,
+      script: s.script,
+      source: s.source,
+      imageUrl: s.imageUrl,
+      loading: s.loading,
+      error: s.error,
+      scriptView: s.scriptView,
+      follow: s.follow,
+      webMode: s.webMode,
+      web: s.web,
+    })),
+  )
   const scrollRef = useRef<HTMLElement>(null)
   const programmaticUntil = useRef(0)
-  const [liveText, setLiveText] = useState('')
-  const lastLive = useRef(0)
   const mac = bridge.platform === 'darwin'
 
   const docId = st.documentId
-  const isPlayingThis = !!docId && playback.document_id === docId
+  const isPlayingThis = !!docId && playingDoc === docId
   const isWeb = st.doc?.kind === 'web' && !!st.doc.url && bridge.capabilities.webView
   const showLivePage = isWeb && st.webMode === 'page' && !st.scriptView
 
@@ -104,12 +119,12 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
 
   useEffect(() => {
     // Without an explicit target, the reader shows (and follows) whatever is playing.
-    const t = useReaderStore.getState().target
-    const pinnedUrl = !!t?.url
-    if (!pinnedUrl && playback.document_id && playback.document_id !== docId && (playback.state === 'playing' || playback.state === 'loading' || !docId)) {
-      useReaderStore.setState({ documentId: playback.document_id, follow: true })
+    const target = useReaderStore.getState().target
+    const pinnedUrl = !!target?.url
+    if (!pinnedUrl && playingDoc && playingDoc !== docId && (playingState === 'playing' || playingState === 'loading' || !docId)) {
+      useReaderStore.setState({ documentId: playingDoc, follow: true })
     }
-  }, [playback.document_id, playback.state, docId])
+  }, [playingDoc, playingState, docId])
 
   useEffect(() => {
     // A URL target: the live page (Electron) posts its blocks and reports the new document id; in a
@@ -134,16 +149,21 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
 
   // ---------------------------------------------------------------- loading
 
-  const loadScript = async (id: string) => {
-    const client = engine.client
-    if (!client) return
-    try {
-      const script = await unwrap(client.GET('/api/v1/documents/{document_id}/script', { params: { path: { document_id: id } } }))
-      if (useReaderStore.getState().documentId === id) useReaderStore.setState({ script })
-    } catch {
-      // Script view and dimming need the plan; the reader still works without it.
-    }
-  }
+  const fetchScript = useCallback(
+    async (id: string): Promise<ScriptOut | null> => {
+      const client = engine.client
+      if (!client) return null
+      try {
+        return await unwrap(client.GET('/api/v1/documents/{document_id}/script', { params: { path: { document_id: id } } }))
+      } catch {
+        return null // Script view and dimming need the plan; the reader still works without it.
+      }
+    },
+    [engine],
+  )
+
+  /** The image of the document on screen; revoked once another document has replaced it. */
+  const shownImageUrl = useRef<string | null>(null)
 
   useEffect(() => {
     if (!docId || !endpoint) return
@@ -151,32 +171,47 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
     if (!client) return
     let cancelled = false
     let objectUrl: string | null = null
-    useReaderStore.setState({ loading: true, error: null, doc: null, blocks: [], script: null, source: null, imageUrl: null, word: null })
+    // The document on screen stays there (and keeps working) until the new one is ready to show.
+    useReaderStore.setState({ loading: true, error: null })
     const run = async () => {
-      const doc: DocumentOut = await unwrap(client.GET('/api/v1/documents/{document_id}', { params: { path: { document_id: docId } } }))
-      const blocks = await fetchAllBlocks(client, docId)
+      const [doc, blocks, script] = await Promise.all([
+        unwrap(client.GET('/api/v1/documents/{document_id}', { params: { path: { document_id: docId } } })) as Promise<DocumentOut>,
+        fetchAllBlocks(client, docId),
+        fetchScript(docId),
+      ])
       if (cancelled) return
-      useReaderStore.setState({ doc, blocks })
-      document.title = doc.title ? `${doc.title} · Open Speech` : 'Open Speech Reader'
+      let source: ArrayBuffer | null = null
       if (doc.has_source_file && (doc.kind === 'pdf' || doc.kind === 'image')) {
         const bytes = await fetchSource(client, docId)
         if (cancelled) return
-        if (doc.kind === 'pdf') useReaderStore.setState({ source: bytes })
-        else {
-          objectUrl = URL.createObjectURL(new Blob([bytes]))
-          useReaderStore.setState({ imageUrl: objectUrl })
-        }
+        if (doc.kind === 'pdf') source = bytes
+        else objectUrl = URL.createObjectURL(new Blob([bytes]))
       }
-      await loadScript(docId)
+      const previousImage = shownImageUrl.current
+      shownImageUrl.current = objectUrl
+      useReaderStore.setState({ doc, blocks, script, source, imageUrl: objectUrl, word: null, loading: false, error: null })
+      if (previousImage) URL.revokeObjectURL(previousImage)
+      objectUrl = null // on screen now: revoked when replaced
+      document.title = doc.title ? `${doc.title} · Open Speech` : 'Open Speech Reader'
     }
-    run()
-      .catch((err: Error) => !cancelled && useReaderStore.setState({ error: err.message || 'Could not open this document.' }))
-      .finally(() => !cancelled && useReaderStore.setState({ loading: false }))
+    run().catch((err: Error) => {
+      if (cancelled) return
+      useReaderStore.setState({
+        doc: null,
+        blocks: [],
+        script: null,
+        source: null,
+        imageUrl: null,
+        word: null,
+        loading: false,
+        error: err.message || 'Could not open this document.',
+      })
+    })
     return () => {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [docId, endpoint, engine])
+  }, [docId, endpoint, engine, fetchScript])
 
   useEffect(() => {
     // Live page for web documents, hidden for text mode / Script view, destroyed for other kinds.
@@ -192,7 +227,10 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
   // ---------------------------------------------------------------- engine events
 
   useServerEvent('playback.word', (msg) => {
-    if (msg.document_id !== useReaderStore.getState().documentId) return
+    const s = useReaderStore.getState()
+    // Words for the document on screen only (not the one still loading, whose blocks aren't here yet).
+    if (msg.document_id !== s.documentId || s.doc?.id !== msg.document_id) return
+    countEvent('word')
     useReaderStore.setState({
       word: {
         documentId: msg.document_id,
@@ -212,29 +250,13 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
     if (msg.document_id !== id || !id) return
     const client = engine.client
     if (!client) return
-    void loadScript(id)
+    void fetchScript(id).then((script) => script && useReaderStore.getState().documentId === id && useReaderStore.setState({ script }))
     void fetchAllBlocks(client, id).then((blocks) => useReaderStore.getState().documentId === id && useReaderStore.setState({ blocks }))
   })
 
   // ---------------------------------------------------------------- follow mode
 
-  const word = st.word
-  useEffect(() => {
-    if (!st.follow || !word || showLivePage) return
-    const root = scrollRef.current
-    if (!root) return
-    const el =
-      root.querySelector<HTMLElement>('[data-current-sentence="true"]') ??
-      root.querySelector<HTMLElement>('[data-current-word="true"]') ??
-      root.querySelector<HTMLElement>('[data-current-page="true"]')
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    const v = root.getBoundingClientRect()
-    const margin = Math.min(120, v.height * 0.15)
-    if (r.top >= v.top + margin && r.bottom <= v.bottom - margin) return
-    programmaticUntil.current = Date.now() + 900
-    el.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
-  }, [word?.utteranceId, word?.anchor.char_start, st.follow, st.scriptView, showLivePage, word])
+  useFollowScroll(scrollRef, programmaticUntil, !showLivePage)
 
   const onScroll = () => {
     if (Date.now() > programmaticUntil.current && useReaderStore.getState().follow) useReaderStore.setState({ follow: false })
@@ -244,19 +266,6 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
     if (showLivePage) bridge.webBackToPlayhead()
     useReaderStore.setState({ follow: true })
   }
-
-  // ---------------------------------------------------------------- live region (rate-limited)
-
-  useEffect(() => {
-    const utt = st.script?.utterances.find((u) => u.id === word?.utteranceId)
-    if (!utt) return
-    const wait = Math.max(0, lastLive.current + LIVE_REGION_MIN_MS - Date.now())
-    const t = setTimeout(() => {
-      lastLive.current = Date.now()
-      setLiveText(utt.text)
-    }, wait)
-    return () => clearTimeout(t)
-  }, [word?.utteranceId, st.script])
 
   // ---------------------------------------------------------------- playback controls
 
@@ -286,6 +295,11 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
     useReaderStore.setState({ follow: true })
     void call(() => unwrap(client.POST('/api/v1/playback/play', { body: { document_id: docId, from, confirm_estimate: false } })))
   }
+  const playFromRef = useRef(playFrom)
+  playFromRef.current = playFrom
+  // Stable handlers: the blocks and pages are memoized and must not re-render for a new closure.
+  const startUtterance = useCallback((id: string) => playFromRef.current({ utterance_id: id }), [])
+  const startAt = useCallback((blockId: string, char: number) => playFromRef.current({ block_id: blockId, char }), [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -334,21 +348,7 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
     fontFamily: FONT_FAMILIES[settings?.font ?? 'system'] ?? 'inherit',
   }
 
-  const statics = staticMarks(st.blocks, st.script)
-  const liveIds = new Set<string>()
-  for (const a of word?.sentenceAnchors ?? []) if (a.block_id) liveIds.add(a.block_id)
-  if (word?.anchor.block_id) liveIds.add(word.anchor.block_id)
-  const marksFor = (blockId: string): BlockMarks => {
-    const base = statics.get(blockId) ?? EMPTY_MARKS
-    if (!liveIds.has(blockId) || !word) return base
-    const len = [...(st.blocks.find((b) => b.id === blockId)?.text ?? '')].length
-    return {
-      ...base,
-      sentence: sentenceRanges(blockId, word.sentenceAnchors.filter((a) => a.char_start != null), len),
-      word: wordRange(blockId, word.anchor, len),
-    }
-  }
-  const outlined = outlinedBlocks(word?.sentenceAnchors ?? [])
+  const statics = useMemo(() => staticMarks(st.blocks, st.script), [st.blocks, st.script])
   const followReleased = showLivePage ? !!st.web?.followReleased : !st.follow
   const title = st.doc?.title ?? st.web?.title ?? (st.loading ? 'Opening…' : 'Open Speech Reader')
 
@@ -362,22 +362,16 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
   } else if (!docId && !st.target?.url) {
     content = <p className="mx-auto max-w-prose px-6 py-10 text-muted-foreground">Nothing is playing. Press ⌘K and tell me what to read.</p>
   } else if (st.scriptView && st.script) {
-    content = <ScriptView script={st.script} blocks={st.blocks} word={word} onStart={(id) => playFrom({ utterance_id: id })} style={contentStyle} />
+    content = <ScriptView script={st.script} blocks={st.blocks} onStart={startUtterance} style={contentStyle} />
   } else if (showLivePage) {
     content = null // the WebContentsView covers the content area
   } else if (st.doc?.kind === 'pdf' && st.source) {
     content = (
       <>
-        <PdfView
-          data={st.source}
-          blocks={st.blocks}
-          removed={st.script?.removed ?? []}
-          word={word}
-          onPlayFrom={(blockId, char) => playFrom({ block_id: blockId, char })}
-        />
+        <PdfView data={st.source} blocks={st.blocks} removed={st.script?.removed ?? []} onPlayFrom={startAt} />
         {/* Reading-order text for screen readers; the canvas pages are images. */}
         <div className="sr-only">
-          <TextView blocks={st.blocks} marksFor={marksFor} outlined={outlined} onStart={(id) => playFrom({ utterance_id: id })} />
+          <TextView blocks={st.blocks} marks={statics} onStart={startUtterance} />
         </div>
       </>
     )
@@ -389,17 +383,16 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
             <img src={st.imageUrl} alt={st.doc?.title ?? 'Image'} className="max-h-[60vh] w-auto rounded-md border" />
           </figure>
         )}
-        <TextView blocks={st.blocks} marksFor={marksFor} outlined={outlined} onStart={(id) => playFrom({ utterance_id: id })} style={contentStyle} />
-        {st.loading && <p className="px-6 text-sm text-muted-foreground">{t('reader.loading')}</p>}
+        <TextView blocks={st.blocks} marks={statics} onStart={startUtterance} style={contentStyle} />
+        {st.loading && !st.doc && <p className="px-6 text-sm text-muted-foreground">{t('reader.loading')}</p>}
       </>
     )
   }
 
   return (
     <div className="flex h-screen flex-col bg-page text-page-foreground">
-      <TitleStrip
+      <ReaderTitle
         title={title}
-        playback={playback}
         isPlayingThis={isPlayingThis}
         pageCount={st.doc?.page_count ?? null}
         scriptView={st.scriptView}
@@ -413,7 +406,7 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
         onCommand={() => bridge.openBar(docId ? { documentId: docId } : {})}
         mac={mac}
       />
-      <main ref={scrollRef} className="relative flex-1 overflow-y-auto" onScroll={onScroll} tabIndex={0} aria-label={title}>
+      <main ref={scrollRef} className="relative flex-1 overflow-y-auto" onScroll={onScroll} tabIndex={0} aria-label={title} data-scroll-root>
         {content}
         {!showLivePage && followReleased && isPlayingThis && (
           <button
@@ -427,9 +420,7 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
           </button>
         )}
       </main>
-      <div className="sr-only" aria-live="polite" aria-atomic="true" data-testid="reader-live">
-        {liveText}
-      </div>
+      <ReaderLiveRegion />
       {st.error && st.doc && (
         <p role="status" className="border-t px-4 py-1 text-xs text-destructive">
           {st.error}
@@ -437,4 +428,74 @@ export function ReaderApp({ bridge }: { bridge: Bridge }) {
       )}
     </div>
   )
+}
+
+/** The title strip, following playback (time left, speed, page) on its own: it changes every second. */
+function ReaderTitle(props: Omit<Parameters<typeof TitleStrip>[0], 'playback'>) {
+  const playback = useEngineStore((s) => s.playback)
+  return <TitleStrip {...props} playback={playback} />
+}
+
+/** The sentence being read, for screen readers, at most every few seconds. Follows the word on its own. */
+function ReaderLiveRegion() {
+  const utteranceId = useReaderStore((s) => s.word?.utteranceId ?? null)
+  const script = useReaderStore((s) => s.script)
+  const [liveText, setLiveText] = useState('')
+  const lastLive = useRef(0)
+  useEffect(() => {
+    const utt = script?.utterances.find((u) => u.id === utteranceId)
+    if (!utt) return
+    const wait = Math.max(0, lastLive.current + LIVE_REGION_MIN_MS - Date.now())
+    const timer = setTimeout(() => {
+      lastLive.current = Date.now()
+      setLiveText(utt.text)
+    }, wait)
+    return () => clearTimeout(timer)
+  }, [utteranceId, script])
+  return (
+    <div className="sr-only" aria-live="polite" aria-atomic="true" data-testid="reader-live">
+      {liveText}
+    </div>
+  )
+}
+
+/**
+ * Follow mode: keep the current sentence in view while the user hasn't scrolled away. Watches the playing word
+ * without re-rendering the reader (a store subscription), and looks once the highlight has been drawn.
+ */
+function useFollowScroll(scrollRef: RefObject<HTMLElement | null>, programmaticUntil: { current: number }, enabled: boolean): void {
+  useEffect(() => {
+    if (!enabled) return
+    let frame = 0
+    const check = () => {
+      frame = 0
+      const s = useReaderStore.getState()
+      const root = scrollRef.current
+      if (!s.follow || !s.word || !root) return
+      const el =
+        root.querySelector<HTMLElement>('[data-current-sentence="true"]') ??
+        root.querySelector<HTMLElement>('[data-current-word="true"]') ??
+        root.querySelector<HTMLElement>('[data-current-page="true"]')
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const v = root.getBoundingClientRect()
+      const margin = Math.min(120, v.height * 0.15)
+      if (r.top >= v.top + margin && r.bottom <= v.bottom - margin) return
+      programmaticUntil.current = Date.now() + 900
+      el.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+    }
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(check)
+    }
+    const moved = (a: WordState | null, b: WordState | null) =>
+      a?.utteranceId !== b?.utteranceId || a?.anchor.char_start !== b?.anchor.char_start
+    const off = useReaderStore.subscribe((s, prev) => {
+      if (moved(s.word, prev.word) || (s.follow && !prev.follow) || s.scriptView !== prev.scriptView) schedule()
+    })
+    schedule()
+    return () => {
+      off()
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [scrollRef, programmaticUntil, enabled])
 }

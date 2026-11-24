@@ -1,7 +1,7 @@
 /**
  * Serves (and builds) the renderer pages in a plain browser, for UI tests against a real engine:
- *   pnpm dev:web  →  http://127.0.0.1:5173/commandbar/index.html?engine=http://127.0.0.1:<port>&token=<t>
- *                    http://127.0.0.1:5173/reader/index.html?engine=…&token=…&doc=<doc_id>
+ *   bun run dev:web  →  http://127.0.0.1:5173/commandbar/index.html?engine=http://127.0.0.1:<port>&token=<t>
+ *                       http://127.0.0.1:5173/reader/index.html?engine=…&token=…&doc=<doc_id>
  * The engine must allow this origin: OPEN_SPEECH_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
  */
 import { resolve } from 'node:path'

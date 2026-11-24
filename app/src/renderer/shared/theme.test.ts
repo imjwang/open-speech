@@ -54,3 +54,14 @@ describe('themes', () => {
     expect(root.dataset.theme).toBe('lavender')
   })
 })
+
+describe('the first paint uses the theme main remembered', () => {
+  it('reads ?theme= from the page URL, else follows the Mac', async () => {
+    const { initialThemePreference } = await import('./prefs')
+    expect(initialThemePreference('?theme=ember&debug=1')).toBe('ember')
+    expect(initialThemePreference('?theme=lavender')).toBe('lavender')
+    expect(initialThemePreference('?theme=system')).toBe('system')
+    expect(initialThemePreference('?theme=neon')).toBe('system')
+    expect(initialThemePreference('')).toBe('system')
+  })
+})

@@ -181,3 +181,17 @@ class AudioCache:
 
     def delete(self, key: str) -> None:
         self.assets.delete(KIND, key)
+
+    def delete_voice(self, provider: str, model: str, voice: str) -> int:
+        """Remove everything one voice said (a cloned voice deleted, or its reference replaced). Entries record
+        which voice spoke them (`VoiceRef`); the keys alone can't say. Returns the number removed."""
+        removed = 0
+        for row in self.assets.db.query("SELECT key FROM assets WHERE kind = ?", (KIND,)):
+            asset = self.assets.get(KIND, row["key"], touch=False)
+            if asset is None:
+                continue
+            m = asset.meta
+            if m.get("provider") == provider and m.get("model") == model and m.get("voice") == voice:
+                self.assets.delete(KIND, asset.key)
+                removed += 1
+        return removed

@@ -11,7 +11,7 @@ H Recipe
 ¶ Taste first, then adjust the grind.
 
 --- removed (4)
-footnotes skip blk_4: 1
-code drop_block blk_9: ratio = water / coffee
-tables drop_block blk_10: Step, Time. Bloom, 0:45. Finish, 3:00.
-footnotes drop_block blk_12: 1 Rinsing removes the papery taste.
+Don't read footnotes and footnote markers skip blk_4: 1
+Don't read code blocks drop_block blk_9: ratio = water / coffee
+Don't read tables drop_block blk_10: Step, Time. Bloom, 0:45. Finish, 3:00.
+Don't read footnotes and footnote markers drop_block blk_12: 1 Rinsing removes the papery taste.

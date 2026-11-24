@@ -40,11 +40,6 @@ CASES: list[tuple[str, str | None, dict[str, object]]] = [
     ("how much is left", "where_am_i", {}),
     ("say SQL as sequel", "lexicon", {"term": "SQL", "spoken": "sequel"}),
     ("Say kubectl as cube control.", "lexicon", {"term": "kubectl", "spoken": "cube control"}),
-    ("skip footnotes", "preset", {"preset": "Footnotes", "enabled": True}),
-    ("stop reading the citations", "preset", {"preset": "Citations", "enabled": True}),
-    ("read page numbers again", "preset", {"preset": "Page numbers", "enabled": False}),
-    ("AI enhanced on", "set_mode", {"mode": "ai_enhanced"}),
-    ("classic mode", "set_mode", {"mode": "classic"}),
     ("how much have I spent this month", "usage", {"period": "month"}),
     ("how much have I spent today", "usage", {"period": "today"}),
     ("how much have I spent", "usage", {"period": "month"}),
@@ -53,11 +48,26 @@ CASES: list[tuple[str, str | None, dict[str, object]]] = [
     ("say that again", "repeat", {}),
     ("clear cache", "clear_cache", {}),
     ("use the coral voice", "set_voice_by_name", {"name": "coral", "scope": "document"}),
+    ("use aiden", "set_voice_by_name", {"name": "aiden", "scope": "document"}),  # a Qwen voice, not "ai"
+    ("open my reading instructions", "open_rules", {"item": "preferences"}),
+    ("edit preferences", "open_rules", {"item": "preferences"}),
     ("read https://example.org/article", "open_source", {"target": "https://example.org/article", "play": True}),
     # Goes to Claude:
     ("summarize the rest of this chapter", None, {}),
     ("use a calmer voice, a bit faster", None, {}),
     ("describe figures in one sentence", None, {}),
+    # What is read everywhere is the reading instructions' business: Claude edits them (tools.py `edit_prompt`).
+    ("skip footnotes", None, {}),
+    ("stop reading the citations", None, {}),
+    ("read page numbers again", None, {}),
+    ("read URLs again", None, {}),
+    ("don't read the tables", None, {}),
+    ("skip footnotes everywhere", None, {}),
+    ("AI enhanced on", None, {}),  # cleanup has no modes any more
+    ("classic mode", None, {}),
+    # Moving through the text, not a rule:
+    ("skip to the conclusion in this paper", None, {}),
+    ("skip the next paragraph on this page", None, {}),
 ]
 
 
@@ -79,6 +89,12 @@ def test_scoped_skip_becomes_rule_proposal() -> None:
     assert i.params["scope_hint"] == "site"
     i = parse("skip citations for this paper")
     assert i is not None and i.kind == "propose_rule" and i.params["scope_hint"] == "document"
+    i = parse("read the captions again in this document only")
+    assert i is not None and i.kind == "propose_rule" and i.params["scope_hint"] == "document"
+    # A type is named in the words; the rule compiler takes it from there.
+    i = parse("skip citations in PDFs")
+    assert i is not None and i.kind == "propose_rule" and i.params == {"instruction": "skip citations in PDFs",
+                                                                         "scope_hint": None}
 
 
 def test_confirmations_only_with_pending_action() -> None:

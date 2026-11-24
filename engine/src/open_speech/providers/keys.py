@@ -20,8 +20,19 @@ from open_speech.config import EngineEnv
 
 log = logging.getLogger(__name__)
 
-PROVIDERS: tuple[str, ...] = ("anthropic", "openai", "gemini")
+PROVIDERS: tuple[str, ...] = ("anthropic", "openai", "gemini", "google")
 KeyStatus = Literal["configured", "missing", "invalid"]
+
+# Where each provider's key comes from, first match wins. Google Cloud Text-to-Speech (`google`, the Chirp
+# voices) falls back to the Gemini key: both are Google Cloud API keys, and the same key works for both once
+# Cloud Text-to-Speech is among its project's enabled (and the key's allowed) APIs. `google` is still its own
+# key identity: a Cloud TTS rejection marks only `google` invalid, never the Gemini voices or speech input.
+KEY_SOURCES: dict[str, tuple[str, ...]] = {
+    "anthropic": ("anthropic_api_key",),
+    "openai": ("openai_api_key",),
+    "gemini": ("gemini_api_key",),
+    "google": ("google_tts_api_key", "gemini_api_key"),
+}
 
 
 class ProviderKeys:
@@ -34,9 +45,12 @@ class ProviderKeys:
         return f"ProviderKeys({', '.join(f'{p}={self.status(p)}' for p in PROVIDERS)})"
 
     def get(self, provider: str) -> str | None:
-        secret: SecretStr | None = getattr(self._env, f"{provider}_api_key", None)
-        value = secret.get_secret_value().strip() if secret is not None else ""
-        return value or None
+        for field in KEY_SOURCES.get(provider, (f"{provider}_api_key",)):
+            secret: SecretStr | None = getattr(self._env, field, None)
+            value = secret.get_secret_value().strip() if secret is not None else ""
+            if value:
+                return value
+        return None
 
     def status(self, provider: str) -> KeyStatus:
         if self.get(provider) is None:

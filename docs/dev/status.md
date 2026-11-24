@@ -1,18 +1,68 @@
 # Implementation status
 
-As of 2026-11-22 · branch `feat/implementation` · macOS 26 on Apple M4
+As of 2026-11-23 · branch `feat/round-3` · macOS 26 on Apple M4 (MacBook Air, 16 GB)
 
 Open Speech v0.1 runs end to end on Apple Silicon: it reads PDFs, web pages and the clipboard aloud with
 the bundled Kokoro voices and live highlighting, listens on the Mac with a local speech recognizer, and
 works in English and Spanish. Provider keys are build configuration; the app never asks for one. The
 first round (2026-11-21) packaged the app and tested Anthropic, OpenAI and Gemini live (see
-[Live providers](#live-providers-2026-11-21)); the second round is described next.
+[Live providers](#live-providers-2026-11-21)); the second round (2026-11-22) removed user keys and added local
+listening and Spanish; the third round, described next, is the first one the owner listened to.
 
 **Legend.** *Verified*: driven in the real Electron app on macOS (screenshots taken), by hand or through
-the test driver. *Tested*: covered by the automated suites (engine 853 tests, app 259 tests) but not
+the test driver. *Tested*: covered by the automated suites (engine 1110+ tests, app 371 tests) but not
 driven in the app. *Partial*: works with a stated gap. *Not verified*: needs hardware, a key or a human.
 
-## This round (2026-11-22)
+## Round 3 (2026-11-23)
+
+The owner listened for the first time and heard static and a fluttering voice; they asked for local Qwen3-TTS
+with cloning, Google Chirp 3 HD (free tier) for reading and every reply, a bar that listens the instant it opens
+and always answers aloud, defaults instead of questions, Haiku everywhere, and the month's cost on screen.
+
+**What changed**
+
+- **Clean playback.** The time-stretcher no longer touches audio at 1× (bit-exact; before, 87 % of voiced windows were altered and it spliced 7.6 times a second, the flutter); a new normalized-correlation WSOLA above 1× (30–40 % fewer splices at 1.5–2×, better intelligibility at 2×); fades on every pause, duck, seek and stop (hard edges 8 → 0); output at the device's native rate with a measured 100 ms buffer; Kokoro limited to one synthesis at a time with tuned threads; cached audio at ~57 kbps instead of ~36. Kokoro stays 8-bit: full precision was 2.5× slower to first sound and neither cleaner nor more intelligible. Diagnostics at `GET /diagnostics/audio` and `open-speech doctor audio`. Measurements: `engine/tools/audiolab`.
+- **Google Chirp 3 HD.** The `auto` voice reads and replies with Chirp Zephyr (es-US for Spanish) while the month's free 1M characters last, then the local voice with a spoken notice; "keep using the Google voice" pays beyond it for the month. Key `GOOGLE_TTS_API_KEY`, else `GEMINI_API_KEY`. Word timing for voices without timestamps is pause-anchored (onset error p50 111 → 51 ms, p90 332 → 139 ms against Kokoro's exact times).
+- **Local Qwen3-TTS.** All 25 mlx-community variants (0.6B/1.7B × Base/CustomVoice/VoiceDesign × bf16…4-bit) pinned; size and precision are settings; generation runs in a worker process (audio deadlines stay at idle levels); streamed, so reading starts before a sentence is finished. Default 0.6B 8-bit: 2× real time on the Air, 0.25 s to first sound, 1.3 % / 1.0 % word errors (en/es). Runtime adds ~380 MB to the app; weights download on demand.
+- **Voice cloning.** "Clone my voice" (read a passage, consent line, separate capture without echo cancellation or gain), "clone this voice" on an audio file, "make a voice that sounds like…" (VoiceDesign → three candidates → keep one). Clones are local, checked by a test sentence (all test clones graded good, 0 % word errors), ~4 s to make warm.
+- **Spoken conversation.** The mic opens with the bar (audio from 15–108 ms after opening, buffered before the engine connects); every reply is spoken sentence by sentence, typed ones too; the mic stays closed while the engine speaks (`assistant.speech` events), then listens 7 s for a follow-up, then goes idle; Tab, the orb or the hotkey interrupts; an utterance is capped at 20 s so sound that never pauses can't hold the mic open. First run asks nothing: a spoken welcome after 4 s of silence.
+- **Haiku 5.5 everywhere.** Annotate on Haiku uses light adaptive thinking (the cheapest variant that passed the accuracy gate: 0 wrong cuts, 100 % recall, ~1/10 of Sonnet's cost; thinking off made 6 wrong cuts). One shared, pre-warmed client.
+- **Cost on screen.** A spend chip with a ring in the bar (Free / <$0.01 / $0.12), a tray menu line, the free voice allowance in the usage card; live through `usage.changed`.
+- **Flicker.** The bar opens on the right frame (20/20, was 0/20), no transparent band, no re-render per mic level (31/s → 0), the reader repaints one block per word, PDF pages no longer blank when scrolled back, the tray icon no longer redraws every second, no theme flip at start.
+- **Protocol 3.** `assistant.speech`, `speech.stop`, `usage.changed`, `assistant.done.speaks/audible_effect`, free tiers in `BudgetState`.
+
+**Verified in the app (2026-11-23)**, real engine with the build keys, sound off, fake capture device: first launch opens the
+bar listening on the first frame; a spoken "What is the capital of France?" → transcribed exactly → Haiku → "Paris." spoken
+with the mic closed → follow-up → idle after exactly 7.0 s; **end of speech → first reply audio 1.39 s** (target 2.5 s); a typed
+question answered aloud (333 ms to audio); a document read by `auto` (Kokoro, Chirp still blocked) with sentence and word
+highlight; "Use the voice Ryan" switched reading to local Qwen mid-document (4.5 s cold worker start, then reading with
+estimated word highlight); spend chip updated live from a Haiku call ($0.0011); sound that never pauses was cut off at
+20 s, answered "Sorry, I didn't catch that", listened once more. Audio diagnostics over the session: 0 underflows,
+0 starvations. Earlier in the round each workstream was driven in the app by its own agent (cloning end to end, the
+conversation loop, flicker frame captures).
+
+**Found during the round and fixed:** the mic could stay open forever on continuous noise; a voice error (e.g. a blocked
+key) switched listening off; "keep paying" turned on again in a later month was undone; voice cards answered while
+disconnected hung on "confirming…"; the hotkey during a clone recording threw the take away; a second quick open left
+the bar invisible until the fallback; "auto" didn't clear per-language voices; "about 0 percent of your budget".
+
+**Packaged build (2026-11-23).** `bun run dist:mac` → `release/OpenSpeech-0.1.0-arm64.dmg`, 951 MB (797 MB before); the app is
+1.9 GB on disk (engine runtime 1.6 GB: Python with the Qwen runtime 881 MB, bundled Kokoro and speech model 745 MB). The
+bundle's gates pass: imports, an MLX GPU kernel inside the bundle, the Qwen worker answering over its pipes, no outside
+linkage, 101 distributions with no GPL/AGPL. Run from `release/mac-arm64` with a scratch profile, sound off, the fake
+capture device: the first launch opened the bar listening by itself (audio 68 ms after opening) and greeted after 4 s; a
+spoken "What can you do?" was answered aloud (0.5 s from end of speech); a document read with Qwen Ryan from the bundled
+runtime (4.5 s cold start, 0 underflows); quitting left no process and removed `engine.json`. `provider.env` carries the
+build keys as before: this DMG stays on the owner's machines.
+
+**Not verified / open**
+
+- **Chirp live.** The Gemini key still gets 403 from Cloud Text-to-Speech (`ACCESS_DENIED` / `API_KEY_SERVICE_BLOCKED`): enable the API (billing on) for the key's project and allow it on the key. Until then `auto` reads with Kokoro; Chirp is tested with recorded responses.
+- **Nobody has listened yet.** Blind A/B sets in `~/Downloads/open-speech-listening/` (playback before/after, Kokoro q8 vs fp32, cache quality, fades), `qwen/` (variants, Qwen vs Kokoro) and `clone/`.
+- **Installing Qwen weights from the packaged app** (the run below used copied weights) and a second, clean Mac.
+- **Human voice** with the real microphone, in a quiet room, English and Spanish.
+
+## Round 2 (2026-11-22)
 
 **What changed**
 
@@ -34,8 +84,8 @@ driven in the app. *Partial*: works with a stated gap. *Not verified*: needs har
 | Engine `pytest` | 853 passed, 10 skipped (the skips need local model weights; with the weights present those pass) |
 | Engine `ruff check` | Clean |
 | Engine `mypy src` | 51 errors, all in files that had them before this round (61 at the start of it) |
-| App `pnpm test` | 259 passed |
-| App `pnpm typecheck`, `pnpm check:api` | Clean |
+| App `bun run test` | 259 passed |
+| App `bun run typecheck`, `bun run check:api` | Clean |
 
 Tests no longer open the Mac's audio output: the suite sets `OPEN_SPEECH_AUDIO_OUTPUT=null` itself. Before
 that was in place, a few full runs by the agents working on this round played the fixture voice's test
@@ -111,7 +161,7 @@ and a 60-cent budget cap. Total spend: about $0.12.
 - **By hand with a real pointer and keyboard:** a drag from Finder or a browser (the events were dispatched by script), the file picker, dictation into the composer and the rules editor, the speech-model download prompt, physical hotkeys.
 - **The package's windows.** The packaged app was started once without opening the bar (see below); its first run, windows and Finder integration were not exercised this round, and it has not been on a second Mac.
 
-**Packaged build** (2026-11-22, from the final code). `pnpm dist:mac` produces
+**Packaged build** (2026-11-22, from the final code). `bun run dist:mac` produces
 `release/OpenSpeech-0.1.0-arm64.dmg`: 797 MB (290 MB before the speech model); the app is 1.4 GB on disk, of
 which the speech model is 673 MB and the 30 Kokoro voices 108 MB.
 
@@ -123,7 +173,7 @@ which the speech model is 673 MB and the 30 Kokoro voices 108 MB.
 
 `provider.env` inside the package holds the three provider keys in plain text. That is what "keys set before
 building" means until the hosted deployment exists: this DMG must not leave machines we control.
-`OPEN_SPEECH_BUNDLE_KEYS=0 pnpm dist:mac` builds one that can be handed around (local voice and listening only).
+`OPEN_SPEECH_BUNDLE_KEYS=0 bun run dist:mac` builds one that can be handed around (local voice and listening only).
 
 ## What was verified by hand (2026-11-21)
 
@@ -142,7 +192,7 @@ building" means until the hosted deployment exists: this DMG must not leave mach
 
 | ID | Requirement | Status | Notes |
 |---|---|---|---|
-| FR-BAR-1 | Hotkey opens the bar listening | Partial | Opens listening with the local recognizer, no key needed (verified via the app's open event). ⌥Space is registered but wasn't pressed physically |
+| FR-BAR-1 | Hotkey opens the bar listening | Partial | 2026-11-23: listens from the first frame (audio 15–108 ms after opening), buffered before the engine connects, follow-up listening after every reply, idle after 7 s, utterances capped at 20 s; driven in the app with a fake capture device. ⌥Space not pressed physically |
 | FR-BAR-2 | Live transcript | Verified | 2026-11-21: real microphone + OpenAI speech-to-text, partials about every 0.7–1 s. 2026-11-22: local recognizer with recordings, partials about every 0.6 s |
 | FR-BAR-3 | Typing switches to text mode | Tested | Including: text typed while an utterance is processed is kept |
 | FR-BAR-4 | Submit on release, end of speech, Enter | Verified | End of speech (energy VAD) and Enter by hand; push-to-talk in unit tests |
@@ -173,7 +223,12 @@ building" means until the hosted deployment exists: this DMG must not leave mach
 | FR-VOICE-3 | Default, per-document, assistant voice | Tested | Default set from onboarding verified |
 | FR-VOICE-4 | Style instructions | Tested | Adapter fixtures only (cloud voices themselves verified live) |
 | FR-VOICE-5 | Local Kokoro, offline | Verified | Bundled in the app; sha256-pinned; Spanish voices read a Spanish document (not listened to) |
+| FR-VOICE-6 | Local Qwen3-TTS, sizes and precisions, cloning | Verified | 2026-11-23: "use the voice Ryan" switched a reading to Qwen in the app (dev build); 0.6B/1.7B measured on the M4 Air (speed, first audio, memory, Parakeet round trip); cloning from a recording, a file and a description driven in the app; not yet heard by the owner (blind sets in ~/Downloads/open-speech-listening/qwen/ and clone/) |
 | FR-VOICE-8 | Voice follows the document's language | Verified | Spanish document read by a Spanish voice with an English default |
+| FR-VOICE-9 | Chirp 3 HD default for reading and replies | Tested | Recorded responses only: the build's key still gets 403 from Cloud Text-to-Speech, so in the app `auto` read with Kokoro silently (verified) |
+| FR-VOICE-10 | Fallbacks said once | Tested | Free-tier and budget fallbacks spoken once per session per reason; the blocked-key case switches silently (verified in the app) |
+| FR-VOICE-11 | Clone a voice, with consent | Verified | Recording, dropped file and consent card driven in the app with the fake capture device; all test clones graded good |
+| FR-VOICE-12 | Design a voice | Verified | Three candidates, "the second one" kept, driven in the app |
 | FR-RULE-1 | Presets, Classic / AI Enhanced | Verified | AI Enhanced live: Claude span ops on top of Classic, $0.009 for a 2-page paper (estimate $0.0095) |
 | FR-RULE-2 | Rules by voice or text with preview | Tested | "Stop reading the footnotes on this site" end to end with the deterministic compiler |
 | FR-RULE-3 | Markdown rule files with scopes | Tested | |
@@ -182,7 +237,7 @@ building" means until the hosted deployment exists: this DMG must not leave mach
 | FR-RULE-6 | `SPEECH.md` | Tested | Starts empty |
 | FR-RULE-10 | Rules editor | Verified | Opened by voice, names and switches, a typed rule saved and compiled; rename, whole-file view, delete and outside changes are tested, not driven in the app |
 | FR-ASST-1 | One Claude agent | Verified | Live: summaries, voice change proposed as a confirmation card and confirmed |
-| FR-ASST-2 | Spoken replies; reading pauses | Verified | Reading resumes after the reply even if the bar stays open |
+| FR-ASST-2 | Spoken replies; reading pauses | Verified | 2026-11-23: every reply spoken sentence by sentence, typed ones too; spoken question → first reply audio 1.39 s with Haiku; mic closed while the engine speaks; reading resumes when the conversation goes idle |
 | FR-ASST-3 | Voice parity for settings | Tested | |
 | FR-ASST-4 | Confirm mutating actions | Verified | |
 | FR-ASST-5 | "Where am I?" | Tested | |
@@ -191,23 +246,24 @@ building" means until the hosted deployment exists: this DMG must not leave mach
 | FR-ASST-10 | Local speech-to-text | Partial | Verified with synthetic speech in English and Spanish; no human voice yet |
 | FR-ASST-11 | The assistant reads links | Tested | Link boundary and local-address refusal with a scripted assistant; not run against Claude |
 | FR-COST-1 | Ledger | Verified | $0 rows for Kokoro and cache hits |
-| FR-COST-2 | Usage summaries | Verified | |
+| FR-COST-2 | Usage summaries | Verified | 2026-11-23: spend chip in the bar and a tray line, live via `usage.changed` (updated from a Haiku call in the app); free voice allowance in the usage card |
 | FR-COST-3 | Pre-flight estimate | Tested | Within ±25% in tests |
 | FR-COST-4 | Monthly budget | Tested | Hard stop falls back to Kokoro |
 | FR-COST-5 | Editable pricing | Tested | |
+| FR-COST-7 | Free allowances first | Tested | Ledger, reserve, alerts, "keep paying" for the month (incl. turning it on again in a later month) |
 | FR-CACHE-1 | Audio cache, free replays | Tested | |
 | FR-CACHE-2 | Cap, LRU, pins, clear | Tested | |
 | FR-CACHE-3 | Incremental re-synthesis | Tested | |
 | FR-CACHE-4 | Extraction and plan caches | Tested | |
 | FR-CACHE-5 | One local asset store | Tested | Voice, transcript and page assets; page caching, revalidation and offline fallback |
 | FR-API-1 | REST + WebSocket with token auth | Tested | 13 security contract tests |
-| FR-API-2 | Generated TypeScript client | Tested | `pnpm check:api` |
+| FR-API-2 | Generated TypeScript client | Tested | `bun run check:api` |
 | FR-API-3 | CLI | Verified | |
 | FR-API-6 | Headless operation | Verified | |
 | FR-SETUP-1 | Keys are build configuration | Tested | Environment and `.env` tested; `provider.env` read by the packaged engine (2026-11-22) |
 | FR-SETUP-2 | The app never handles keys | Tested | No key route, command or field; `/keys` answers 404 |
 | FR-SETUP-3 | Speak and listen from first launch | Partial | Kokoro and the speech model bundled; the packaged engine listens and speaks from a clean profile (2026-11-22) |
-| FR-SETUP-4 | First run ≤ 3 steps, spoken, skippable | Verified | By voice against the real recognizer |
+| FR-SETUP-4 | First run ≤ 3 steps, spoken, skippable | Verified | 2026-11-23: no questions; the bar opens listening by itself and greets once after 4 s of silence; defaults: `auto` voice (Chirp, else Kokoro), Classic cleanup, Haiku |
 | FR-SETUP-5 | Appearance | Verified | Lavender and Ember in the bar, reader and rules editor; reader font options not reviewed |
 | FR-SETUP-6 | Remappable shortcuts | Not verified | |
 | FR-SETUP-7 | Graceful missing keys | Verified | |
@@ -256,7 +312,7 @@ and their speech was being transcribed, so the test was stopped), Gemini speech-
 
 ## Packaged app (2026-11-21, before the speech model and build-time keys)
 
-`pnpm dist:mac` built `OpenSpeech-0.1.0-arm64.dmg` (about 290 MB; the app is 728 MB installed:
+`bun run dist:mac` built `OpenSpeech-0.1.0-arm64.dmg` (about 290 MB; the app is 728 MB installed:
 Electron 243 MB, Python runtime 379 MB, Kokoro 110 MB). Ad-hoc signed, hardened runtime off, not
 notarized; 88 Python packages, none GPL/AGPL.
 

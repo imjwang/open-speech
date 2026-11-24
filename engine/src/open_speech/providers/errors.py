@@ -16,7 +16,9 @@ PROVIDER_NAMES = {
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "gemini": "Gemini",
+    "google": "Google",
     "kokoro": "Kokoro",
+    "qwen3": "Qwen",
     "fixture": "Fixture",
     "openai_compatible": "your speech server",
 }

@@ -28,6 +28,9 @@ class Voice(BaseModel):
     available: bool = True
     unavailable_reason: str | None = None
     timestamps: bool = False  # exact word timing
+    # The same speaker in other locales shares a persona (Chirp 3 HD: "chirp3-hd:Zephyr" for en-US, es-US, …),
+    # so following a document into another language keeps the voice the user knows when it can.
+    persona: str | None = None
 
 
 class TtsLimits(BaseModel):
@@ -186,6 +189,24 @@ class VisionBlock(BaseModel):
     text: str
 
 
+DEFAULT_MAX_CONCURRENCY = 3  # cloud voices wait on the network, so a few requests may overlap
+
+
+def max_concurrency(provider: object) -> int:
+    """How many syntheses may run at once for this provider (`provider.max_concurrency`, else 3). Local voices
+    share this machine's CPU with the audio path, so they set a lower, measured value (Kokoro: see kokoro.py)."""
+    return max(1, int(getattr(provider, "max_concurrency", DEFAULT_MAX_CONCURRENCY)))
+
+
+def cache_identity(provider: object, req: TtsRequest) -> str:
+    """What the audio cache key records as the model: the request's model, unless the provider says the weights
+    behind it can differ (Kokoro: `model/quant`), so changing them re-synthesizes only that provider's audio."""
+    fn = getattr(provider, "cache_identity", None)
+    if callable(fn):
+        return str(fn(req))
+    return req.model
+
+
 __all__ = [
     "AudioChunk",
     "CompiledRuleDraft",
@@ -205,4 +226,6 @@ __all__ = [
     "VisionProvider",
     "Voice",
     "WordTiming",
+    "cache_identity",
+    "max_concurrency",
 ]

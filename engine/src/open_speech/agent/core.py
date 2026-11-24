@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,8 +18,7 @@ if TYPE_CHECKING:
     from open_speech.service.commands import Turn
     from open_speech.service.engine import Engine
 
-HISTORY_TURNS = 12  # user+assistant pairs kept per conversation
-PREFERENCES_CHARS = 2000
+INSTRUCTIONS_CHARS = 2000
 
 
 @cache
@@ -38,7 +38,8 @@ def turn_context(e: Engine, turn: Turn, failures: list[str]) -> str:
     snap = e.playback.state()
     ctx: dict[str, Any] = {
         "language": current_language(),  # reply in this language
-        "input": "spoken" if req.source == "spoken" else "typed",
+        # How the user asked (spoken, typed or a button). The reply is heard either way.
+        "input": req.source,
         "playing": snap.state,
         "document": snap.document_title,
         "document_id": req.context.document_id or snap.document_id,
@@ -56,13 +57,25 @@ def turn_context(e: Engine, turn: Turn, failures: list[str]) -> str:
     if req.context.selection:
         ctx["selection"] = f"<document_content>{req.context.selection[:2000]}</document_content>"
     out = f"<turn_context>{json.dumps(ctx, ensure_ascii=False)}</turn_context>"
-    preferences = e.rule_store.speech_md().strip()
-    if preferences:
-        out += f"\n<user_preferences>{preferences[:PREFERENCES_CHARS]}</user_preferences>"
+    instructions = e.rule_store.speech_md().strip()  # SPEECH.md, the prompt that drives cleanup
+    if instructions:
+        out += f"\n<reading_instructions>{instructions[:INSTRUCTIONS_CHARS]}</reading_instructions>"
     return out
 
 
-async def run_agent_turn(e: Engine, *, turn: Turn, conversation: Conversation, failures: list[str]) -> Reply:
+async def run_agent_turn(
+    e: Engine,
+    *,
+    turn: Turn,
+    conversation: Conversation,
+    failures: list[str],
+    on_text: Callable[[str], None] | None = None,
+) -> Reply:
+    """One turn with Claude. The reply streams to clients (`assistant.delta`) and, through `on_text`, into the
+    reply's voice as it is written, so the first sentence is heard while the rest is still coming.
+
+    Each turn stands alone: Claude gets this turn's context and words, never earlier turns. `conversation` only
+    carries what the app itself remembers while the bar is open (the hosts the user named)."""
     from open_speech.agent.tools import TurnGuard, build_tools
 
     runner = e.agent_runner()
@@ -84,11 +97,12 @@ async def run_agent_turn(e: Engine, *, turn: Turn, conversation: Conversation, f
 
     def on_delta(text: str) -> None:
         e.events.publish(AssistantDelta(turn_id=turn.id, text=text))
+        if on_text is not None:
+            on_text(text)
 
     try:
         result = await runner.run(
             system=system_prompt(),
-            history=conversation.history[-2 * HISTORY_TURNS :],
             user=user,
             tools=tools,
             model=settings.llm.model,
@@ -108,17 +122,12 @@ async def run_agent_turn(e: Engine, *, turn: Turn, conversation: Conversation, f
             raise EngineError("offline", t("agent.offline")) from err
         raise EngineError("provider_error", t("agent.problem")) from err
 
-    e.ledger.record(
+    e.ledger.record(  # the budget guard and the usage watcher hear about it from the ledger
         provider="anthropic", model=result.model or settings.llm.model, op="chat", units=result.units, turn_id=turn.id
     )
-    e.budget.after_record()
     text = result.text
     if result.stop_reason == "refusal":
         text = text or t("agent.refused")
     if not text:
         text = t("done.generic") if result.tool_calls else t("agent.no_answer")
-    said = req.text
-    if turn.documents:
-        said += "\n[attached: " + ", ".join(e.documents.title(d) for d in turn.documents) + "]"
-    conversation.history.extend([{"role": "user", "content": said}, {"role": "assistant", "content": text}])
     return Reply(text=text)

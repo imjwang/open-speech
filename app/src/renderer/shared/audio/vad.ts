@@ -109,10 +109,19 @@ export class EnergyVad {
     return null
   }
 
-  reset(): void {
-    this.calibrationMs = 0
-    this.calibration = []
-    this.floorDb = -60
+  /**
+   * Arm it for the next utterance. `keepFloor`: the room was already measured in this conversation (a
+   * follow-up), so speech can be declared from the first chunk instead of after another calibration.
+   */
+  reset(opts: { keepFloor?: boolean } = {}): void {
+    const calibrated = this.calibrationMs >= this.calibrateMs
+    if (opts.keepFloor && calibrated) {
+      this.calibration = []
+    } else {
+      this.calibrationMs = 0
+      this.calibration = []
+      this.floorDb = -60
+    }
     this.speechMs = 0
     this.silenceMs = 0
     this.speaking = false

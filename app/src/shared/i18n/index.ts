@@ -45,7 +45,7 @@ export function t(key: MessageKey, params?: Record<string, string | number>): st
   return translate(current, key, params)
 }
 
-/** `t` for keys built at run time (e.g. `preset.${name}`): returns `fallback` when there is no such message. */
+/** `t` for keys built at run time (e.g. `theme.${name}`): returns `fallback` when there is no such message. */
 export function tMaybe(key: string, fallback: string, params?: Record<string, string | number>): string {
   return key in en ? translate(current, key as MessageKey, params) : fallback
 }

@@ -3,7 +3,7 @@
  * removes it whole, and its ✕ removes it with the pointer.
  */
 import { $getNodeByKey, DecoratorNode, type LexicalEditor, type LexicalNode, type NodeKey, type SerializedLexicalNode } from 'lexical'
-import { AlignLeft, FileText, FileType2, Globe, Image as ImageIcon, X } from 'lucide-react'
+import { AlignLeft, AudioLines, FileText, FileType2, Globe, Image as ImageIcon, X } from 'lucide-react'
 import type { JSX } from 'react'
 
 import { useT } from '@/i18n'
@@ -16,6 +16,7 @@ function Icon({ item }: { item: AttachmentItem }): JSX.Element {
   if (item.kind === 'text') return <AlignLeft aria-hidden="true" />
   if (item.fileKind === 'image') return <ImageIcon aria-hidden="true" />
   if (item.fileKind === 'doc') return <FileType2 aria-hidden="true" />
+  if (item.fileKind === 'audio') return <AudioLines aria-hidden="true" />
   return <FileText aria-hidden="true" />
 }
 

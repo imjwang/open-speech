@@ -7,7 +7,7 @@
 import type { CardRow } from '@shared/api/ws.gen'
 import type { DocumentOut } from '@shared/api/client'
 
-import type { ActionModel, BarState, CardModel, LocalConfirm, Notice, TurnAttachment, TurnModel } from './store'
+import type { ActionModel, BarState, CaptureState, CardModel, LocalConfirm, Notice, TurnAttachment, TurnModel } from './store'
 import { composerEmpty } from './store'
 
 export type Row =
@@ -16,16 +16,52 @@ export type Row =
   | { kind: 'history'; value: 'history'; count: number }
   | { kind: 'user'; value: string; turn: TurnModel }
   | { kind: 'reply'; value: string; turn: TurnModel }
-  | { kind: 'action'; value: string; action: ActionModel }
+  /** `capture`: the recording that belongs to this card (the passage card of a voice being cloned). */
+  | { kind: 'action'; value: string; action: ActionModel; capture: CaptureState | null }
   | { kind: 'card'; value: string; card: CardModel }
   | { kind: 'card-row'; value: string; card: CardModel; row: CardRow }
   | { kind: 'notice'; value: string; notice: Notice }
-  | { kind: 'job'; value: string; jobId: string; pct: number; label: string }
+  /** `job`: what it is ("install", "clone", "design"), for its icon. */
+  | { kind: 'job'; value: string; jobId: string; pct: number; label: string; job?: string | null }
   | { kind: 'recent'; value: string; doc: DocumentOut }
 
 export interface RowGroup {
   id: string
   rows: Row[]
+}
+
+/** The part of the bar's state the rows are built from (a component subscribes to just these). */
+export type RowState = Pick<
+  BarState,
+  | 'localConfirm'
+  | 'pending'
+  | 'turns'
+  | 'showHistory'
+  | 'actions'
+  | 'notices'
+  | 'jobs'
+  | 'mode'
+  | 'draft'
+  | 'attachments'
+  | 'selected'
+  | 'capture'
+>
+
+export function rowState(s: BarState): RowState {
+  return {
+    localConfirm: s.localConfirm,
+    pending: s.pending,
+    turns: s.turns,
+    showHistory: s.showHistory,
+    actions: s.actions,
+    notices: s.notices,
+    jobs: s.jobs,
+    mode: s.mode,
+    draft: s.draft,
+    attachments: s.attachments,
+    selected: s.selected,
+    capture: s.capture,
+  }
 }
 
 export interface RowInputs {
@@ -36,10 +72,10 @@ export interface RowInputs {
 
 const MAX_TURNS = 20
 const RECENTS_SHOWN = 5
-/** Cards drawn as one block (a figure, chips, a grid) rather than one row per item. */
-const BLOCK_CARDS = new Set(['usage', 'where', 'presets'])
+/** Cards drawn as one block (a figure) rather than one row per item. */
+const BLOCK_CARDS = new Set(['usage', 'where'])
 
-export function turnRows(turn: TurnModel, actions: BarState['actions']): Row[] {
+export function turnRows(turn: TurnModel, actions: BarState['actions'], capture: CaptureState | null = null): Row[] {
   const rows: Row[] = []
   const pressed = turn.source === 'button'
   if (!pressed && (turn.text || turn.attachments.length)) rows.push({ kind: 'user', value: `user:${turn.turnId}`, turn })
@@ -48,7 +84,7 @@ export function turnRows(turn: TurnModel, actions: BarState['actions']): Row[] {
   if (!cardOnly && (turn.reply || !turn.done || turn.error)) rows.push({ kind: 'reply', value: `reply:${turn.turnId}`, turn })
   for (const id of turn.actionIds) {
     const action = actions[id]
-    if (action) rows.push({ kind: 'action', value: `action:${id}`, action })
+    if (action) rows.push({ kind: 'action', value: `action:${id}`, action, capture: capture?.actionId === id ? capture : null })
   }
   for (const card of turn.cards) {
     if (BLOCK_CARDS.has(card.kind)) rows.push({ kind: 'card', value: `card:${card.id}`, card })
@@ -57,7 +93,7 @@ export function turnRows(turn: TurnModel, actions: BarState['actions']): Row[] {
   return rows
 }
 
-export function buildRows(s: BarState, x: RowInputs): RowGroup[] {
+export function buildRows(s: RowState, x: RowInputs): RowGroup[] {
   const groups: RowGroup[] = []
   const typed = s.mode !== 'listening' ? s.draft.trim() : ''
 
@@ -69,14 +105,14 @@ export function buildRows(s: BarState, x: RowInputs): RowGroup[] {
   const shown = s.showHistory ? turns : turns.slice(-1)
   const conversation: Row[] = []
   if (turns.length > 1 && !s.showHistory) conversation.push({ kind: 'history', value: 'history', count: turns.length - 1 })
-  conversation.push(...shown.flatMap((turn) => turnRows(turn, s.actions)))
+  conversation.push(...shown.flatMap((turn) => turnRows(turn, s.actions, s.capture)))
   if (conversation.length) groups.push({ id: 'conversation', rows: conversation })
 
   const status: Row[] = [
     ...s.notices.map((notice): Row => ({ kind: 'notice', value: `notice:${notice.id}`, notice })),
     ...Object.entries(s.jobs)
       .filter(([, j]) => j.pct < 100)
-      .map(([jobId, j]): Row => ({ kind: 'job', value: `job:${jobId}`, jobId, pct: j.pct, label: j.label })),
+      .map(([jobId, j]): Row => ({ kind: 'job', value: `job:${jobId}`, jobId, pct: j.pct, label: j.label, job: j.kind ?? null })),
   ]
   if (status.length) groups.push({ id: 'status', rows: status })
 
@@ -102,7 +138,7 @@ export function findRow(groups: RowGroup[], value: string): Row | undefined {
 }
 
 /** The row Enter acts on when the user has not moved the selection (09: "default row"). */
-export function defaultSelection(groups: RowGroup[], s: BarState): string {
+export function defaultSelection(groups: RowGroup[], s: Pick<RowState, 'selected' | 'mode' | 'draft' | 'attachments'>): string {
   const rows = allRows(groups)
   const has = (v: string) => rows.some((r) => r.value === v)
   if (s.selected && has(s.selected)) return s.selected
@@ -114,6 +150,52 @@ export function defaultSelection(groups: RowGroup[], s: BarState): string {
   const lastReply = [...rows].reverse().find((r) => r.kind === 'reply')
   if (lastReply) return lastReply.value
   return rows.find((r) => r.kind !== 'pending' && r.kind !== 'card' && r.kind !== 'history')?.value ?? ''
+}
+
+/**
+ * Two rows draw the same thing: rebuilding the rows makes new row objects every time, but what a row shows comes
+ * from the models it points at, and those keep their identity until they change. A row whose models are the
+ * same doesn't re-render (`RowView` is memoized on this).
+ */
+export function sameRow(a: Row, b: Row): boolean {
+  if (a === b) return true
+  if (a.kind !== b.kind || a.value !== b.value) return false
+  switch (a.kind) {
+    case 'local-confirm':
+      return a.confirm === (b as typeof a).confirm
+    case 'pending': {
+      const o = b as typeof a
+      return a.text === o.text && a.attachments === o.attachments
+    }
+    case 'history':
+      return a.count === (b as typeof a).count
+    case 'user': {
+      // A reply streaming in replaces the turn object; the "you said" line only shows what was said.
+      const x = a.turn
+      const y = (b as typeof a).turn
+      return x === y || (x.text === y.text && x.attachments === y.attachments && x.recordingId === y.recordingId && x.source === y.source)
+    }
+    case 'reply':
+      return a.turn === (b as typeof a).turn
+    case 'action': {
+      const o = b as typeof a
+      return a.action === o.action && a.capture === o.capture
+    }
+    case 'card':
+      return a.card === (b as typeof a).card
+    case 'card-row': {
+      const o = b as typeof a
+      return a.card === o.card && a.row === o.row
+    }
+    case 'notice':
+      return a.notice === (b as typeof a).notice
+    case 'job': {
+      const o = b as typeof a
+      return a.pct === o.pct && a.label === o.label && a.job === o.job
+    }
+    case 'recent':
+      return a.doc === (b as typeof a).doc
+  }
 }
 
 export function cardRowEnabled(row: CardRow): boolean {

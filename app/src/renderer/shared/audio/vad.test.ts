@@ -45,4 +45,21 @@ describe('EnergyVad', () => {
     expect(feed(vad, -30, 400)).toEqual([])
     expect(feed(vad, -12, 300)).toEqual(['speech-start'])
   })
+
+  it('keeps the room it measured for a follow-up: speech counts from the first chunk', () => {
+    const vad = new EnergyVad()
+    feed(vad, -32, 300)
+    feed(vad, -12, 300)
+    feed(vad, -32, 900)
+    vad.reset({ keepFloor: true })
+    // No 250 ms of calibration first: a reply right away is heard.
+    expect(feed(vad, -12, 160)).toEqual(['speech-start'])
+    expect(vad.threshold).toBeLessThan(-12)
+  })
+
+  it('keepFloor before the room was ever measured still calibrates', () => {
+    const vad = new EnergyVad()
+    vad.reset({ keepFloor: true })
+    expect(feed(vad, -12, 200)).toEqual([])
+  })
 })

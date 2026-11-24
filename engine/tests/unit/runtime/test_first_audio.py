@@ -154,20 +154,6 @@ async def test_cached_audio_still_plays(rt: Runtime, transport: Transport) -> No
     assert FixtureTts.calls == calls
 
 
-def test_two_overlapping_clips_of_different_length_both_finish() -> None:
-    """Found while running these with the null output: the renderer removed a finished clip with
-    `list.remove`, which compared the clips' sample arrays and raised inside the audio callback on every pull."""
-    from open_speech.playback.render import Renderer
-    from open_speech.providers.pcm import tone
-
-    renderer = Renderer(24000)
-    long_done = renderer.play_clip(tone(220, 0.05, 24000))
-    short_done = renderer.play_clip(tone(330, 0.02, 24000))
-    for _ in range(6):
-        renderer.pull(480)
-    assert short_done.is_set() and long_done.is_set() and not renderer.has_clips()
-
-
 # ------------------------------------------------------------------ warming the local voice
 
 

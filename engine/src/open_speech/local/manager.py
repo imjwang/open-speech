@@ -6,7 +6,11 @@
   catalog pins, and land in `models/<provider>/<model>/`. Progress goes out as `job.progress` events.
   Files without a pin are accepted trust-on-first-use: the computed hash is recorded in `manifest.json`
   and the model's status says "unpinned".
-- Remove deletes the model directory. Qwen3-TTS (P2) is listed as unsupported/later.
+- Remove deletes the model directory.
+- Weight variants (`[local_weights.<provider>."<id>"]`, Qwen3-TTS: 25 sizes x families x precisions) install into
+  `models/<provider>/<id>/`. Only the installed ones, the ones downloading and the ones the settings choose are
+  listed unless `all` is asked for. A file another installed variant already has (same sha256: the 650 MB codec is
+  in every Qwen variant) is hard-linked instead of downloaded again.
 - Packaged builds ship Kokoro read-only inside the app (`local/bundled.py`, FR-SETUP-3). It counts as installed
   when app data has no complete copy, and is never written to or removed.
 - Speech-to-text models (`[stt.local."<model>"]`, kind "stt") are listed, installed and removed the same way;
@@ -40,12 +44,13 @@ from open_speech.config import Paths
 from open_speech.errors import EngineError, NotFound
 from open_speech.ids import new_id
 from open_speech.local.bundled import bundled_models_dir
-from open_speech.local.catalog import LOCAL_STT_DIR, LocalSttModel, ModelCatalog, TtsModel, WeightFile
+from open_speech.local.catalog import LOCAL_STT_DIR, LocalSttModel, ModelCatalog, TtsModel, WeightFile, WeightsVariant
 from open_speech.service.events import EventBus
 
 log = logging.getLogger(__name__)
 Fit = Literal["fits", "slow", "unsupported"]
-LocalEntry = TtsModel | LocalSttModel
+LocalEntry = TtsModel | LocalSttModel | WeightsVariant
+FAMILY_NAMES = {"customvoice": "Qwen voices", "base": "Qwen voice cloning", "voicedesign": "Qwen voice design"}
 
 
 class HardwareInfo(BaseModel):
@@ -154,7 +159,8 @@ class LocalModelManager:
 
     def entry(self, model_id: str) -> LocalEntry:
         """A local voice model or a local speech-to-text model, by catalog id."""
-        e = self.catalog.local_model(model_id) or self.catalog.local_stt_model(model_id)
+        e = (self.catalog.local_model(model_id) or self.catalog.local_stt_model(model_id)
+             or self.catalog.weights_variant(model_id))
         if e is None:
             raise NotFound(f"a local model called {model_id}")
         return e
@@ -188,7 +194,7 @@ class LocalModelManager:
             return []
         files = w.all_files()
         if isinstance(entry, TtsModel) and w.voice_file:
-            files += [WeightFile(path=w.voice_file.format(voice=v), size_mb=w.voice_size_mb) for v in entry.voices]
+            files += w.voice_files(entry.voices)
         return files
 
     def manifest(self, entry: LocalEntry) -> dict[str, Any] | None:
@@ -204,10 +210,29 @@ class LocalModelManager:
     def installed(self, model_id: str) -> bool:
         return self.installed_dir(self.entry(model_id)) is not None
 
-    def list(self) -> list[LocalModel]:
+    @staticmethod
+    def display_name(entry: LocalEntry) -> str:
+        """"Qwen voices — 0.6B 8-bit" for a weights variant; the catalog name otherwise."""
+        if isinstance(entry, WeightsVariant):
+            prec = entry.precision if entry.precision == "bf16" else f"{entry.precision[:-3]}-bit"
+            return f"{FAMILY_NAMES.get(entry.family, entry.provider)} — {entry.size.upper()} {prec}"
+        return entry.name or entry.model
+
+    def list(self, *, all: bool = False, selected: set[str] | None = None) -> list[LocalModel]:  # noqa: A002
+        """Local voices and speech models; of the weight variants, the installed, downloading or failed ones and
+        `selected` (what the settings choose), or every one with `all`."""
         out: list[LocalModel] = []
         hw = self.hardware
-        entries: list[LocalEntry] = [*self.catalog.local_models(), *self.catalog.local_stt_models()]
+        chosen = selected or set()
+        variants: list[LocalEntry] = [
+            v for v in self.catalog.weights_variants()
+            if all or v.model in chosen or v.model in self._by_model or self.installed_dir(v) is not None
+        ]
+        # A voice model whose weights come as variants (Qwen3-TTS) is listed through its variants, not as a row of its
+        # own that couldn't be installed.
+        with_variants = {v.provider for v in self.catalog.weights_variants()}
+        voices = [m for m in self.catalog.local_models() if m.weights is not None or m.provider not in with_variants]
+        entries: list[LocalEntry] = [*voices, *variants, *self.catalog.local_stt_models()]
         for entry in entries:
             fit, note = fit_for(entry, hw)
             installed = entry.weights is not None and self.installed(entry.model)
@@ -223,11 +248,12 @@ class LocalModelManager:
                 status = f"Install failed: {job.error}"
             else:
                 status = note or "Not installed"
+            variant = entry if isinstance(entry, WeightsVariant) else None
             out.append(
                 LocalModel(
                     id=entry.model,
                     provider=entry.provider,
-                    name=entry.name or entry.model,
+                    name=self.display_name(entry),
                     size_mb=int(round(entry.size_mb)),
                     ram_gb=entry.ram_gb,
                     license=entry.license or "unknown",
@@ -235,6 +261,10 @@ class LocalModelManager:
                     fit=fit,
                     status=status,
                     kind="stt" if isinstance(entry, LocalSttModel) else "tts",
+                    family=variant.family if variant else None,
+                    size=variant.size if variant else None,
+                    precision=variant.precision if variant else None,
+                    selected=entry.model in chosen,
                 )
             )
         return out
@@ -304,7 +334,7 @@ class LocalModelManager:
         manifest_files: dict[str, Any] = {}
         all_pinned = True
         base = entry.weights.base_url(self._hf)
-        name = entry.name or entry.model
+        name = self.display_name(entry)
         try:
             async with self._client_factory() as client:
                 for f, exp in zip(files, expected, strict=True):
@@ -312,6 +342,8 @@ class LocalModelManager:
                         self._progress(job, min(99.0, (_base + n) * 100 / total),
                                        f"Downloading {name} ({(_base + n) / 1024**2:.0f} of {total / 1024**2:.0f} MB)")
 
+                    if f.sha256 and not (d / f.path).exists():
+                        await asyncio.to_thread(self._reuse, entry, f, d / f.path)
                     digest, size = await self._download(client, f.url or f"{base}/{f.path}", d / f.path, progress)
                     if f.sha256:
                         if digest.lower() != f.sha256.lower():
@@ -340,6 +372,8 @@ class LocalModelManager:
                     "model": entry.model,
                     "provider": entry.provider,
                     "kind": "stt" if isinstance(entry, LocalSttModel) else "tts",
+                    **({"variant": {"family": entry.family, "size": entry.size, "precision": entry.precision,
+                                    "revision": entry.weights.revision}} if isinstance(entry, WeightsVariant) else {}),
                     "installed_at": datetime.now(UTC).isoformat(),
                     "pinned": all_pinned,
                     "files": manifest_files,
@@ -353,6 +387,34 @@ class LocalModelManager:
         if self._on_change is not None:
             self._on_change(entry.model)
         return d
+
+    def _reuse(self, entry: LocalEntry, f: WeightFile, target: Path) -> bool:
+        """Hard-link (or copy) a pinned file that another installed model of the same provider already has with the
+        same sha256 (its manifest says so), instead of downloading it again. Returns whether it did."""
+        root = self.paths.models / self._subdir(entry)
+        if not root.is_dir():
+            return False
+        for man_path in root.glob("*/manifest.json"):
+            if man_path.parent == target.parent or man_path.parent.name == entry.model:
+                continue
+            try:
+                files = json.loads(man_path.read_text("utf-8")).get("files") or {}
+            except (OSError, json.JSONDecodeError):
+                continue
+            for rel, info in files.items():
+                if str(info.get("sha256", "")).lower() != f.sha256.lower():
+                    continue
+                src = man_path.parent / rel
+                if not src.is_file():
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    os.link(src, target)
+                except OSError:
+                    shutil.copyfile(src, target)
+                log.info("reused %s from %s", f.path, man_path.parent.name)
+                return True
+        return False
 
     async def _download(
         self, client: httpx.AsyncClient, url: str, target: Path, progress: Callable[[int], None]
@@ -397,13 +459,14 @@ class LocalModelManager:
         job.label = label
         job._last_emit = now  # type: ignore[attr-defined]
         if self.events is not None:
-            self.events.publish(JobProgress(job_id=job.id, pct=job.pct, label=label))
+            self.events.publish(JobProgress(job_id=job.id, pct=job.pct, label=label, kind="install"))
 
     def _fail(self, job: _Job, err: EngineError) -> None:
         job.state = "failed"
         job.error = err.detail
         if self.events is not None:
-            self.events.publish(JobProgress(job_id=job.id, pct=job.pct, label=f"Install failed: {err.detail}"))
+            failed = f"Install failed: {err.detail}"
+            self.events.publish(JobProgress(job_id=job.id, pct=job.pct, label=failed, kind="install"))
             self.events.publish(ErrorMsg(problem={**err.problem(), "job_id": job.id}))
 
 

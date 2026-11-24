@@ -1,0 +1,115 @@
+{
+  "model": "Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit",
+  "load": {
+    "op": "loaded",
+    "id": 1,
+    "load_s": 2.278,
+    "warm_s": 0.908,
+    "active_gb": 2.036,
+    "sample_rate": 24000,
+    "type": "custom_voice",
+    "size": "0b6",
+    "speakers": [
+      "serena",
+      "vivian",
+      "uncle_fu",
+      "ryan",
+      "aiden",
+      "ono_anna",
+      "sohee",
+      "eric",
+      "dylan"
+    ],
+    "languages": [
+      "chinese",
+      "english",
+      "german",
+      "italian",
+      "portuguese",
+      "spanish",
+      "japanese",
+      "korean",
+      "french",
+      "russian"
+    ],
+    "wall_s": 3.22
+  },
+  "voice": "Ryan",
+  "quality": {
+    "en": {
+      "wer": 0.0133,
+      "words": 226,
+      "f0_median_hz": 131.4,
+      "f0_spread_pct": 14.0,
+      "timbre_similarity_mean": 0.975,
+      "timbre_similarity_min": 0.893,
+      "worst": [
+        {
+          "wer": 0.125,
+          "ref": "Please save your work before closing the window.",
+          "hyp": "Please save your work before closing the wind."
+        },
+        {
+          "wer": 0.1,
+          "ref": "Photosynthesis converts light energy into chemical energy stored in sugars.",
+          "hyp": "Photosynthes converts light energy into chemical energy stored in sugars."
+        },
+        {
+          "wer": 0.091,
+          "ref": "He finished the marathon in just under four hours, which surprised everyone.",
+          "hyp": "Hehehe He finished the marathon in just under four hours, which surprised everyone."
+        }
+      ]
+    },
+    "es": {
+      "wer": 0.01,
+      "words": 100,
+      "f0_median_hz": 148.7,
+      "f0_spread_pct": 15.3,
+      "timbre_similarity_mean": 0.947,
+      "timbre_similarity_min": 0.811,
+      "worst": [
+        {
+          "wer": 0.111,
+          "ref": "El agua hierve a cien grados al nivel del mar.",
+          "hyp": "El agua hierbe a 100 grados al nivel del mar."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos.",
+          "hyp": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Si la bater\u00eda est\u00e1 baja, la pantalla se oscurece para ahorrar energ\u00eda.",
+          "hyp": "Si la bater\u00eda est\u00e1 baja, la pantalla se oscurece para ahorrar energ\u00eda."
+        }
+      ]
+    },
+    "es-auto": {
+      "wer": 0.02,
+      "words": 100,
+      "f0_median_hz": 161.7,
+      "f0_spread_pct": 10.4,
+      "timbre_similarity_mean": 0.959,
+      "timbre_similarity_min": 0.885,
+      "worst": [
+        {
+          "wer": 0.25,
+          "ref": "Gire a la izquierda en el pr\u00f3ximo sem\u00e1foro.",
+          "hyp": "Dra la izquierda en el pr\u00f3ximo sem\u00e1foro."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos.",
+          "hyp": "Termin\u00f3 el marat\u00f3n en poco menos de cuatro horas, lo que sorprendi\u00f3 a todos."
+        },
+        {
+          "wer": 0.0,
+          "ref": "Si la bater\u00eda est\u00e1 baja, la pantalla se oscurece para ahorrar energ\u00eda.",
+          "hyp": "Si la bater\u00eda est\u00e1 baja, la pantalla se oscurece para ahorrar energ\u00eda."
+        }
+      ]
+    }
+  }
+}

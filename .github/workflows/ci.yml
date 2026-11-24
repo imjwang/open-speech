@@ -38,18 +38,19 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+      # Node still runs vitest, electron-vite and the scripts (through their shebangs).
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: app/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
+      - run: bun install --frozen-lockfile
       - name: Generated engine client is current (FR-API-2)
-        run: pnpm check:api
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm build
+        run: bun run check:api
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
 
   e2e:
     needs: [engine, app]
@@ -57,13 +58,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: app/pnpm-lock.yaml
       - run: cd engine && uv sync --all-extras --frozen
-      - run: cd app && pnpm install --frozen-lockfile
+      - run: cd app && bun install --frozen-lockfile
       - name: UI, accessibility and voice-only workflows (fixture providers)
-        run: cd app && pnpm e2e
+        run: cd app && bun run e2e

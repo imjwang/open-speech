@@ -1,0 +1,68 @@
+{
+  "dir": "/Users/jeff/Downloads/open-speech-listening",
+  "pairs": [
+    {
+      "pair": 1,
+      "title": "Normal speed (1x)",
+      "listen_for": "Roughness, a faint buzz or flutter in vowels; which sounds like clean speech?",
+      "A": "old playback (audiotsm WSOLA even at 1x)",
+      "B": "new playback (1x passes audio through untouched)"
+    },
+    {
+      "pair": 2,
+      "title": "1.5x speed",
+      "listen_for": "Flutter, warble, doubled or swallowed syllables; which is easier to follow?",
+      "A": "old stretcher (audiotsm WSOLA)",
+      "B": "new stretcher (normalized-correlation WSOLA)"
+    },
+    {
+      "pair": 3,
+      "title": "2x speed",
+      "listen_for": "Flutter, warble, doubled or swallowed syllables; which is easier to follow?",
+      "A": "old stretcher (audiotsm WSOLA)",
+      "B": "new stretcher (normalized-correlation WSOLA)"
+    },
+    {
+      "pair": 4,
+      "title": "3x speed",
+      "listen_for": "Flutter, warble, doubled or swallowed syllables; which is easier to follow?",
+      "A": "old stretcher (audiotsm WSOLA)",
+      "B": "new stretcher (normalized-correlation WSOLA)"
+    },
+    {
+      "pair": 5,
+      "title": "3x speed, two settings of the new stretcher",
+      "listen_for": "Smoothness versus clarity: one is smoother, the other drops fewer short sounds. Which would you use?",
+      "A": "30 ms frames, 75 % overlap (shipped above 2x)",
+      "B": "40 ms frames, 50 % overlap (smoother splices)"
+    },
+    {
+      "pair": 6,
+      "title": "Local voice weights: q8 vs full precision",
+      "listen_for": "Hiss in the pauses, grit or buzz on vowels, clarity.",
+      "A": "Kokoro q8 (shipped, 92 MB)",
+      "B": "Kokoro fp32 (326 MB)"
+    },
+    {
+      "pair": 7,
+      "title": "Fresh vs cached audio (old cache quality)",
+      "listen_for": "Replays and second readings come from the cache. Swishy or muffled consonants, a phasey sound?",
+      "A": "fresh audio (as synthesized)",
+      "B": "cached at the old Opus setting (~36 kbps)"
+    },
+    {
+      "pair": 8,
+      "title": "Fresh vs cached audio (new cache quality)",
+      "listen_for": "Same question at the new cache setting.",
+      "A": "cached at the new Opus setting (~57 kbps)",
+      "B": "fresh audio (as synthesized)"
+    },
+    {
+      "pair": 9,
+      "title": "Pause, resume, skip and stop",
+      "listen_for": "Clicks or thumps where playback pauses, resumes, jumps and stops.",
+      "A": "new (12\u201315 ms fades and crossfades)",
+      "B": "old (hard cuts)"
+    }
+  ]
+}
